@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import {
   LayoutDashboard,
@@ -12,6 +12,9 @@ import {
   FileSpreadsheet,
   Menu,
   X,
+  ShieldCheck,
+  LogOut,
+  UserCog,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { FiltersBar } from "./FiltersBar";
@@ -21,6 +24,10 @@ const NAV = [
   { to: "/financeiro", label: "Financeiro", icon: Wallet },
   { to: "/comercial", label: "Comercial", icon: Target },
   { to: "/perfil", label: "Perfil dos Clientes", icon: Users },
+] as const;
+
+const ADMIN_NAV = [
+  { to: "/admin/usuarios", label: "Usuários", icon: UserCog },
 ] as const;
 
 export function DashboardLayout({
@@ -36,9 +43,15 @@ export function DashboardLayout({
   onExportExcel?: () => void;
   children: ReactNode;
 }) {
-  const { theme, toggleTheme } = useApp();
+  const { theme, toggleTheme, user, role, isAdmin, signOut } = useApp();
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  async function handleSignOut() {
+    await signOut();
+    navigate({ to: "/auth", replace: true });
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -82,12 +95,53 @@ export function DashboardLayout({
               </Link>
             );
           })}
+          {isAdmin && (
+            <>
+              <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Administração
+              </p>
+              {ADMIN_NAV.map((item) => {
+                const active = pathname === item.to;
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                      active
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm shadow-primary/20"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
-        <div className="absolute bottom-0 left-0 right-0 border-t border-sidebar-border p-3">
-          <div className="rounded-lg bg-sidebar-accent/50 p-3 text-xs text-muted-foreground">
-            <p className="font-semibold text-sidebar-foreground">Dados simulados</p>
-            <p className="mt-1">Demo com dados sintéticos para demonstração.</p>
-          </div>
+        <div className="absolute bottom-0 left-0 right-0 border-t border-sidebar-border p-3 space-y-2">
+          {user && (
+            <div className="rounded-lg bg-sidebar-accent/50 p-3 text-xs">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck
+                  className={`h-3 w-3 ${isAdmin ? "text-primary" : "text-muted-foreground"}`}
+                />
+                <span className="font-semibold uppercase tracking-wider text-[10px] text-muted-foreground">
+                  {role ?? "sem papel"}
+                </span>
+              </div>
+              <p className="mt-1 truncate text-sidebar-foreground">{user.email}</p>
+              <button
+                onClick={handleSignOut}
+                className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-sidebar-foreground"
+              >
+                <LogOut className="h-3 w-3" /> Sair
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
