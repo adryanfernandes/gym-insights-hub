@@ -43,9 +43,15 @@ export function DashboardLayout({
   onExportExcel?: () => void;
   children: ReactNode;
 }) {
-  const { theme, toggleTheme } = useApp();
+  const { theme, toggleTheme, user, role, isAdmin, signOut } = useApp();
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  async function handleSignOut() {
+    await signOut();
+    navigate({ to: "/auth", replace: true });
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
