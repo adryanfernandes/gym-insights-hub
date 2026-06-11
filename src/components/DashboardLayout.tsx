@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import {
   LayoutDashboard,
@@ -12,6 +12,9 @@ import {
   FileSpreadsheet,
   Menu,
   X,
+  ShieldCheck,
+  LogOut,
+  UserCog,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { FiltersBar } from "./FiltersBar";
@@ -21,6 +24,10 @@ const NAV = [
   { to: "/financeiro", label: "Financeiro", icon: Wallet },
   { to: "/comercial", label: "Comercial", icon: Target },
   { to: "/perfil", label: "Perfil dos Clientes", icon: Users },
+] as const;
+
+const ADMIN_NAV = [
+  { to: "/admin/usuarios", label: "Usuários", icon: UserCog },
 ] as const;
 
 export function DashboardLayout({
