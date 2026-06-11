@@ -27,7 +27,7 @@ import {
 } from "@/lib/mockData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
-export const Route = createFileRoute("/financeiro")({
+export const Route = createFileRoute("/_authenticated/financeiro")({
   head: () => ({
     meta: [
       { title: "Financeiro — GymPulse BI" },

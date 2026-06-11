@@ -9,105 +9,120 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as PerfilRouteImport } from './routes/perfil'
-import { Route as FinanceiroRouteImport } from './routes/financeiro'
-import { Route as ComercialRouteImport } from './routes/comercial'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
+import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
+import { Route as AuthenticatedComercialRouteImport } from './routes/_authenticated/comercial'
 
-const PerfilRoute = PerfilRouteImport.update({
-  id: '/perfil',
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/_authenticated/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedPerfilRoute = AuthenticatedPerfilRouteImport.update({
+  id: '/_authenticated/perfil',
   path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FinanceiroRoute = FinanceiroRouteImport.update({
-  id: '/financeiro',
+const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
+  id: '/_authenticated/financeiro',
   path: '/financeiro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ComercialRoute = ComercialRouteImport.update({
-  id: '/comercial',
+const AuthenticatedComercialRoute = AuthenticatedComercialRouteImport.update({
+  id: '/_authenticated/comercial',
   path: '/comercial',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/comercial': typeof ComercialRoute
-  '/financeiro': typeof FinanceiroRoute
-  '/perfil': typeof PerfilRoute
+  '/comercial': typeof AuthenticatedComercialRoute
+  '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/perfil': typeof AuthenticatedPerfilRoute
+  '/': typeof AuthenticatedIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/comercial': typeof ComercialRoute
-  '/financeiro': typeof FinanceiroRoute
-  '/perfil': typeof PerfilRoute
+  '/comercial': typeof AuthenticatedComercialRoute
+  '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/perfil': typeof AuthenticatedPerfilRoute
+  '/': typeof AuthenticatedIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/comercial': typeof ComercialRoute
-  '/financeiro': typeof FinanceiroRoute
-  '/perfil': typeof PerfilRoute
+  '/_authenticated/comercial': typeof AuthenticatedComercialRoute
+  '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/comercial' | '/financeiro' | '/perfil'
+  fullPaths: '/comercial' | '/financeiro' | '/perfil' | '/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/comercial' | '/financeiro' | '/perfil'
-  id: '__root__' | '/' | '/comercial' | '/financeiro' | '/perfil'
+  to: '/comercial' | '/financeiro' | '/perfil' | '/'
+  id:
+    | '__root__'
+    | '/_authenticated/comercial'
+    | '/_authenticated/financeiro'
+    | '/_authenticated/perfil'
+    | '/_authenticated/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  ComercialRoute: typeof ComercialRoute
-  FinanceiroRoute: typeof FinanceiroRoute
-  PerfilRoute: typeof PerfilRoute
+  AuthenticatedComercialRoute: typeof AuthenticatedComercialRoute
+  AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
+  AuthenticatedPerfilRoute: typeof AuthenticatedPerfilRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/perfil': {
-      id: '/perfil'
-      path: '/perfil'
-      fullPath: '/perfil'
-      preLoaderRoute: typeof PerfilRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/financeiro': {
-      id: '/financeiro'
-      path: '/financeiro'
-      fullPath: '/financeiro'
-      preLoaderRoute: typeof FinanceiroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/comercial': {
-      id: '/comercial'
-      path: '/comercial'
-      fullPath: '/comercial'
-      preLoaderRoute: typeof ComercialRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/perfil': {
+      id: '/_authenticated/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof AuthenticatedPerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/financeiro': {
+      id: '/_authenticated/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/comercial': {
+      id: '/_authenticated/comercial'
+      path: '/comercial'
+      fullPath: '/comercial'
+      preLoaderRoute: typeof AuthenticatedComercialRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  ComercialRoute: ComercialRoute,
-  FinanceiroRoute: FinanceiroRoute,
-  PerfilRoute: PerfilRoute,
+  AuthenticatedComercialRoute: AuthenticatedComercialRoute,
+  AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
+  AuthenticatedPerfilRoute: AuthenticatedPerfilRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
