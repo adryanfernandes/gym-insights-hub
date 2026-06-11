@@ -124,7 +124,7 @@ function FinanceiroPage() {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => formatBRL(v)} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => formatBRL(Number(v))} />
               <Area
                 type="monotone"
                 dataKey="faturamento"
@@ -151,7 +151,7 @@ function FinanceiroPage() {
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => formatBRL(v)} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => formatBRL(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -169,7 +169,7 @@ function FinanceiroPage() {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => formatBRL(v)} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => formatBRL(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="faturamento" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="cancelamentos" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
@@ -186,7 +186,7 @@ function FinanceiroPage() {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => v ? formatBRL(v as number) : "-"} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => (v ? formatBRL(Number(v)) : "-")} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="real" fill="var(--chart-1)" radius={[4, 4, 0, 0]} name="Real" />
               <Line
