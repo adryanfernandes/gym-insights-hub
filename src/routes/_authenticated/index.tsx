@@ -15,11 +15,9 @@ import {
 import { Users, DollarSign, TrendingDown, ShoppingCart, RefreshCw, CalendarCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
+import { useApp } from "@/contexts/AppContext";
 import {
-  overviewKpis,
-  evolucaoAlunos,
-  ocupacaoAgenda,
-  taxaRenovacao,
+  getFilteredDashboardData,
   formatBRL,
   formatNum,
 } from "@/lib/mockData";
@@ -28,7 +26,7 @@ import { exportToPdf, exportToExcel } from "@/lib/exporters";
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
-      { title: "Geral — GymPulse BI" },
+      { title: "Geral — be.move BI" },
       { name: "description", content: "Visão executiva da operação da academia." },
     ],
   }),
@@ -44,7 +42,9 @@ const tooltipStyle = {
 };
 
 function GeralPage() {
-  const k = overviewKpis;
+  const { filters } = useApp();
+  const data = getFilteredDashboardData(filters);
+  const k = data.overviewKpis;
 
   const onExportExcel = () =>
     exportToExcel("geral", {
@@ -58,9 +58,9 @@ function GeralPage() {
         { metrica: "Taxa desativação renovação (%)", valor: k.taxaDesativacaoRenovacao },
         { metrica: "Taxa ocupação agenda (%)", valor: k.taxaOcupacaoAgenda },
       ],
-      EvolucaoAlunos: evolucaoAlunos,
-      OcupacaoAgenda: ocupacaoAgenda,
-      TaxaRenovacao: taxaRenovacao,
+      EvolucaoAlunos: data.evolucaoAlunos,
+      OcupacaoAgenda: data.ocupacaoAgenda,
+      TaxaRenovacao: data.taxaRenovacao,
     });
 
   const onExportPdf = () =>
@@ -134,7 +134,7 @@ function GeralPage() {
           description="Últimos 30 dias"
         >
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={evolucaoAlunos}>
+              <AreaChart data={data.evolucaoAlunos}>
               <defs>
                 <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.5} />
@@ -158,7 +158,7 @@ function GeralPage() {
 
         <ChartCard title="Ocupação da agenda por horário" description="Média do período">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={ocupacaoAgenda}>
+            <BarChart data={data.ocupacaoAgenda}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="horario"
@@ -177,7 +177,7 @@ function GeralPage() {
           description="Últimos 12 meses"
         >
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={taxaRenovacao}>
+            <LineChart data={data.taxaRenovacao}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />

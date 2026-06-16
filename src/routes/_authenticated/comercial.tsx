@@ -31,7 +31,7 @@ import { exportToPdf, exportToExcel } from "@/lib/exporters";
 export const Route = createFileRoute("/_authenticated/comercial")({
   head: () => ({
     meta: [
-      { title: "Comercial — GymPulse BI" },
+      { title: "Comercial — be.move BI" },
       { name: "description", content: "Aquisição e retenção de alunos." },
     ],
   }),

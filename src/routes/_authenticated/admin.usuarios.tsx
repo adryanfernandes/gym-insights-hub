@@ -6,7 +6,7 @@ import { useApp } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
-  head: () => ({ meta: [{ title: "Usuários — GymPulse BI" }] }),
+  head: () => ({ meta: [{ title: "Usuários — be.move BI" }] }),
   component: AdminUsersPage,
 });
 
