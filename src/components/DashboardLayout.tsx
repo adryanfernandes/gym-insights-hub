@@ -50,7 +50,7 @@ export function DashboardLayout({
 
   async function handleSignOut() {
     await signOut();
-    navigate({ to: "/auth", replace: true });
+    navigate({ to: "/", replace: true });
   }
 
   return (
