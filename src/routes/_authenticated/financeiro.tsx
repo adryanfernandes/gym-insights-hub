@@ -18,11 +18,9 @@ import {
 import { Wallet, TrendingUp, Repeat, AlertOctagon } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
+import { useApp } from "@/contexts/AppContext";
 import {
-  overviewKpis,
-  faturamentoMensal,
-  receitaPorPlano,
-  projecaoFaturamento,
+  getFilteredDashboardData,
   formatBRL,
 } from "@/lib/mockData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
@@ -48,7 +46,9 @@ const tooltipStyle = {
 const PIE_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
 
 function FinanceiroPage() {
-  const k = overviewKpis;
+  const { filters } = useApp();
+  const data = getFilteredDashboardData(filters);
+  const k = data.overviewKpis;
 
   const onExportExcel = () =>
     exportToExcel("financeiro", {
@@ -58,9 +58,9 @@ function FinanceiroPage() {
         { metrica: "LTV médio", valor: k.ltvMedio },
         { metrica: "Cancelamentos financeiros", valor: k.cancelamentosFinanceiros },
       ],
-      FaturamentoMensal: faturamentoMensal,
-      ReceitaPorPlano: receitaPorPlano,
-      Projecao: projecaoFaturamento,
+      FaturamentoMensal: data.faturamentoMensal,
+      ReceitaPorPlano: data.receitaPorPlano,
+      Projecao: data.projecaoFaturamento,
     });
 
   const onExportPdf = () =>
@@ -111,7 +111,7 @@ function FinanceiroPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard title="Evolução do faturamento mensal" description="Últimos 12 meses">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={faturamentoMensal}>
+            <AreaChart data={data.faturamentoMensal}>
               <defs>
                 <linearGradient id="gf" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.5} />
@@ -140,14 +140,14 @@ function FinanceiroPage() {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={receitaPorPlano}
+                data={data.receitaPorPlano}
                 dataKey="valor"
                 nameKey="plano"
                 innerRadius={55}
                 outerRadius={95}
                 paddingAngle={3}
               >
-                {receitaPorPlano.map((_, i) => (
+                {data.receitaPorPlano.map((_, i) => (
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
               </Pie>
@@ -162,7 +162,7 @@ function FinanceiroPage() {
           description="Comparativo mensal"
         >
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={faturamentoMensal}>
+            <ComposedChart data={data.faturamentoMensal}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
               <YAxis
@@ -179,7 +179,7 @@ function FinanceiroPage() {
 
         <ChartCard title="Projeção de faturamento" description="Próximos 6 meses">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={projecaoFaturamento}>
+            <ComposedChart data={data.projecaoFaturamento}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
               <YAxis
