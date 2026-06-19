@@ -5,8 +5,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
 
 export type Filters = {
   periodo: string;
@@ -18,19 +16,64 @@ export type Filters = {
 
 export type AppRole = "admin" | "gestor";
 
+export type AppUser = {
+  id: string;
+  login: string;
+  email: string;
+  displayName: string;
+  role: AppRole;
+  password: string;
+};
+
 type Ctx = {
   theme: "light" | "dark";
   toggleTheme: () => void;
   filters: Filters;
   setFilters: (f: Partial<Filters>) => void;
-  user: User | null;
+  user: AppUser | null;
+  users: AppUser[];
   role: AppRole | null;
   isAdmin: boolean;
   loadingAuth: boolean;
+  signIn: (login: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
+  addUser: (input: {
+    login: string;
+    password: string;
+    displayName: string;
+    email: string;
+    role: AppRole;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  updateUserRole: (userId: string, role: AppRole) => Promise<void>;
+};
+
+const AUTH_STORAGE_KEY = "be_move_auth_user";
+const USERS_STORAGE_KEY = "be_move_users";
+const ADMIN_USER: AppUser = {
+  id: "local-admin",
+  login: "admin",
+  email: "admin@be.move",
+  displayName: "Administrador",
+  role: "admin",
+  password: "12345",
 };
 
 const AppCtx = createContext<Ctx | null>(null);
+
+function loadUsers() {
+  try {
+    const saved = window.localStorage.getItem(USERS_STORAGE_KEY);
+    const parsed = saved ? (JSON.parse(saved) as AppUser[]) : [];
+    const withoutDuplicateAdmin = parsed.filter((user) => user.id !== ADMIN_USER.id);
+    return [ADMIN_USER, ...withoutDuplicateAdmin];
+  } catch {
+    return [ADMIN_USER];
+  }
+}
+
+function persistUsers(users: AppUser[]) {
+  window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -41,8 +84,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sexo: "Todos",
     faixaEtaria: "Todas",
   });
-  const [user, setUser] = useState<User | null>(null);
-  const [role, setRole] = useState<AppRole | null>(null);
+  const [users, setUsers] = useState<AppUser[]>([ADMIN_USER]);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
@@ -52,40 +95,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   useEffect(() => {
-    let active = true;
+    const loadedUsers = loadUsers();
+    setUsers(loadedUsers);
+    persistUsers(loadedUsers);
 
-    async function loadRole(userId: string) {
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .order("role", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (!active) return;
-      setRole((data?.role as AppRole) ?? null);
-    }
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      const u = data.session?.user ?? null;
-      setUser(u);
-      if (u) loadRole(u.id);
-      setLoadingAuth(false);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadRole(u.id);
-      else setRole(null);
-    });
-
-    return () => {
-      active = false;
-      sub.subscription.unsubscribe();
-    };
+    const savedLogin = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    const savedUser = loadedUsers.find((item) => item.login === savedLogin) ?? null;
+    setUser(savedUser);
+    setLoadingAuth(false);
   }, []);
+
+  const role: AppRole | null = user?.role ?? null;
+
+  function setAndPersistUsers(nextUsers: AppUser[]) {
+    setUsers(nextUsers);
+    persistUsers(nextUsers);
+    setUser((current) => {
+      if (!current) return current;
+      return nextUsers.find((item) => item.id === current.id) ?? null;
+    });
+  }
 
   return (
     <AppCtx.Provider
@@ -95,13 +124,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
         filters,
         setFilters: (f) => setFiltersState((prev) => ({ ...prev, ...f })),
         user,
+        users,
         role,
         isAdmin: role === "admin",
         loadingAuth,
+        signIn: async (login, password) => {
+          const found = users.find(
+            (item) => item.login.trim().toLowerCase() === login.trim().toLowerCase(),
+          );
+          if (found && found.password === password) {
+            window.localStorage.setItem(AUTH_STORAGE_KEY, found.login);
+            setUser(found);
+            return true;
+          }
+          return false;
+        },
         signOut: async () => {
-          await supabase.auth.signOut();
+          window.localStorage.removeItem(AUTH_STORAGE_KEY);
           setUser(null);
-          setRole(null);
+        },
+        addUser: async ({ login, password, displayName, email, role }) => {
+          const normalizedLogin = login.trim();
+          if (!normalizedLogin || !password.trim() || !displayName.trim()) {
+            return { ok: false, error: "Preencha nome, login e senha." };
+          }
+          if (
+            users.some(
+              (item) => item.login.trim().toLowerCase() === normalizedLogin.toLowerCase(),
+            )
+          ) {
+            return { ok: false, error: "Já existe um usuário com esse login." };
+          }
+
+          const nextUser: AppUser = {
+            id: `local-${Date.now()}`,
+            login: normalizedLogin,
+            password,
+            displayName: displayName.trim(),
+            email: email.trim() || `${normalizedLogin}@be.move`,
+            role,
+          };
+          setAndPersistUsers([...users, nextUser]);
+          return { ok: true };
+        },
+        updateUserRole: async (userId, nextRole) => {
+          setAndPersistUsers(
+            users.map((item) =>
+              item.id === userId ? { ...item, role: nextRole } : item,
+            ),
+          );
         },
       }}
     >

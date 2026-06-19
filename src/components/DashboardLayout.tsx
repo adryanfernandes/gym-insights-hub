@@ -50,7 +50,7 @@ export function DashboardLayout({
 
   async function handleSignOut() {
     await signOut();
-    navigate({ to: "/", replace: true });
+    navigate({ to: "/auth", replace: true });
   }
 
   return (
@@ -83,6 +83,7 @@ export function DashboardLayout({
               <Link
                 key={item.to}
                 to={item.to}
+                preload="intent"
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                   active
@@ -107,6 +108,7 @@ export function DashboardLayout({
                   <Link
                     key={item.to}
                     to={item.to}
+                    preload="intent"
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                       active

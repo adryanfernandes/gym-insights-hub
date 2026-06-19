@@ -40,7 +40,7 @@ export function FiltersBar({ extra }: { extra?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
       <Select label="Período" value={filters.periodo} options={PERIODOS} onChange={upd("periodo")} />
-      <Select label="Unidade" value={filters.unidade} options={UNIDADES} onChange={upd("unidade")} />
+      <Select label="Bairro" value={filters.unidade} options={UNIDADES} onChange={upd("unidade")} />
       <Select
         label="Contrato"
         value={filters.tipoContrato}

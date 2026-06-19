@@ -1,64 +1,55 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
-import { Shield, ShieldCheck, Loader2, UserCog } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { Loader2, Shield, ShieldCheck, UserCog, UserPlus } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { useApp } from "@/contexts/AppContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useApp, type AppRole } from "@/contexts/AppContext";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
-  head: () => ({ meta: [{ title: "Usuários — be.move BI" }] }),
+  head: () => ({ meta: [{ title: "Usuários - be.move BI" }] }),
   component: AdminUsersPage,
 });
 
-type Row = {
-  id: string;
-  display_name: string | null;
-  unidade: string | null;
-  role: "admin" | "gestor" | null;
-};
-
 function AdminUsersPage() {
-  const { isAdmin, loadingAuth, user } = useApp();
+  const { isAdmin, loadingAuth, user, users, addUser, updateUserRole } = useApp();
   const navigate = useNavigate();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({
+    displayName: "",
+    login: "",
+    email: "",
+    password: "",
+    role: "gestor" as AppRole,
+  });
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!loadingAuth && !isAdmin) navigate({ to: "/" });
+    if (!loadingAuth && !isAdmin) navigate({ to: "/", replace: true });
   }, [isAdmin, loadingAuth, navigate]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name, unidade")
-      .order("created_at", { ascending: true });
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("user_id, role");
-    const map = new Map((roles ?? []).map((r) => [r.user_id, r.role as Row["role"]]));
-    setRows(
-      (profiles ?? []).map((p) => ({
-        id: p.id,
-        display_name: p.display_name,
-        unidade: p.unidade,
-        role: map.get(p.id) ?? null,
-      })),
-    );
-    setLoading(false);
-  }, []);
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreating(true);
+    setMessage("");
+    setError("");
 
-  useEffect(() => {
-    if (isAdmin) load();
-  }, [isAdmin, load]);
+    const result = await addUser(form);
+    setCreating(false);
 
-  async function setRole(userId: string, newRole: "admin" | "gestor") {
+    if (!result.ok) {
+      setError(result.error ?? "Não foi possível criar o usuário.");
+      return;
+    }
+
+    setForm({ displayName: "", login: "", email: "", password: "", role: "gestor" });
+    setMessage("Usuário criado com sucesso.");
+  }
+
+  async function setRole(userId: string, newRole: AppRole) {
     setSavingId(userId);
-    await supabase.from("user_roles").delete().eq("user_id", userId);
-    await supabase.from("user_roles").insert({ user_id: userId, role: newRole });
+    await updateUserRole(userId, newRole);
     setSavingId(null);
-    load();
   }
 
   if (loadingAuth || !isAdmin) {
@@ -73,12 +64,103 @@ function AdminUsersPage() {
 
   return (
     <DashboardLayout title="Usuários" subtitle="Gerencie quem acessa o dashboard">
-      <div className="rounded-xl border border-border bg-card">
+      <section className="rounded-xl border border-border bg-card">
+        <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+          <UserPlus className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold">Adicionar usuário</h2>
+        </div>
+
+        <form onSubmit={handleCreate} className="grid gap-4 p-5 md:grid-cols-5">
+          <label className="md:col-span-1">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Nome
+            </span>
+            <input
+              value={form.displayName}
+              onChange={(event) => setForm((prev) => ({ ...prev, displayName: event.target.value }))}
+              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
+
+          <label className="md:col-span-1">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Login
+            </span>
+            <input
+              value={form.login}
+              onChange={(event) => setForm((prev) => ({ ...prev, login: event.target.value }))}
+              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
+
+          <label className="md:col-span-1">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              E-mail
+            </span>
+            <input
+              value={form.email}
+              onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+              type="email"
+              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
+
+          <label className="md:col-span-1">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Senha
+            </span>
+            <input
+              value={form.password}
+              onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+              type="password"
+              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
+
+          <div className="grid grid-cols-[1fr_auto] gap-3 md:col-span-1">
+            <label>
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Papel
+              </span>
+              <select
+                value={form.role}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, role: event.target.value as AppRole }))
+                }
+                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="gestor">gestor</option>
+                <option value="admin">admin</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              disabled={creating}
+              className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+              Criar
+            </button>
+          </div>
+        </form>
+
+        {(error || message) && (
+          <p
+            className={`border-t border-border px-5 py-3 text-xs ${
+              error ? "text-destructive" : "text-success"
+            }`}
+          >
+            {error || message}
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-border bg-card">
         <div className="flex items-center gap-2 border-b border-border px-5 py-4">
           <UserCog className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">Usuários cadastrados</h2>
           <span className="ml-auto text-xs text-muted-foreground">
-            {rows.length} {rows.length === 1 ? "usuário" : "usuários"}
+            {users.length} {users.length === 1 ? "usuário" : "usuários"}
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -86,79 +168,72 @@ function AdminUsersPage() {
             <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Nome</th>
-                <th className="px-5 py-3 text-left font-medium">Unidade</th>
+                <th className="px-5 py-3 text-left font-medium">Login</th>
+                <th className="px-5 py-3 text-left font-medium">E-mail</th>
                 <th className="px-5 py-3 text-left font-medium">Papel</th>
                 <th className="px-5 py-3 text-right font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-muted-foreground">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r) => {
-                  const isSelf = r.id === user?.id;
-                  return (
-                    <tr key={r.id} className="border-t border-border">
-                      <td className="px-5 py-3">
-                        {r.display_name || "—"}{" "}
-                        {isSelf && (
-                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                            você
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-muted-foreground">
-                        {r.unidade || "—"}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                            r.role === "admin"
-                              ? "bg-primary/15 text-primary"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {r.role === "admin" ? (
-                            <ShieldCheck className="h-3 w-3" />
-                          ) : (
-                            <Shield className="h-3 w-3" />
-                          )}
-                          {r.role ?? "sem papel"}
+              {users.map((row) => {
+                const isSelf = row.id === user?.id;
+                return (
+                  <tr key={row.id} className="border-t border-border">
+                    <td className="px-5 py-3">
+                      {row.displayName}
+                      {isSelf && (
+                        <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          você
                         </span>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <div className="inline-flex gap-2">
-                          <button
-                            disabled={savingId === r.id || r.role === "gestor" || isSelf}
-                            onClick={() => setRole(r.id, "gestor")}
-                            className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent disabled:opacity-40"
-                          >
-                            Tornar gestor
-                          </button>
-                          <button
-                            disabled={savingId === r.id || r.role === "admin"}
-                            onClick={() => setRole(r.id, "admin")}
-                            className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-                          >
-                            Tornar admin
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">{row.login}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{row.email}</td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          row.role === "admin"
+                            ? "bg-primary/15 text-primary"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {row.role === "admin" ? (
+                          <ShieldCheck className="h-3 w-3" />
+                        ) : (
+                          <Shield className="h-3 w-3" />
+                        )}
+                        {row.role}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <div className="inline-flex gap-2">
+                        <button
+                          disabled={savingId === row.id || row.role === "gestor" || isSelf}
+                          onClick={() => setRole(row.id, "gestor")}
+                          className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent disabled:opacity-40"
+                        >
+                          Tornar gestor
+                        </button>
+                        <button
+                          disabled={savingId === row.id || row.role === "admin"}
+                          onClick={() => setRole(row.id, "admin")}
+                          className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+                        >
+                          Tornar admin
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
         <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
-          Você não pode rebaixar sua própria conta para evitar bloquear o acesso de admin.
+          Apenas administradores podem acessar esta aba e criar novos usuários. Você não pode
+          rebaixar sua própria conta para evitar bloquear o acesso de admin.
         </p>
-      </div>
+      </section>
     </DashboardLayout>
   );
 }

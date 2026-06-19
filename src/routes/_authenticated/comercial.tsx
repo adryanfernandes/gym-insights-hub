@@ -17,12 +17,9 @@ import {
 import { ShoppingCart, TrendingDown, AlertTriangle } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
+import { useApp } from "@/contexts/AppContext";
 import {
-  overviewKpis,
-  evolucaoVendas,
-  funilComercial,
-  rankingRetencao,
-  alunosRisco,
+  getFilteredDashboardData,
   formatBRL,
   formatNum,
 } from "@/lib/mockData";
@@ -55,7 +52,9 @@ const RISK_BADGE: Record<string, string> = {
 const RISK_LABEL: Record<string, string> = { alto: "Alto", medio: "Médio", baixo: "Baixo" };
 
 function ComercialPage() {
-  const k = overviewKpis;
+  const { filters } = useApp();
+  const data = getFilteredDashboardData(filters);
+  const k = data.overviewKpis;
 
   const onExportExcel = () =>
     exportToExcel("comercial", {
@@ -64,16 +63,16 @@ function ComercialPage() {
         { metrica: "Cancelamentos próx. 30d", valor: k.cancelamentos30d.qtd },
         { metrica: "Alunos em risco", valor: k.alunosRisco },
       ],
-      EvolucaoVendas: evolucaoVendas,
-      Funil: funilComercial,
-      Ranking: rankingRetencao,
-      AlunosRisco: alunosRisco,
+      EvolucaoVendas: data.evolucaoVendas,
+      Funil: data.funilComercial,
+      Ranking: data.rankingRetencao,
+      AlunosRisco: data.alunosRisco,
     });
 
   const onExportPdf = () =>
     exportToPdf(
       "Alunos em risco",
-      alunosRisco.map((a) => ({
+      data.alunosRisco.map((a) => ({
         Nome: a.nome,
         "Último agend.": a.ultimoAgendamento,
         "Dias sem atividade": a.diasSemAtividade,
@@ -119,7 +118,7 @@ function ComercialPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard title="Vendas x Cancelamentos" description="Últimos 30 dias">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={evolucaoVendas}>
+            <LineChart data={data.evolucaoVendas}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="data" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} />
               <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
@@ -147,7 +146,7 @@ function ComercialPage() {
           <ResponsiveContainer width="100%" height="100%">
             <FunnelChart>
               <Tooltip contentStyle={tooltipStyle} />
-              <Funnel dataKey="valor" data={funilComercial} isAnimationActive fill="var(--chart-1)">
+              <Funnel dataKey="valor" data={data.funilComercial} isAnimationActive fill="var(--chart-1)">
                 <LabelList
                   position="right"
                   fill="var(--foreground)"
@@ -172,7 +171,7 @@ function ComercialPage() {
           description="% de alunos retidos"
         >
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rankingRetencao} layout="vertical">
+            <BarChart data={data.rankingRetencao} layout="vertical">
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />
               <YAxis
@@ -194,8 +193,8 @@ function ComercialPage() {
           </p>
           <div className="mt-5 space-y-4">
             {["alto", "medio", "baixo"].map((nivel) => {
-              const count = alunosRisco.filter((a) => a.nivelRisco === nivel).length;
-              const pct = (count / alunosRisco.length) * 100;
+              const count = data.alunosRisco.filter((a) => a.nivelRisco === nivel).length;
+              const pct = data.alunosRisco.length ? (count / data.alunosRisco.length) * 100 : 0;
               return (
                 <div key={nivel}>
                   <div className="mb-1.5 flex items-center justify-between text-xs">
@@ -246,7 +245,7 @@ function ComercialPage() {
               </tr>
             </thead>
             <tbody>
-              {alunosRisco
+              {data.alunosRisco
                 .slice()
                 .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade)
                 .map((a) => (
