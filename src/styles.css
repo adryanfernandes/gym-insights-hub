@@ -136,3 +136,136 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+@layer utilities {
+  .login-grid-sweep {
+    background-image:
+      linear-gradient(to right, oklch(0.55 0.22 265 / 0.1) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.65 0.17 155 / 0.1) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: linear-gradient(to bottom, transparent, black 18%, black 72%, transparent);
+    animation: login-grid-sweep 14s linear infinite;
+  }
+
+  .login-card-in {
+    animation: login-card-in 620ms ease-out both;
+  }
+
+  .login-float {
+    animation: login-float 5.5s ease-in-out infinite;
+  }
+
+  .login-float-delayed {
+    animation: login-float 6.2s ease-in-out 500ms infinite;
+  }
+
+  .login-lift {
+    transform-origin: center;
+    animation: login-lift 3.4s ease-in-out infinite;
+  }
+
+  .login-pulse {
+    animation: login-pulse 2.4s ease-in-out infinite;
+  }
+
+  .login-sprint {
+    transform-origin: bottom;
+    animation: login-sprint 1.15s ease-in-out infinite;
+  }
+
+  .login-count {
+    animation: login-count 4.2s ease-in-out infinite;
+  }
+
+  .login-count-delayed {
+    animation: login-count 4.2s ease-in-out 250ms infinite;
+  }
+
+  .login-count-slow {
+    animation: login-count 4.2s ease-in-out 500ms infinite;
+  }
+}
+
+@keyframes login-grid-sweep {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 64px 64px;
+  }
+}
+
+@keyframes login-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes login-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) rotate(3deg);
+  }
+}
+
+@keyframes login-lift {
+  0%, 100% {
+    transform: translateY(14px) rotate(-7deg);
+  }
+  45%, 55% {
+    transform: translateY(-26px) rotate(4deg);
+  }
+}
+
+@keyframes login-pulse {
+  0%, 100% {
+    box-shadow: 0 24px 48px oklch(0.55 0.22 265 / 0.18);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 30px 64px oklch(0.65 0.17 155 / 0.26);
+    transform: scale(1.05);
+  }
+}
+
+@keyframes login-sprint {
+  0%, 100% {
+    transform: scaleY(0.58);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes login-count {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-grid-sweep,
+  .login-card-in,
+  .login-float,
+  .login-float-delayed,
+  .login-lift,
+  .login-pulse,
+  .login-sprint,
+  .login-count,
+  .login-count-delayed,
+  .login-count-slow {
+    animation: none;
+  }
+}
