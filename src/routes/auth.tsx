@@ -8,6 +8,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import beMoveLogo from "@/assets/be-move-logo.svg";
+import gymAnalyticsCard from "@/assets/gym-analytics-card.svg";
 import { useApp } from "@/contexts/AppContext";
 
 export const Route = createFileRoute("/auth")({
@@ -56,8 +58,22 @@ function LoginPage() {
         className="relative hidden min-h-[520px] items-center justify-center md:flex"
       >
         <div className="relative h-[460px] w-full max-w-xl">
-          <div className="absolute left-4 top-10 h-24 w-24 rounded-lg border border-primary/20 bg-card/65 shadow-lg backdrop-blur login-float" />
-          <div className="absolute bottom-8 right-8 h-28 w-28 rounded-lg border border-success/20 bg-card/65 shadow-lg backdrop-blur login-float-delayed" />
+          <div className="absolute left-4 top-10 grid h-24 w-24 place-items-center overflow-hidden rounded-lg border border-primary/20 bg-[#29498b] p-3 shadow-lg login-float">
+            <img
+              src={beMoveLogo}
+              alt=""
+              className="h-full w-full object-contain"
+              draggable={false}
+            />
+          </div>
+          <div className="absolute bottom-8 right-8 grid h-28 w-28 place-items-center overflow-hidden rounded-lg border border-success/20 bg-[#101828] p-3 shadow-lg login-float-delayed">
+            <img
+              src={gymAnalyticsCard}
+              alt=""
+              className="h-full w-full object-contain"
+              draggable={false}
+            />
+          </div>
 
           <div className="absolute left-12 top-28 h-60 w-60 rounded-full border border-primary/15" />
           <div className="absolute left-24 top-40 h-36 w-36 rounded-full border border-success/20" />

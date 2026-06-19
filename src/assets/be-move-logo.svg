@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 263 224" role="img" aria-labelledby="title">
+  <title id="title">be.move</title>
+  <rect width="263" height="224" fill="#29498b" />
+  <g
+    fill="#ffffff"
+    font-family="Inter, Arial, Helvetica, sans-serif"
+    font-weight="800"
+    letter-spacing="-4"
+  >
+    <text x="31" y="91" font-size="66">be.</text>
+    <text x="31" y="145" font-size="66">m</text>
+    <text x="148" y="145" font-size="66">ve</text>
+  </g>
+  <circle cx="123" cy="122" r="30" fill="none" stroke="#ff6b18" stroke-width="9" />
+  <path
+    d="M117 106 134 122 117 138"
+    fill="none"
+    stroke="#ff6b18"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="8"
+  />
+</svg>
