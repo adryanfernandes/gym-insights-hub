@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   LogOut,
   UserCog,
+  Settings,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { FiltersBar } from "./FiltersBar";
@@ -24,23 +25,24 @@ const NAV = [
   { to: "/financeiro", label: "Financeiro", icon: Wallet },
   { to: "/comercial", label: "Comercial", icon: Target },
   { to: "/perfil", label: "Perfil dos Clientes", icon: Users },
+  { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
-const ADMIN_NAV = [
-  { to: "/admin/usuarios", label: "Usuários", icon: UserCog },
-] as const;
+const ADMIN_NAV = [{ to: "/admin/usuarios", label: "Usuários", icon: UserCog }] as const;
 
 export function DashboardLayout({
   title,
   subtitle,
   onExportPdf,
   onExportExcel,
+  showFilters = true,
   children,
 }: {
   title: string;
   subtitle?: string;
   onExportPdf?: () => void;
   onExportExcel?: () => void;
+  showFilters?: boolean;
   children: ReactNode;
 }) {
   const { theme, toggleTheme, user, role, isAdmin, signOut } = useApp();
@@ -67,9 +69,7 @@ export function DashboardLayout({
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-sidebar-foreground">be.move BI</p>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Analytics
-            </p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Analytics</p>
           </div>
         </div>
         <nav className="space-y-1 p-3">
@@ -167,9 +167,7 @@ export function DashboardLayout({
             </button>
             <div className="min-w-0">
               <h1 className="truncate text-base font-bold sm:text-lg">{title}</h1>
-              {subtitle && (
-                <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-              )}
+              {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -201,7 +199,7 @@ export function DashboardLayout({
           </div>
         </header>
         <main className="flex-1 space-y-5 p-4 md:p-6">
-          <FiltersBar />
+          {showFilters && <FiltersBar />}
           {children}
         </main>
       </div>
