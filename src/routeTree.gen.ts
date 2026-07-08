@@ -12,6 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as ApiMembersRouteImport } from './routes/api/members'
+import { Route as ApiKeepaliveRouteImport } from './routes/api/keepalive'
+import { Route as AuthenticatedProfessoresRouteImport } from './routes/_authenticated/professores'
 import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
@@ -32,6 +35,22 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiMembersRoute = ApiMembersRouteImport.update({
+  id: '/api/members',
+  path: '/api/members',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiKeepaliveRoute = ApiKeepaliveRouteImport.update({
+  id: '/api/keepalive',
+  path: '/api/keepalive',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedProfessoresRoute =
+  AuthenticatedProfessoresRouteImport.update({
+    id: '/professores',
+    path: '/professores',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPerfilRoute = AuthenticatedPerfilRouteImport.update({
   id: '/perfil',
   path: '/perfil',
@@ -67,6 +86,9 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/perfil': typeof AuthenticatedPerfilRoute
+  '/professores': typeof AuthenticatedProfessoresRoute
+  '/api/keepalive': typeof ApiKeepaliveRoute
+  '/api/members': typeof ApiMembersRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
 }
 export interface FileRoutesByTo {
@@ -75,6 +97,9 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/perfil': typeof AuthenticatedPerfilRoute
+  '/professores': typeof AuthenticatedProfessoresRoute
+  '/api/keepalive': typeof ApiKeepaliveRoute
+  '/api/members': typeof ApiMembersRoute
   '/': typeof AuthenticatedIndexRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
 }
@@ -86,6 +111,9 @@ export interface FileRoutesById {
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
   '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
+  '/_authenticated/professores': typeof AuthenticatedProfessoresRoute
+  '/api/keepalive': typeof ApiKeepaliveRoute
+  '/api/members': typeof ApiMembersRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
 }
@@ -98,6 +126,9 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/financeiro'
     | '/perfil'
+    | '/professores'
+    | '/api/keepalive'
+    | '/api/members'
     | '/admin/usuarios'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -106,6 +137,9 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/financeiro'
     | '/perfil'
+    | '/professores'
+    | '/api/keepalive'
+    | '/api/members'
     | '/'
     | '/admin/usuarios'
   id:
@@ -116,6 +150,9 @@ export interface FileRouteTypes {
     | '/_authenticated/configuracoes'
     | '/_authenticated/financeiro'
     | '/_authenticated/perfil'
+    | '/_authenticated/professores'
+    | '/api/keepalive'
+    | '/api/members'
     | '/_authenticated/'
     | '/_authenticated/admin/usuarios'
   fileRoutesById: FileRoutesById
@@ -123,6 +160,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiKeepaliveRoute: typeof ApiKeepaliveRoute
+  ApiMembersRoute: typeof ApiMembersRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -146,6 +185,27 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/members': {
+      id: '/api/members'
+      path: '/api/members'
+      fullPath: '/api/members'
+      preLoaderRoute: typeof ApiMembersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/keepalive': {
+      id: '/api/keepalive'
+      path: '/api/keepalive'
+      fullPath: '/api/keepalive'
+      preLoaderRoute: typeof ApiKeepaliveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/professores': {
+      id: '/_authenticated/professores'
+      path: '/professores'
+      fullPath: '/professores'
+      preLoaderRoute: typeof AuthenticatedProfessoresRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/perfil': {
@@ -191,6 +251,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
   AuthenticatedPerfilRoute: typeof AuthenticatedPerfilRoute
+  AuthenticatedProfessoresRoute: typeof AuthenticatedProfessoresRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedAdminUsuariosRoute: typeof AuthenticatedAdminUsuariosRoute
 }
@@ -200,6 +261,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
   AuthenticatedPerfilRoute: AuthenticatedPerfilRoute,
+  AuthenticatedProfessoresRoute: AuthenticatedProfessoresRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedAdminUsuariosRoute: AuthenticatedAdminUsuariosRoute,
 }
@@ -210,6 +272,8 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiKeepaliveRoute: ApiKeepaliveRoute,
+  ApiMembersRoute: ApiMembersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

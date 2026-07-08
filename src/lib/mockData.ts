@@ -2,7 +2,7 @@ import { addMonths, differenceInCalendarDays, format, isWithinInterval, parse, s
 import type { Filters } from "@/contexts/AppContext";
 import customerRows from "./customerRows.json";
 
-type ClientRow = {
+export type ClientRow = {
   id: number;
   nome: string;
   genero: string;
@@ -19,7 +19,7 @@ type ClientRow = {
   diasAtivo: number;
 };
 
-const CLIENTS = customerRows as ClientRow[];
+export const CLIENTS = customerRows as ClientRow[];
 
 const parsedDateCache = new Map<string, Date | null>();
 const parseBRDate = (value: string | null) => {
@@ -37,18 +37,20 @@ const sum = <T,>(rows: T[], pick: (row: T) => number) => rows.reduce((total, row
 const avg = <T,>(rows: T[], pick: (row: T) => number) =>
   rows.length ? sum(rows, pick) / rows.length : 0;
 
-const allDates = CLIENTS.flatMap((client) => [
-  parseBRDate(client.inicio),
-  parseBRDate(client.vencimento),
-  parseBRDate(client.ultimaFrequencia),
-]).filter((date): date is Date => Boolean(date));
+function getReferenceDate(clients: ClientRow[]) {
+  const allDates = clients.flatMap((client) => [
+    parseBRDate(client.inicio),
+    parseBRDate(client.vencimento),
+    parseBRDate(client.ultimaFrequencia),
+  ]).filter((date): date is Date => Boolean(date));
 
-const referenceDate = allDates.reduce(
-  (latest, date) => (date > latest ? date : latest),
-  allDates[0] ?? new Date(),
-);
+  return allDates.reduce(
+    (latest, date) => (date > latest ? date : latest),
+    allDates[0] ?? new Date(),
+  );
+}
 
-function periodRange(periodo: string) {
+function periodRange(periodo: string, referenceDate: Date) {
   if (periodo.includes("Hoje")) {
     return { start: referenceDate, end: referenceDate, label: "Hoje", days: 1 };
   }
@@ -81,13 +83,13 @@ function ageRange(idade: number) {
   return "55+";
 }
 
-function daysSinceLastFrequency(client: ClientRow) {
+function daysSinceLastFrequency(client: ClientRow, referenceDate: Date) {
   const last = parseBRDate(client.ultimaFrequencia);
   return last ? differenceInCalendarDays(referenceDate, last) : 999;
 }
 
-function riskLevel(client: ClientRow): "baixo" | "medio" | "alto" {
-  const days = daysSinceLastFrequency(client);
+function riskLevel(client: ClientRow, referenceDate: Date): "baixo" | "medio" | "alto" {
+  const days = daysSinceLastFrequency(client, referenceDate);
   if (days > 15) return "alto";
   if (days > 10) return "medio";
   return "baixo";
@@ -141,8 +143,8 @@ function makeMonthKeys(range: { start: Date; end: Date }) {
   return keys;
 }
 
-function latestTopBairros() {
-  return countBy(CLIENTS, (client) => client.bairro)
+function latestTopBairros(clients = CLIENTS) {
+  return countBy(clients, (client) => client.bairro)
     .sort((a, b) => b.qtd - a.qtd)
     .slice(0, 12)
     .map((row) => row.key);
@@ -157,6 +159,20 @@ export const TIPOS_CONTRATO = [
 ];
 export const SEXOS = ["Todos", "Masculino", "Feminino", "Outro"];
 export const FAIXAS_ETARIAS = ["Todas", "18-25", "26-35", "36-45", "46-55", "55+"];
+
+export function getDashboardFilterOptions(clients = CLIENTS) {
+  return {
+    unidades: ["Todas", ...latestTopBairros(clients)],
+    tiposContrato: [
+      "Todos",
+      ...countBy(clients, (client) => client.contrato)
+        .sort((a, b) => b.qtd - a.qtd)
+        .map((row) => row.key),
+    ],
+    sexos: SEXOS,
+    faixasEtarias: FAIXAS_ETARIAS,
+  };
+}
 
 export const formatBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -174,26 +190,35 @@ export function getFilteredDashboardData(filters: Filters) {
   return data;
 }
 
-function buildFilteredDashboardData(filters: Filters) {
-  const range = periodRange(filters.periodo);
-  const baseRows = CLIENTS.filter((client) => matchesBaseFilters(client, filters));
+export function getFilteredDashboardDataFromRows(filters: Filters, clients: ClientRow[]) {
+  return buildFilteredDashboardData(filters, clients.length ? clients : CLIENTS);
+}
+
+function buildFilteredDashboardData(filters: Filters, clients = CLIENTS) {
+  const referenceDate = getReferenceDate(clients);
+  const range = periodRange(filters.periodo, referenceDate);
+  const baseRows = clients.filter((client) => matchesBaseFilters(client, filters));
   const rows = baseRows.filter((client) => matchesPeriod(client, range));
   const periodRows = rows.length ? rows : baseRows;
 
   const starts = periodRows.filter((client) => isInRange(parseBRDate(client.inicio), range));
   const vencimentos = periodRows.filter((client) => isInRange(parseBRDate(client.vencimento), range));
-  const riskRows = periodRows.filter((client) => daysSinceLastFrequency(client) > 10);
-  const highRiskRows = riskRows.filter((client) => riskLevel(client) === "alto");
+  const riskRows = periodRows.filter((client) => daysSinceLastFrequency(client, referenceDate) > 10);
+  const highRiskRows = riskRows.filter((client) => riskLevel(client, referenceDate) === "alto");
   const activeRows = periodRows.filter((client) => {
     const due = parseBRDate(client.vencimento);
     return !due || due >= range.end;
+  });
+  const inactiveRows = periodRows.filter((client) => {
+    const due = parseBRDate(client.vencimento);
+    return Boolean(due && due < range.end);
   });
   const positiveValueRows = periodRows.filter((client) => client.valor > 0);
   const ticketMedio = avg(positiveValueRows, (client) => client.valor);
   const faturamento = sum(periodRows, (client) => client.valor);
   const cancelamentosValor = sum(highRiskRows, (client) => client.valor);
   const ocupacao = clamp(
-    35 + (periodRows.filter((client) => daysSinceLastFrequency(client) <= 7).length / Math.max(periodRows.length, 1)) * 60,
+    35 + (periodRows.filter((client) => daysSinceLastFrequency(client, referenceDate) <= 7).length / Math.max(periodRows.length, 1)) * 60,
     0,
     98,
   );
@@ -206,7 +231,7 @@ function buildFilteredDashboardData(filters: Filters) {
     });
     const monthDueRisk = periodRows.filter((client) => {
       const due = parseBRDate(client.vencimento);
-      return due && monthKey(due) === key && riskLevel(client) === "alto";
+      return due && monthKey(due) === key && riskLevel(client, referenceDate) === "alto";
     });
     return {
       mes: monthLabel(key),
@@ -233,7 +258,7 @@ function buildFilteredDashboardData(filters: Filters) {
     }).length;
     const cancelamentos = baseRows.filter((client) => {
       const due = parseBRDate(client.vencimento);
-      return due && format(due, "yyyy-MM-dd") === format(date, "yyyy-MM-dd") && riskLevel(client) === "alto";
+      return due && format(due, "yyyy-MM-dd") === format(date, "yyyy-MM-dd") && riskLevel(client, referenceDate) === "alto";
     }).length;
     return { data: format(date, "dd/MM"), vendas, cancelamentos };
   });
@@ -260,22 +285,125 @@ function buildFilteredDashboardData(filters: Filters) {
   const rankingRetencao = countBy(periodRows, (client) => client.bairro)
     .map((row) => {
       const group = periodRows.filter((client) => client.bairro === row.key);
-      const retained = group.filter((client) => daysSinceLastFrequency(client) <= 15).length;
+      const retained = group.filter((client) => daysSinceLastFrequency(client, referenceDate) <= 15).length;
       return { unidade: row.key, retencao: Math.round((retained / Math.max(group.length, 1)) * 100) };
     })
     .sort((a, b) => b.retencao - a.retencao)
     .slice(0, 8);
   const alunosRisco = riskRows
     .slice()
-    .sort((a, b) => daysSinceLastFrequency(b) - daysSinceLastFrequency(a))
+    .sort((a, b) => daysSinceLastFrequency(b, referenceDate) - daysSinceLastFrequency(a, referenceDate))
     .slice(0, 12)
     .map((client) => ({
       id: client.id,
       nome: client.nome,
       ultimoAgendamento: client.ultimaFrequencia ?? "-",
-      diasSemAtividade: daysSinceLastFrequency(client),
+      diasSemAtividade: daysSinceLastFrequency(client, referenceDate),
       valorContrato: client.valor,
-      nivelRisco: riskLevel(client),
+      nivelRisco: riskLevel(client, referenceDate),
+    }));
+
+  const unidadesPeriodo = countBy(periodRows, (client) => client.bairro)
+    .sort((a, b) => b.qtd - a.qtd)
+    .map((row) => row.key);
+  const teacherSeed = [
+    { professor: "Ana Ribeiro", modalidade: "Musculacao" },
+    { professor: "Bruno Castro", modalidade: "Funcional" },
+    { professor: "Carla Mendes", modalidade: "Pilates" },
+    { professor: "Diego Nunes", modalidade: "Spinning" },
+    { professor: "Fernanda Lima", modalidade: "Yoga" },
+    { professor: "Gustavo Rocha", modalidade: "Lutas" },
+    { professor: "Helena Prado", modalidade: "Danca" },
+    { professor: "Igor Martins", modalidade: "Cross Training" },
+    { professor: "Juliana Alves", modalidade: "Alongamento" },
+    { professor: "Marcos Vieira", modalidade: "HIIT" },
+  ];
+  const teacherBase = filters.unidade === "Todas"
+    ? teacherSeed
+    : teacherSeed.filter((_, index) => index % 3 !== 1).slice(0, 6);
+  const ocupacaoBase = ocupacao;
+  const professoresRanking = teacherBase.map((teacher, index) => {
+    const unidade = filters.unidade === "Todas"
+      ? (unidadesPeriodo[index % Math.max(unidadesPeriodo.length, 1)] ?? "Centro")
+      : filters.unidade;
+    const aulas = Math.max(12, Math.round((range.days / 30) * (18 + (index % 4) * 4 + starts.length / 18)));
+    const capacidade = aulas * (12 + (index % 5) * 2);
+    const ocupacaoProfessor = round(clamp(ocupacaoBase + Math.sin(index + 0.75) * 13 + (index % 3) * 3, 42, 96), 1);
+    const presentes = Math.round((capacidade * ocupacaoProfessor) / 100);
+    const noShow = round(clamp(100 - ocupacaoProfessor + (index % 4) * 1.7, 3, 28), 1);
+
+    return {
+      ...teacher,
+      unidade,
+      aulas,
+      capacidade,
+      presentes,
+      ocupacao: ocupacaoProfessor,
+      noShow,
+      mediaAlunos: round(presentes / Math.max(aulas, 1), 1),
+    };
+  }).sort((a, b) => b.ocupacao - a.ocupacao);
+  const professoresKpis = {
+    totalProfessores: professoresRanking.length,
+    aulasMinistradas: sum(professoresRanking, (row) => row.aulas),
+    capacidadeTotal: sum(professoresRanking, (row) => row.capacidade),
+    alunosPresentes: sum(professoresRanking, (row) => row.presentes),
+    ocupacaoMedia: round(
+      (sum(professoresRanking, (row) => row.presentes) /
+        Math.max(sum(professoresRanking, (row) => row.capacidade), 1)) *
+        100,
+      1,
+    ),
+    taxaNoShowMedia: round(avg(professoresRanking, (row) => row.noShow), 1),
+    professoresAltaOcupacao: professoresRanking.filter((row) => row.ocupacao >= 80).length,
+  };
+  const professoresPorModalidade = teacherSeed.slice(0, 8).map((teacher, index) => {
+    const group = professoresRanking.filter((row) => row.modalidade === teacher.modalidade);
+    const fallbackAulas = Math.round((range.days / 30) * (14 + index * 2));
+    const aulas = group.length ? sum(group, (row) => row.aulas) : fallbackAulas;
+    const capacidade = group.length ? sum(group, (row) => row.capacidade) : fallbackAulas * (12 + index);
+    const presentes = group.length
+      ? sum(group, (row) => row.presentes)
+      : Math.round(capacidade * clamp((ocupacaoBase + Math.cos(index) * 10) / 100, 0.45, 0.92));
+
+    return {
+      modalidade: teacher.modalidade,
+      aulas,
+      ocupacao: round((presentes / Math.max(capacidade, 1)) * 100, 1),
+      mediaAlunos: round(presentes / Math.max(aulas, 1), 1),
+    };
+  });
+  const professoresPorHorario = [
+    "06:00",
+    "07:00",
+    "08:00",
+    "12:00",
+    "17:00",
+    "18:00",
+    "19:00",
+    "20:00",
+  ].map((horario, index) => ({
+    horario,
+    ocupacao: Math.round(clamp(professoresKpis.ocupacaoMedia + Math.sin(index * 1.3) * 15 + (index >= 4 ? 7 : -3), 38, 98)),
+    aulas: Math.round((range.days / 30) * (18 + index * 3)),
+  }));
+  const totalSemanasProfessores = Math.min(8, Math.max(4, Math.ceil(range.days / 7)));
+  const professoresEvolucao = Array.from({ length: totalSemanasProfessores }, (_, index) => {
+    const semana = `S${index + 1}`;
+    const variacao = Math.sin(index * 0.95) * 5 + index * 0.8 - totalSemanasProfessores / 3;
+    return {
+      semana,
+      ocupacao: round(clamp(professoresKpis.ocupacaoMedia + variacao, 45, 96), 1),
+      aulas: Math.round((professoresKpis.aulasMinistradas / totalSemanasProfessores) * (0.88 + index * 0.035)),
+    };
+  });
+  const professoresOportunidades = professoresRanking
+    .filter((row) => row.ocupacao < 72 || row.noShow > 18)
+    .slice(-4)
+    .map((row) => ({
+      professor: row.professor,
+      foco: row.ocupacao < 72 ? "Rever grade/oferta" : "Reduzir faltas",
+      indicador: row.ocupacao < 72 ? `${row.ocupacao}% ocupacao` : `${row.noShow}% no-show`,
     }));
 
   const visitantes = Math.round(starts.length * 5.8);
@@ -289,6 +417,7 @@ function buildFilteredDashboardData(filters: Filters) {
     periodLabel: range.label,
     overviewKpis: {
       alunosAtivos: activeRows.length,
+      alunosNaoAtivos: inactiveRows.length,
       ticketMedio: round(ticketMedio, 1),
       cancelamentos30d: { qtd: highRiskRows.length, valor: round(cancelamentosValor, 1) },
       vendas30d: { qtd: starts.length, valor: round(sum(starts, (client) => client.valor), 1) },
@@ -329,7 +458,7 @@ function buildFilteredDashboardData(filters: Filters) {
         const due = parseBRDate(client.vencimento);
         return due && monthKey(due) === key;
       });
-      const retained = monthRows.filter((client) => riskLevel(client) !== "alto").length;
+      const retained = monthRows.filter((client) => riskLevel(client, referenceDate) !== "alto").length;
       return {
         mes: monthLabel(key),
         taxa: Math.round((retained / Math.max(monthRows.length, 1)) * 100),
@@ -351,6 +480,14 @@ function buildFilteredDashboardData(filters: Filters) {
     ],
     rankingRetencao,
     alunosRisco,
+    professores: {
+      kpis: professoresKpis,
+      ranking: professoresRanking,
+      porModalidade: professoresPorModalidade,
+      porHorario: professoresPorHorario,
+      evolucao: professoresEvolucao,
+      oportunidades: professoresOportunidades,
+    },
     faixaEtariaData,
     sexoData,
     tipoContratoData,

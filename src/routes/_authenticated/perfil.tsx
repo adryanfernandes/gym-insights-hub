@@ -16,7 +16,8 @@ import { Cake, Users, FileText } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
-import { getFilteredDashboardData, formatNum } from "@/lib/mockData";
+import { formatNum } from "@/lib/mockData";
+import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
 export const Route = createFileRoute("/_authenticated/perfil")({
@@ -47,7 +48,7 @@ const PIE_COLORS = [
 
 function PerfilPage() {
   const { filters } = useApp();
-  const data = getFilteredDashboardData(filters);
+  const { data } = useDashboardData(filters);
   const k = data.overviewKpis;
   const totalSexo = data.sexoData.reduce((s, d) => s + d.qtd, 0);
   const masc = data.sexoData.find((s) => s.sexo === "Masculino")?.qtd ?? 0;

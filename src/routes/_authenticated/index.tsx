@@ -12,15 +12,15 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { Users, DollarSign, TrendingDown, ShoppingCart, RefreshCw, CalendarCheck } from "lucide-react";
+import { Users, UserX, DollarSign, TrendingDown, ShoppingCart, RefreshCw, CalendarCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
 import {
-  getFilteredDashboardData,
   formatBRL,
   formatNum,
 } from "@/lib/mockData";
+import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -43,13 +43,14 @@ const tooltipStyle = {
 
 function GeralPage() {
   const { filters } = useApp();
-  const data = getFilteredDashboardData(filters);
+  const { data } = useDashboardData(filters);
   const k = data.overviewKpis;
 
   const onExportExcel = () =>
     exportToExcel("geral", {
       KPIs: [
         { metrica: "Alunos ativos", valor: k.alunosAtivos },
+        { metrica: "Alunos não ativos", valor: k.alunosNaoAtivos },
         { metrica: "Ticket médio", valor: k.ticketMedio },
         { metrica: "Cancelamentos 30d (qtd)", valor: k.cancelamentos30d.qtd },
         { metrica: "Cancelamentos 30d (R$)", valor: k.cancelamentos30d.valor },
@@ -66,6 +67,7 @@ function GeralPage() {
   const onExportPdf = () =>
     exportToPdf("Geral - KPIs", [
       { Métrica: "Alunos ativos", Valor: formatNum(k.alunosAtivos) },
+      { Métrica: "Alunos não ativos", Valor: formatNum(k.alunosNaoAtivos) },
       { Métrica: "Ticket médio", Valor: formatBRL(k.ticketMedio) },
       { Métrica: "Vendas 30d", Valor: `${k.vendas30d.qtd} (${formatBRL(k.vendas30d.valor)})` },
       {
@@ -83,12 +85,20 @@ function GeralPage() {
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
     >
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         <KpiCard
           label="Alunos ativos"
           value={formatNum(k.alunosAtivos)}
           delta={4.2}
           icon={<Users className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Alunos não ativos"
+          value={formatNum(k.alunosNaoAtivos)}
+          hint="Contratos vencidos"
+          delta={-1.6}
+          accent="warning"
+          icon={<UserX className="h-5 w-5" />}
         />
         <KpiCard
           label="Ticket médio"

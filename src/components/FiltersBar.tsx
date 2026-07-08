@@ -1,5 +1,5 @@
 import { useApp, type Filters } from "@/contexts/AppContext";
-import { UNIDADES, TIPOS_CONTRATO, SEXOS, FAIXAS_ETARIAS } from "@/lib/mockData";
+import { useDashboardData } from "@/lib/membersDashboardData";
 
 const PERIODOS = ["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Este ano"];
 
@@ -36,22 +36,23 @@ function Select({
 
 export function FiltersBar({ extra }: { extra?: React.ReactNode }) {
   const { filters, setFilters } = useApp();
+  const { filterOptions } = useDashboardData(filters);
   const upd = (k: keyof Filters) => (v: string) => setFilters({ [k]: v });
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
       <Select label="Período" value={filters.periodo} options={PERIODOS} onChange={upd("periodo")} />
-      <Select label="Bairro" value={filters.unidade} options={UNIDADES} onChange={upd("unidade")} />
+      <Select label="Bairro" value={filters.unidade} options={filterOptions.unidades} onChange={upd("unidade")} />
       <Select
         label="Contrato"
         value={filters.tipoContrato}
-        options={TIPOS_CONTRATO}
+        options={filterOptions.tiposContrato}
         onChange={upd("tipoContrato")}
       />
-      <Select label="Sexo" value={filters.sexo} options={SEXOS} onChange={upd("sexo")} />
+      <Select label="Sexo" value={filters.sexo} options={filterOptions.sexos} onChange={upd("sexo")} />
       <Select
         label="Faixa etária"
         value={filters.faixaEtaria}
-        options={FAIXAS_ETARIAS}
+        options={filterOptions.faixasEtarias}
         onChange={upd("faixaEtaria")}
       />
       {extra}

@@ -5,6 +5,7 @@ import {
   Wallet,
   Target,
   Users,
+  UserRoundCheck,
   Moon,
   Sun,
   Dumbbell,
@@ -24,6 +25,7 @@ const NAV = [
   { to: "/", label: "Geral", icon: LayoutDashboard },
   { to: "/financeiro", label: "Financeiro", icon: Wallet },
   { to: "/comercial", label: "Comercial", icon: Target },
+  { to: "/professores", label: "Professores", icon: UserRoundCheck },
   { to: "/perfil", label: "Perfil dos Clientes", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;

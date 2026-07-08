@@ -19,10 +19,10 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
 import {
-  getFilteredDashboardData,
   formatBRL,
   formatNum,
 } from "@/lib/mockData";
+import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
 export const Route = createFileRoute("/_authenticated/comercial")({
@@ -53,7 +53,7 @@ const RISK_LABEL: Record<string, string> = { alto: "Alto", medio: "Médio", baix
 
 function ComercialPage() {
   const { filters } = useApp();
-  const data = getFilteredDashboardData(filters);
+  const { data } = useDashboardData(filters);
   const k = data.overviewKpis;
 
   const onExportExcel = () =>

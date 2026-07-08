@@ -20,9 +20,9 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
 import {
-  getFilteredDashboardData,
   formatBRL,
 } from "@/lib/mockData";
+import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
 export const Route = createFileRoute("/_authenticated/financeiro")({
@@ -47,7 +47,7 @@ const PIE_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(-
 
 function FinanceiroPage() {
   const { filters } = useApp();
-  const data = getFilteredDashboardData(filters);
+  const { data } = useDashboardData(filters);
   const k = data.overviewKpis;
 
   const onExportExcel = () =>
