@@ -1,6 +1,5 @@
 import { addMonths, differenceInCalendarDays, format, isWithinInterval, parse, subDays } from "date-fns";
 import type { Filters } from "@/contexts/AppContext";
-import customerRows from "./customerRows.json";
 
 export type ClientRow = {
   id: number;
@@ -18,8 +17,6 @@ export type ClientRow = {
   valorTotal: number;
   diasAtivo: number;
 };
-
-export const CLIENTS = customerRows as ClientRow[];
 
 const parsedDateCache = new Map<string, Date | null>();
 const parseBRDate = (value: string | null) => {
@@ -143,24 +140,17 @@ function makeMonthKeys(range: { start: Date; end: Date }) {
   return keys;
 }
 
-function latestTopBairros(clients = CLIENTS) {
+function latestTopBairros(clients: ClientRow[]) {
   return countBy(clients, (client) => client.bairro)
     .sort((a, b) => b.qtd - a.qtd)
     .slice(0, 12)
     .map((row) => row.key);
 }
 
-export const UNIDADES = ["Todas", ...latestTopBairros()];
-export const TIPOS_CONTRATO = [
-  "Todos",
-  ...countBy(CLIENTS, (client) => client.contrato)
-    .sort((a, b) => b.qtd - a.qtd)
-    .map((row) => row.key),
-];
 export const SEXOS = ["Todos", "Masculino", "Feminino", "Outro"];
 export const FAIXAS_ETARIAS = ["Todas", "18-25", "26-35", "36-45", "46-55", "55+"];
 
-export function getDashboardFilterOptions(clients = CLIENTS) {
+export function getDashboardFilterOptions(clients: ClientRow[]) {
   return {
     unidades: ["Todas", ...latestTopBairros(clients)],
     tiposContrato: [
@@ -178,23 +168,11 @@ export const formatBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 export const formatNum = (v: number) => v.toLocaleString("pt-BR");
 
-const dashboardDataCache = new Map<string, ReturnType<typeof buildFilteredDashboardData>>();
-
-export function getFilteredDashboardData(filters: Filters) {
-  const cacheKey = JSON.stringify(filters);
-  const cached = dashboardDataCache.get(cacheKey);
-  if (cached) return cached;
-
-  const data = buildFilteredDashboardData(filters);
-  dashboardDataCache.set(cacheKey, data);
-  return data;
-}
-
 export function getFilteredDashboardDataFromRows(filters: Filters, clients: ClientRow[]) {
-  return buildFilteredDashboardData(filters, clients.length ? clients : CLIENTS);
+  return buildFilteredDashboardData(filters, clients);
 }
 
-function buildFilteredDashboardData(filters: Filters, clients = CLIENTS) {
+function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
   const referenceDate = getReferenceDate(clients);
   const range = periodRange(filters.periodo, referenceDate);
   const baseRows = clients.filter((client) => matchesBaseFilters(client, filters));

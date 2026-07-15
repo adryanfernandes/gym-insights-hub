@@ -1,8 +1,15 @@
 import { differenceInCalendarDays, format, parseISO, subDays } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Filters } from "@/contexts/AppContext";
 import {
-  CLIENTS,
   getDashboardFilterOptions,
   getFilteredDashboardDataFromRows,
   type ClientRow,
@@ -185,7 +192,7 @@ async function fetchMembersRequest() {
   return Array.isArray(data) ? data as MemberRecord[] : [];
 }
 
-export function useDashboardData(filters: Filters) {
+function useDashboardDataState(filters: Filters) {
   const [members, setMembers] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -216,7 +223,7 @@ export function useDashboardData(filters: Filters) {
     };
   }, []);
 
-  const sourceRows = members.length ? members : CLIENTS;
+  const sourceRows = members;
   const data = useMemo(
     () => getFilteredDashboardDataFromRows(filters, sourceRows),
     [filters, sourceRows],
@@ -228,7 +235,33 @@ export function useDashboardData(filters: Filters) {
     filterOptions,
     loadingMembers: loading,
     membersError: error,
-    usingSupabaseMembers: members.length > 0,
+    usingSupabaseMembers: !loading && !error,
     membersCount: members.length,
   };
+}
+
+type DashboardData = ReturnType<typeof useDashboardDataState>;
+
+const DashboardDataContext = createContext<DashboardData | null>(null);
+
+export function DashboardDataProvider({
+  filters,
+  children,
+}: {
+  filters: Filters;
+  children: ReactNode;
+}) {
+  const value = useDashboardDataState(filters);
+
+  return createElement(DashboardDataContext.Provider, { value }, children);
+}
+
+export function useDashboardData(_filters: Filters) {
+  const value = useContext(DashboardDataContext);
+
+  if (!value) {
+    throw new Error("useDashboardData deve ser usado dentro de DashboardDataProvider");
+  }
+
+  return value;
 }

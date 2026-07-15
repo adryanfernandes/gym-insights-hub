@@ -19,6 +19,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useDashboardData } from "@/lib/membersDashboardData";
 import { FiltersBar } from "./FiltersBar";
 
 const NAV = [
@@ -47,7 +48,8 @@ export function DashboardLayout({
   showFilters?: boolean;
   children: ReactNode;
 }) {
-  const { theme, toggleTheme, user, role, isAdmin, signOut } = useApp();
+  const { theme, toggleTheme, filters, user, role, isAdmin, signOut } = useApp();
+  const { loadingMembers, membersError } = useDashboardData(filters);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -85,7 +87,6 @@ export function DashboardLayout({
               <Link
                 key={item.to}
                 to={item.to}
-                preload="intent"
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                   active
@@ -110,7 +111,6 @@ export function DashboardLayout({
                   <Link
                     key={item.to}
                     to={item.to}
-                    preload="intent"
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                       active
@@ -201,6 +201,20 @@ export function DashboardLayout({
           </div>
         </header>
         <main className="flex-1 space-y-5 p-4 md:p-6">
+          {showFilters && membersError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              Não foi possível atualizar os dados do Supabase. Verifique a conexão e tente
+              novamente.
+            </div>
+          )}
+          {showFilters && loadingMembers && (
+            <div className="rounded-xl border border-border bg-card/50 px-4 py-3 text-sm text-muted-foreground">
+              Carregando dados do Supabase...
+            </div>
+          )}
           {showFilters && <FiltersBar />}
           {children}
         </main>

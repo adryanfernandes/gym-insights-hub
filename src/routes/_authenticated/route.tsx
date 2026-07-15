@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { DashboardDataProvider } from "@/lib/membersDashboardData";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -9,7 +10,7 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthenticatedLayout() {
-  const { user, loadingAuth } = useApp();
+  const { user, loadingAuth, filters } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -26,5 +27,9 @@ function AuthenticatedLayout() {
     );
   }
 
-  return <Outlet />;
+  return (
+    <DashboardDataProvider filters={filters}>
+      <Outlet />
+    </DashboardDataProvider>
+  );
 }

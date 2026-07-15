@@ -128,7 +128,9 @@
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
@@ -207,7 +209,8 @@
 }
 
 @keyframes login-float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translate3d(0, 0, 0) rotate(0deg);
   }
   50% {
@@ -216,16 +219,19 @@
 }
 
 @keyframes login-lift {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(14px) rotate(-7deg);
   }
-  45%, 55% {
+  45%,
+  55% {
     transform: translateY(-26px) rotate(4deg);
   }
 }
 
 @keyframes login-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 24px 48px oklch(0.55 0.22 265 / 0.18);
     transform: scale(1);
   }
@@ -236,7 +242,8 @@
 }
 
 @keyframes login-sprint {
-  0%, 100% {
+  0%,
+  100% {
     transform: scaleY(0.58);
     opacity: 0.55;
   }
@@ -247,7 +254,8 @@
 }
 
 @keyframes login-count {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateX(0);
   }
   50% {
@@ -267,5 +275,27 @@
   .login-count-delayed,
   .login-count-slow {
     animation: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: page-out 90ms ease-in both;
+  }
+
+  ::view-transition-new(root) {
+    animation: page-in 160ms ease-out both;
+  }
+
+  @keyframes page-out {
+    to {
+      opacity: 0.92;
+    }
+  }
+
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
   }
 }
