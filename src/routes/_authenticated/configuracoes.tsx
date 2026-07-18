@@ -105,8 +105,26 @@ function ClientsApiPanel() {
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
   const [intervalHours, setIntervalHours] = useState(24);
   const [history, setHistory] = useState<MemberSyncLog[]>([]);
+  const [now, setNow] = useState(() => Date.now());
   const [syncMessage, setSyncMessage] = useState("");
   const [syncError, setSyncError] = useState("");
+
+  const nextScheduledAt = useMemo(() => {
+    if (!scheduleEnabled) return null;
+    const lastSuccess = history.find((log) => log.status === "success");
+    const dueAt = lastSuccess
+      ? new Date(lastSuccess.finished_at).getTime() + intervalHours * 60 * 60 * 1000
+      : now;
+    const nextRun = new Date(dueAt);
+    nextRun.setUTCMinutes(5, 0, 0);
+    if (nextRun.getTime() < dueAt) nextRun.setUTCHours(nextRun.getUTCHours() + 1);
+    return nextRun;
+  }, [history, intervalHours, now, scheduleEnabled]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const loadSettings = useCallback(async () => {
     const response = await fetch("/api/member-sync-settings", { cache: "no-store" });
@@ -121,6 +139,10 @@ function ClientsApiPanel() {
     loadSettings().catch((error) =>
       setSyncError(error instanceof Error ? error.message : "Falha ao carregar agendamento."),
     );
+    const timer = window.setInterval(() => {
+      loadSettings().catch(() => undefined);
+    }, 30000);
+    return () => window.clearInterval(timer);
   }, [loadSettings]);
 
   async function synchronizeMembers() {
@@ -184,6 +206,31 @@ function ClientsApiPanel() {
           </p>
           {syncMessage && <p className="mt-2 text-xs text-success">{syncMessage}</p>}
           {syncError && <p className="mt-2 text-xs text-destructive">{syncError}</p>}
+
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">
+                Próxima atualização agendada
+              </p>
+              {nextScheduledAt ? (
+                <>
+                  <p className="mt-0.5 text-sm font-semibold">
+                    {nextScheduledAt.toLocaleString("pt-BR")}
+                  </p>
+                  <p className="mt-0.5 font-mono text-lg font-bold text-primary">
+                    {formatCountdown(nextScheduledAt.getTime() - now)}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                  Agendamento pausado
+                </p>
+              )}
+            </div>
+          </div>
 
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-52 space-y-2">
@@ -265,6 +312,16 @@ function ClientsApiPanel() {
       </section>
     </div>
   );
+}
+
+function formatCountdown(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const time = [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+  return days ? `${days}d ${time}` : time;
 }
 
 function ApiMonitorPanel() {
