@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  DatabaseZap,
   Loader2,
   Play,
   RefreshCw,
@@ -65,18 +66,204 @@ function ConfiguracoesPage() {
       subtitle="Parâmetros operacionais e monitoramento"
       showFilters={false}
     >
-      <Tabs defaultValue="api" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="api" className="gap-2">
+      <Tabs defaultValue="clients-api" className="space-y-4">
+        <TabsList className="h-auto flex-wrap">
+          <TabsTrigger value="clients-api" className="gap-2">
+            <DatabaseZap className="h-4 w-4" />
+            API de clientes
+          </TabsTrigger>
+          <TabsTrigger value="status-api" className="gap-2">
             <ServerCog className="h-4 w-4" />
-            API
+            Status do sistema
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="api" className="space-y-4">
+        <TabsContent value="clients-api" className="space-y-4">
+          <ClientsApiPanel />
+        </TabsContent>
+        <TabsContent value="status-api" className="space-y-4">
           <ApiMonitorPanel />
         </TabsContent>
       </Tabs>
     </DashboardLayout>
+  );
+}
+
+type MemberSyncLog = {
+  id: string;
+  finished_at: string;
+  trigger_type: "manual" | "scheduled";
+  status: "success" | "error";
+  total_fetched: number;
+  new_members: number;
+  duration_ms: number;
+  error_message?: string | null;
+};
+
+function ClientsApiPanel() {
+  const [isSyncingMembers, setIsSyncingMembers] = useState(false);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [scheduleEnabled, setScheduleEnabled] = useState(true);
+  const [intervalHours, setIntervalHours] = useState(24);
+  const [history, setHistory] = useState<MemberSyncLog[]>([]);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [syncError, setSyncError] = useState("");
+
+  const loadSettings = useCallback(async () => {
+    const response = await fetch("/api/member-sync-settings", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    setScheduleEnabled(result.settings?.enabled !== false);
+    setIntervalHours(result.settings?.interval_hours ?? 24);
+    setHistory(Array.isArray(result.history) ? result.history : []);
+  }, []);
+
+  useEffect(() => {
+    loadSettings().catch((error) =>
+      setSyncError(error instanceof Error ? error.message : "Falha ao carregar agendamento."),
+    );
+  }, [loadSettings]);
+
+  async function synchronizeMembers() {
+    setIsSyncingMembers(true);
+    setSyncMessage("");
+    setSyncError("");
+    try {
+      const response = await fetch("/api/sync-members", { method: "POST" });
+      const result = (await response.json()) as {
+        synchronized?: number;
+        newMembers?: number;
+        durationMs?: number;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setSyncMessage(
+        `${result.synchronized ?? 0} alunos sincronizados; ${result.newMembers ?? 0} novos adicionados.`,
+      );
+      await loadSettings();
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Falha ao sincronizar alunos.");
+    } finally {
+      setIsSyncingMembers(false);
+    }
+  }
+
+  async function saveSchedule(enabled = scheduleEnabled) {
+    setIsSavingSchedule(true);
+    setSyncError("");
+    try {
+      const response = await fetch("/api/member-sync-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled, intervalHours }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setScheduleEnabled(result.settings.enabled);
+      setSyncMessage(
+        result.settings.enabled
+          ? `Atualização agendada a cada ${result.settings.interval_hours} hora(s).`
+          : "Atualização agendada pausada.",
+      );
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Falha ao salvar agendamento.");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center gap-2">
+            <DatabaseZap className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">API de clientes</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Busca todos os alunos da EVO/W12 e atualiza a tabela members no Supabase.
+          </p>
+          {syncMessage && <p className="mt-2 text-xs text-success">{syncMessage}</p>}
+          {syncError && <p className="mt-2 text-xs text-destructive">{syncError}</p>}
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-52 space-y-2">
+              <Label htmlFor="client-sync-hours">Atualização em horas</Label>
+              <Input
+                id="client-sync-hours"
+                type="number"
+                min={1}
+                max={720}
+                value={intervalHours}
+                onChange={(event) => setIntervalHours(Math.max(1, Number(event.target.value) || 1))}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => saveSchedule()}
+              disabled={isSavingSchedule}
+            >
+              Salvar intervalo
+            </Button>
+            <Button
+              type="button"
+              variant={scheduleEnabled ? "outline" : "default"}
+              onClick={() => saveSchedule(!scheduleEnabled)}
+              disabled={isSavingSchedule}
+            >
+              {scheduleEnabled ? <Square /> : <Play />}
+              {scheduleEnabled ? "Pausar" : "Iniciar"}
+            </Button>
+            <Button type="button" onClick={synchronizeMembers} disabled={isSyncingMembers}>
+              {isSyncingMembers ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {isSyncingMembers ? "Sincronizando..." : "Atualizar agora"}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-4 text-sm font-semibold">Histórico de atualização de clientes</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Horário</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Consultados</TableHead>
+              <TableHead className="text-right">Novos</TableHead>
+              <TableHead className="text-right">Tempo</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {history.length ? (
+              history.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>{new Date(log.finished_at).toLocaleString("pt-BR")}</TableCell>
+                  <TableCell>{log.trigger_type === "scheduled" ? "Agendada" : "Manual"}</TableCell>
+                  <TableCell>
+                    <Badge variant={log.status === "success" ? "outline" : "destructive"}>
+                      {log.status === "success" ? "Sucesso" : "Erro"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{log.total_fetched}</TableCell>
+                  <TableCell className="text-right font-semibold">{log.new_members}</TableCell>
+                  <TableCell className="text-right">
+                    {Math.round(log.duration_ms / 1000)}s
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                  Nenhuma atualização registrada.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+    </div>
   );
 }
 

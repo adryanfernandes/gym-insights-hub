@@ -9,14 +9,6 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
-function getApiKeys() {
-  return [
-    process.env.SUPABASE_SECRET_KEY,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    process.env.SUPABASE_PUBLISHABLE_KEY,
-  ].filter((key, index, keys): key is string => Boolean(key) && keys.indexOf(key) === index);
-}
-
 function getHeaders(apiKey: string) {
   const headers: Record<string, string> = {
     apikey: apiKey,
@@ -40,29 +32,21 @@ export const Route = createFileRoute("/api/members")({
 
         try {
           const supabaseUrl = getRequiredEnv("SUPABASE_URL").replace(/\/$/, "");
-          const apiKeys = getApiKeys();
-          if (!apiKeys.length) getRequiredEnv("SUPABASE_PUBLISHABLE_KEY");
+          const apiKey = getRequiredEnv("SUPABASE_SECRET_KEY");
           const members: unknown[] = [];
           let from = 0;
           let total: number | null = null;
 
           while (total === null || from < total) {
             const to = from + PAGE_SIZE - 1;
-            let response: Response | null = null;
-            for (const apiKey of apiKeys) {
-              response = await fetch(`${supabaseUrl}/rest/v1/${MEMBERS_TABLE}?select=*`, {
-                signal: controller.signal,
-                headers: {
-                  ...getHeaders(apiKey),
-                  range: `${from}-${to}`,
-                },
-                cache: "no-store",
-              });
-
-              if (response.status !== 401 && response.status !== 403) break;
-            }
-
-            if (!response) throw new Error("No Supabase API key configured");
+            const response = await fetch(`${supabaseUrl}/rest/v1/${MEMBERS_TABLE}?select=*`, {
+              signal: controller.signal,
+              headers: {
+                ...getHeaders(apiKey),
+                range: `${from}-${to}`,
+              },
+              cache: "no-store",
+            });
 
             const body = await response.text();
             if (!response.ok) {
