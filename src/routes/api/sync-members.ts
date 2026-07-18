@@ -33,7 +33,7 @@ function extractMembers(payload: unknown): unknown[] {
 }
 
 async function collectMembers() {
-  const authorization = requiredEnv("EVO_API_AUTHORIZATION");
+  const authorization = await getEvoAuthorization();
   const endpoint = process.env.EVO_MEMBERS_URL || DEFAULT_EVO_URL;
   const branchId = process.env.EVO_BRANCH_ID || "1";
   const members: Member[] = [];
@@ -61,6 +61,23 @@ async function collectMembers() {
   }
 
   throw new Error("EVO API pagination exceeded the safety limit");
+}
+
+async function getEvoAuthorization() {
+  if (process.env.EVO_API_AUTHORIZATION) return process.env.EVO_API_AUTHORIZATION;
+
+  const supabaseUrl = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
+  const response = await fetchWithTimeout(
+    `${supabaseUrl}/rest/v1/member_sync_settings?select=evo_api_authorization&id=eq.true&limit=1`,
+    { headers: { apikey: requiredEnv("SUPABASE_SECRET_KEY") }, cache: "no-store" },
+  );
+  if (!response.ok) throw new Error(`Failed to load EVO API credential: HTTP ${response.status}`);
+  const settings = (await response.json()) as Array<{ evo_api_authorization?: string | null }>;
+  const authorization = settings[0]?.evo_api_authorization?.trim();
+  if (!authorization) {
+    throw new Error("Configure a chave de acesso da API EVO em Configurações > API de clientes");
+  }
+  return authorization;
 }
 
 async function upsertMembers(members: Member[]) {

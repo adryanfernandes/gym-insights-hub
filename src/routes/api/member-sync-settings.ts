@@ -26,8 +26,20 @@ export const Route = createFileRoute("/api/member-sync-settings")({
           if (!settingsResponse.ok || !historyResponse.ok) {
             throw new Error("Member sync tables are not available; apply the Supabase migration");
           }
-          const settings = (await settingsResponse.json()) as unknown[];
-          return Response.json({ settings: settings[0], history: await historyResponse.json() });
+          const settings = (await settingsResponse.json()) as Array<Record<string, unknown>>;
+          const current = settings[0];
+          return Response.json({
+            settings: current
+              ? {
+                  id: current.id,
+                  enabled: current.enabled,
+                  interval_hours: current.interval_hours,
+                  updated_at: current.updated_at,
+                  has_api_credential: Boolean(current.evo_api_authorization),
+                }
+              : null,
+            history: await historyResponse.json(),
+          });
         } catch (error) {
           return Response.json(
             { error: error instanceof Error ? error.message : "Failed to load sync settings" },
@@ -37,20 +49,43 @@ export const Route = createFileRoute("/api/member-sync-settings")({
       },
       PATCH: async ({ request }) => {
         try {
-          const input = (await request.json()) as { enabled?: boolean; intervalHours?: number };
-          const intervalHours = Math.max(1, Math.min(720, Math.round(input.intervalHours ?? 24)));
+          const origin = request.headers.get("origin");
+          if (origin && new URL(origin).host !== new URL(request.url).host) {
+            return Response.json({ error: "Origin not allowed" }, { status: 403 });
+          }
+          const input = (await request.json()) as {
+            enabled?: boolean;
+            intervalHours?: number;
+            apiCredential?: string;
+          };
           const { url, headers } = config();
+          const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+          if (typeof input.enabled === "boolean") updates.enabled = input.enabled;
+          if (typeof input.intervalHours === "number") {
+            updates.interval_hours = Math.max(1, Math.min(720, Math.round(input.intervalHours)));
+          }
+          if (typeof input.apiCredential === "string" && input.apiCredential.trim()) {
+            const credential = input.apiCredential.trim();
+            updates.evo_api_authorization = credential.startsWith("Basic ")
+              ? credential
+              : `Basic ${credential}`;
+          }
           const response = await fetch(`${url}/rest/v1/member_sync_settings?id=eq.true`, {
             method: "PATCH",
             headers: { ...headers, prefer: "return=representation" },
-            body: JSON.stringify({
-              enabled: input.enabled !== false,
-              interval_hours: intervalHours,
-              updated_at: new Date().toISOString(),
-            }),
+            body: JSON.stringify(updates),
           });
           if (!response.ok) throw new Error(await response.text());
-          return Response.json({ settings: (await response.json())[0] });
+          const settings = (await response.json())[0] as Record<string, unknown>;
+          return Response.json({
+            settings: {
+              id: settings.id,
+              enabled: settings.enabled,
+              interval_hours: settings.interval_hours,
+              updated_at: settings.updated_at,
+              has_api_credential: Boolean(settings.evo_api_authorization),
+            },
+          });
         } catch (error) {
           return Response.json(
             { error: error instanceof Error ? error.message : "Failed to save sync settings" },

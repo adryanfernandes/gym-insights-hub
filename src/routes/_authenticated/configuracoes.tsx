@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Clock,
   DatabaseZap,
+  KeyRound,
   Loader2,
   Play,
   RefreshCw,
@@ -104,6 +105,9 @@ function ClientsApiPanel() {
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
   const [intervalHours, setIntervalHours] = useState(24);
+  const [apiCredential, setApiCredential] = useState("");
+  const [hasApiCredential, setHasApiCredential] = useState(false);
+  const [isSavingCredential, setIsSavingCredential] = useState(false);
   const [history, setHistory] = useState<MemberSyncLog[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [syncMessage, setSyncMessage] = useState("");
@@ -132,6 +136,7 @@ function ClientsApiPanel() {
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
     setScheduleEnabled(result.settings?.enabled !== false);
     setIntervalHours(result.settings?.interval_hours ?? 24);
+    setHasApiCredential(result.settings?.has_api_credential === true);
     setHistory(Array.isArray(result.history) ? result.history : []);
   }, []);
 
@@ -193,6 +198,32 @@ function ClientsApiPanel() {
     }
   }
 
+  async function saveApiCredential() {
+    if (!apiCredential.trim()) {
+      setSyncError("Informe a chave de acesso da API EVO.");
+      return;
+    }
+    setIsSavingCredential(true);
+    setSyncError("");
+    setSyncMessage("");
+    try {
+      const response = await fetch("/api/member-sync-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ apiCredential }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setHasApiCredential(result.settings?.has_api_credential === true);
+      setApiCredential("");
+      setSyncMessage("Chave da API EVO salva com sucesso.");
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Falha ao salvar chave da API.");
+    } finally {
+      setIsSavingCredential(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <section className="rounded-xl border border-border bg-card p-5">
@@ -206,6 +237,42 @@ function ClientsApiPanel() {
           </p>
           {syncMessage && <p className="mt-2 text-xs text-success">{syncMessage}</p>}
           {syncError && <p className="mt-2 text-xs text-destructive">{syncError}</p>}
+
+          <div className="rounded-lg border border-border p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-sm font-semibold">Chave de acesso da API EVO</p>
+                <p className="text-xs text-muted-foreground">
+                  {hasApiCredential
+                    ? "Chave configurada. Informe outra apenas para substituí-la."
+                    : "Nenhuma chave configurada."}
+                </p>
+              </div>
+              <Badge variant={hasApiCredential ? "outline" : "destructive"} className="ml-auto">
+                {hasApiCredential ? "Configurada" : "Pendente"}
+              </Badge>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="password"
+                autoComplete="off"
+                value={apiCredential}
+                onChange={(event) => setApiCredential(event.target.value)}
+                placeholder="Basic ... ou apenas o token Base64"
+                aria-label="Chave de acesso da API EVO"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={saveApiCredential}
+                disabled={isSavingCredential || !apiCredential.trim()}
+              >
+                {isSavingCredential ? <Loader2 className="animate-spin" /> : <KeyRound />}
+                Salvar chave
+              </Button>
+            </div>
+          </div>
 
           <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
             <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
