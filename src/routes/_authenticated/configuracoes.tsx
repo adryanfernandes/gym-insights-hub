@@ -105,6 +105,7 @@ function ClientsApiPanel() {
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
   const [intervalHours, setIntervalHours] = useState(24);
+  const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
   const [apiCredential, setApiCredential] = useState("");
   const [hasApiCredential, setHasApiCredential] = useState(false);
   const [isSavingCredential, setIsSavingCredential] = useState(false);
@@ -116,14 +117,10 @@ function ClientsApiPanel() {
   const nextScheduledAt = useMemo(() => {
     if (!scheduleEnabled) return null;
     const lastSuccess = history.find((log) => log.status === "success");
-    const dueAt = lastSuccess
-      ? new Date(lastSuccess.finished_at).getTime() + intervalHours * 60 * 60 * 1000
-      : now;
-    const nextRun = new Date(dueAt);
-    nextRun.setUTCMinutes(5, 0, 0);
-    if (nextRun.getTime() < dueAt) nextRun.setUTCHours(nextRun.getUTCHours() + 1);
-    return nextRun;
-  }, [history, intervalHours, now, scheduleEnabled]);
+    const lastSuccessAt = lastSuccess ? new Date(lastSuccess.finished_at).getTime() : 0;
+    const anchor = Math.max(lastSuccessAt, scheduleUpdatedAt ?? now);
+    return new Date(anchor + intervalHours * 60 * 60 * 1000);
+  }, [history, intervalHours, now, scheduleEnabled, scheduleUpdatedAt]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -136,6 +133,13 @@ function ClientsApiPanel() {
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
     setScheduleEnabled(result.settings?.enabled !== false);
     setIntervalHours(result.settings?.interval_hours ?? 24);
+    setScheduleUpdatedAt(
+      result.settings?.schedule_updated_at
+        ? new Date(result.settings.schedule_updated_at).getTime()
+        : result.settings?.updated_at
+          ? new Date(result.settings.updated_at).getTime()
+          : Date.now(),
+    );
     setHasApiCredential(result.settings?.has_api_credential === true);
     setHistory(Array.isArray(result.history) ? result.history : []);
   }, []);
@@ -186,6 +190,8 @@ function ClientsApiPanel() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
       setScheduleEnabled(result.settings.enabled);
+      setIntervalHours(result.settings.interval_hours);
+      setScheduleUpdatedAt(new Date(result.settings.schedule_updated_at).getTime());
       setSyncMessage(
         result.settings.enabled
           ? `Atualização agendada a cada ${result.settings.interval_hours} hora(s).`

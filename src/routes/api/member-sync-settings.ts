@@ -35,6 +35,7 @@ export const Route = createFileRoute("/api/member-sync-settings")({
                   enabled: current.enabled,
                   interval_hours: current.interval_hours,
                   updated_at: current.updated_at,
+                  schedule_updated_at: current.schedule_updated_at,
                   has_api_credential: Boolean(current.evo_api_authorization),
                 }
               : null,
@@ -59,11 +60,18 @@ export const Route = createFileRoute("/api/member-sync-settings")({
             apiCredential?: string;
           };
           const { url, headers } = config();
-          const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-          if (typeof input.enabled === "boolean") updates.enabled = input.enabled;
+          const changedAt = new Date().toISOString();
+          const updates: Record<string, unknown> = { updated_at: changedAt };
+          let scheduleChanged = false;
+          if (typeof input.enabled === "boolean") {
+            updates.enabled = input.enabled;
+            scheduleChanged = true;
+          }
           if (typeof input.intervalHours === "number") {
             updates.interval_hours = Math.max(1, Math.min(720, Math.round(input.intervalHours)));
+            scheduleChanged = true;
           }
+          if (scheduleChanged) updates.schedule_updated_at = changedAt;
           if (typeof input.apiCredential === "string" && input.apiCredential.trim()) {
             const credential = input.apiCredential.trim();
             updates.evo_api_authorization = credential.startsWith("Basic ")
@@ -83,6 +91,7 @@ export const Route = createFileRoute("/api/member-sync-settings")({
               enabled: settings.enabled,
               interval_hours: settings.interval_hours,
               updated_at: settings.updated_at,
+              schedule_updated_at: settings.schedule_updated_at,
               has_api_credential: Boolean(settings.evo_api_authorization),
             },
           });
