@@ -23,7 +23,12 @@ export const Route = createFileRoute("/api/member-sync-scheduler")({
           );
           if (!settingsResponse.ok) throw new Error("Member sync settings table is unavailable");
           const settings = (await settingsResponse.json())[0] as
-            | { enabled: boolean; interval_hours: number }
+            | {
+                enabled: boolean;
+                interval_hours: number;
+                schedule_updated_at?: string;
+                updated_at: string;
+              }
             | undefined;
           if (!settings?.enabled) return Response.json({ ok: true, action: "disabled" });
 
@@ -34,9 +39,11 @@ export const Route = createFileRoute("/api/member-sync-scheduler")({
           const last = historyResponse.ok
             ? ((await historyResponse.json())[0] as { finished_at?: string } | undefined)
             : undefined;
-          const elapsed = last?.finished_at
-            ? Date.now() - new Date(last.finished_at).getTime()
-            : Infinity;
+          const lastSuccessAt = last?.finished_at ? new Date(last.finished_at).getTime() : 0;
+          const scheduleUpdatedAt = new Date(
+            settings.schedule_updated_at || settings.updated_at,
+          ).getTime();
+          const elapsed = Date.now() - Math.max(lastSuccessAt, scheduleUpdatedAt);
           if (elapsed < settings.interval_hours * 60 * 60 * 1000) {
             return Response.json({ ok: true, action: "not-due" });
           }
