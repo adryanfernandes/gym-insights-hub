@@ -13,12 +13,15 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as ApiSyncMembersRouteImport } from './routes/api/sync-members'
+import { Route as ApiSyncActivitiesRouteImport } from './routes/api/sync-activities'
 import { Route as ApiStatusSnapshotRouteImport } from './routes/api/status-snapshot'
 import { Route as ApiStatusHistoryRouteImport } from './routes/api/status-history'
 import { Route as ApiMembersRouteImport } from './routes/api/members'
 import { Route as ApiMemberSyncSettingsRouteImport } from './routes/api/member-sync-settings'
 import { Route as ApiMemberSyncSchedulerRouteImport } from './routes/api/member-sync-scheduler'
 import { Route as ApiKeepaliveRouteImport } from './routes/api/keepalive'
+import { Route as ApiActivitySyncSettingsRouteImport } from './routes/api/activity-sync-settings'
+import { Route as ApiActivitySyncSchedulerRouteImport } from './routes/api/activity-sync-scheduler'
 import { Route as AuthenticatedProfessoresRouteImport } from './routes/_authenticated/professores'
 import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
@@ -43,6 +46,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
 const ApiSyncMembersRoute = ApiSyncMembersRouteImport.update({
   id: '/api/sync-members',
   path: '/api/sync-members',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSyncActivitiesRoute = ApiSyncActivitiesRouteImport.update({
+  id: '/api/sync-activities',
+  path: '/api/sync-activities',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiStatusSnapshotRoute = ApiStatusSnapshotRouteImport.update({
@@ -75,6 +83,17 @@ const ApiKeepaliveRoute = ApiKeepaliveRouteImport.update({
   path: '/api/keepalive',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiActivitySyncSettingsRoute = ApiActivitySyncSettingsRouteImport.update({
+  id: '/api/activity-sync-settings',
+  path: '/api/activity-sync-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiActivitySyncSchedulerRoute =
+  ApiActivitySyncSchedulerRouteImport.update({
+    id: '/api/activity-sync-scheduler',
+    path: '/api/activity-sync-scheduler',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedProfessoresRoute =
   AuthenticatedProfessoresRouteImport.update({
     id: '/professores',
@@ -117,12 +136,15 @@ export interface FileRoutesByFullPath {
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/perfil': typeof AuthenticatedPerfilRoute
   '/professores': typeof AuthenticatedProfessoresRoute
+  '/api/activity-sync-scheduler': typeof ApiActivitySyncSchedulerRoute
+  '/api/activity-sync-settings': typeof ApiActivitySyncSettingsRoute
   '/api/keepalive': typeof ApiKeepaliveRoute
   '/api/member-sync-scheduler': typeof ApiMemberSyncSchedulerRoute
   '/api/member-sync-settings': typeof ApiMemberSyncSettingsRoute
   '/api/members': typeof ApiMembersRoute
   '/api/status-history': typeof ApiStatusHistoryRoute
   '/api/status-snapshot': typeof ApiStatusSnapshotRoute
+  '/api/sync-activities': typeof ApiSyncActivitiesRoute
   '/api/sync-members': typeof ApiSyncMembersRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
 }
@@ -133,12 +155,15 @@ export interface FileRoutesByTo {
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/perfil': typeof AuthenticatedPerfilRoute
   '/professores': typeof AuthenticatedProfessoresRoute
+  '/api/activity-sync-scheduler': typeof ApiActivitySyncSchedulerRoute
+  '/api/activity-sync-settings': typeof ApiActivitySyncSettingsRoute
   '/api/keepalive': typeof ApiKeepaliveRoute
   '/api/member-sync-scheduler': typeof ApiMemberSyncSchedulerRoute
   '/api/member-sync-settings': typeof ApiMemberSyncSettingsRoute
   '/api/members': typeof ApiMembersRoute
   '/api/status-history': typeof ApiStatusHistoryRoute
   '/api/status-snapshot': typeof ApiStatusSnapshotRoute
+  '/api/sync-activities': typeof ApiSyncActivitiesRoute
   '/api/sync-members': typeof ApiSyncMembersRoute
   '/': typeof AuthenticatedIndexRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
@@ -152,12 +177,15 @@ export interface FileRoutesById {
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
   '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
   '/_authenticated/professores': typeof AuthenticatedProfessoresRoute
+  '/api/activity-sync-scheduler': typeof ApiActivitySyncSchedulerRoute
+  '/api/activity-sync-settings': typeof ApiActivitySyncSettingsRoute
   '/api/keepalive': typeof ApiKeepaliveRoute
   '/api/member-sync-scheduler': typeof ApiMemberSyncSchedulerRoute
   '/api/member-sync-settings': typeof ApiMemberSyncSettingsRoute
   '/api/members': typeof ApiMembersRoute
   '/api/status-history': typeof ApiStatusHistoryRoute
   '/api/status-snapshot': typeof ApiStatusSnapshotRoute
+  '/api/sync-activities': typeof ApiSyncActivitiesRoute
   '/api/sync-members': typeof ApiSyncMembersRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
@@ -172,12 +200,15 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/perfil'
     | '/professores'
+    | '/api/activity-sync-scheduler'
+    | '/api/activity-sync-settings'
     | '/api/keepalive'
     | '/api/member-sync-scheduler'
     | '/api/member-sync-settings'
     | '/api/members'
     | '/api/status-history'
     | '/api/status-snapshot'
+    | '/api/sync-activities'
     | '/api/sync-members'
     | '/admin/usuarios'
   fileRoutesByTo: FileRoutesByTo
@@ -188,12 +219,15 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/perfil'
     | '/professores'
+    | '/api/activity-sync-scheduler'
+    | '/api/activity-sync-settings'
     | '/api/keepalive'
     | '/api/member-sync-scheduler'
     | '/api/member-sync-settings'
     | '/api/members'
     | '/api/status-history'
     | '/api/status-snapshot'
+    | '/api/sync-activities'
     | '/api/sync-members'
     | '/'
     | '/admin/usuarios'
@@ -206,12 +240,15 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro'
     | '/_authenticated/perfil'
     | '/_authenticated/professores'
+    | '/api/activity-sync-scheduler'
+    | '/api/activity-sync-settings'
     | '/api/keepalive'
     | '/api/member-sync-scheduler'
     | '/api/member-sync-settings'
     | '/api/members'
     | '/api/status-history'
     | '/api/status-snapshot'
+    | '/api/sync-activities'
     | '/api/sync-members'
     | '/_authenticated/'
     | '/_authenticated/admin/usuarios'
@@ -220,12 +257,15 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiActivitySyncSchedulerRoute: typeof ApiActivitySyncSchedulerRoute
+  ApiActivitySyncSettingsRoute: typeof ApiActivitySyncSettingsRoute
   ApiKeepaliveRoute: typeof ApiKeepaliveRoute
   ApiMemberSyncSchedulerRoute: typeof ApiMemberSyncSchedulerRoute
   ApiMemberSyncSettingsRoute: typeof ApiMemberSyncSettingsRoute
   ApiMembersRoute: typeof ApiMembersRoute
   ApiStatusHistoryRoute: typeof ApiStatusHistoryRoute
   ApiStatusSnapshotRoute: typeof ApiStatusSnapshotRoute
+  ApiSyncActivitiesRoute: typeof ApiSyncActivitiesRoute
   ApiSyncMembersRoute: typeof ApiSyncMembersRoute
 }
 
@@ -257,6 +297,13 @@ declare module '@tanstack/react-router' {
       path: '/api/sync-members'
       fullPath: '/api/sync-members'
       preLoaderRoute: typeof ApiSyncMembersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sync-activities': {
+      id: '/api/sync-activities'
+      path: '/api/sync-activities'
+      fullPath: '/api/sync-activities'
+      preLoaderRoute: typeof ApiSyncActivitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/status-snapshot': {
@@ -299,6 +346,20 @@ declare module '@tanstack/react-router' {
       path: '/api/keepalive'
       fullPath: '/api/keepalive'
       preLoaderRoute: typeof ApiKeepaliveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/activity-sync-settings': {
+      id: '/api/activity-sync-settings'
+      path: '/api/activity-sync-settings'
+      fullPath: '/api/activity-sync-settings'
+      preLoaderRoute: typeof ApiActivitySyncSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/activity-sync-scheduler': {
+      id: '/api/activity-sync-scheduler'
+      path: '/api/activity-sync-scheduler'
+      fullPath: '/api/activity-sync-scheduler'
+      preLoaderRoute: typeof ApiActivitySyncSchedulerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/professores': {
@@ -372,12 +433,15 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiActivitySyncSchedulerRoute: ApiActivitySyncSchedulerRoute,
+  ApiActivitySyncSettingsRoute: ApiActivitySyncSettingsRoute,
   ApiKeepaliveRoute: ApiKeepaliveRoute,
   ApiMemberSyncSchedulerRoute: ApiMemberSyncSchedulerRoute,
   ApiMemberSyncSettingsRoute: ApiMemberSyncSettingsRoute,
   ApiMembersRoute: ApiMembersRoute,
   ApiStatusHistoryRoute: ApiStatusHistoryRoute,
   ApiStatusSnapshotRoute: ApiStatusSnapshotRoute,
+  ApiSyncActivitiesRoute: ApiSyncActivitiesRoute,
   ApiSyncMembersRoute: ApiSyncMembersRoute,
 }
 export const routeTree = rootRouteImport

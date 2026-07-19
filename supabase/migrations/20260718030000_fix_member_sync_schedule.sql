@@ -1,8 +1,7 @@
 ALTER TABLE public.member_sync_settings
   ADD COLUMN IF NOT EXISTS schedule_updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
-ALTER TABLE public.member_sync_settings
-  ADD COLUMN IF NOT EXISTS schedule_updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+NOTIFY pgrst, 'reload schema';
 
 DO $$
 BEGIN

@@ -1,0 +1,282 @@
+import { createFileRoute } from "@tanstack/react-router";
+
+const ACTIVITIES_URL = "https://evo-integracao-api.w12app.com.br/api/v1/activities/schedule";
+const UPSERT_BATCH_SIZE = 100;
+type Activity = Record<string, unknown>;
+
+function requiredEnv(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing ${name}`);
+  return value;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 60000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractActivities(payload: unknown): Activity[] {
+  if (Array.isArray(payload)) return payload.filter(isObject);
+  if (!isObject(payload)) return [];
+  for (const key of ["data", "items", "activities", "results"]) {
+    const value = payload[key];
+    if (Array.isArray(value)) return value.filter(isObject);
+  }
+  return [];
+}
+
+function isObject(value: unknown): value is Activity {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (isObject(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+async function sourceKey(date: string, activity: Activity) {
+  const id = ["idSchedule", "idActivitySchedule", "idClass"].find(
+    (key) => activity[key] !== undefined && activity[key] !== null,
+  );
+  const identity = id
+    ? `${id}:${String(activity[id])}`
+    : stableStringify({
+        activity: activity.activity ?? activity.name ?? activity.title,
+        activityId: activity.idActivity ?? activity.id,
+        start: activity.startTime ?? activity.startDate ?? activity.date,
+        end: activity.endTime ?? activity.endDate,
+        room: activity.idStudio ?? activity.idRoom ?? activity.studio,
+        instructor: activity.idEmployee ?? activity.idInstructor ?? activity.instructor,
+      });
+  const bytes = new TextEncoder().encode(`${date}:${identity}`);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function currentMonth() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Fortaleza",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return { year, month, days };
+}
+
+function isoDate(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+async function getAuthorization() {
+  if (process.env.EVO_API_AUTHORIZATION) return process.env.EVO_API_AUTHORIZATION;
+  const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
+  const headers = { apikey: requiredEnv("SUPABASE_SECRET_KEY") };
+  const activityResponse = await fetch(
+    `${url}/rest/v1/activity_sync_settings?select=evo_api_authorization&id=eq.true&limit=1`,
+    { headers, cache: "no-store" },
+  );
+  if (!activityResponse.ok) throw new Error("Falha ao carregar a chave da API de atividades");
+  const activitySettings = (await activityResponse.json()) as Array<{
+    evo_api_authorization?: string;
+  }>;
+  if (activitySettings[0]?.evo_api_authorization?.trim()) {
+    return activitySettings[0].evo_api_authorization.trim();
+  }
+
+  const memberResponse = await fetch(
+    `${url}/rest/v1/member_sync_settings?select=evo_api_authorization&id=eq.true&limit=1`,
+    { headers, cache: "no-store" },
+  );
+  const memberSettings = memberResponse.ok
+    ? ((await memberResponse.json()) as Array<{ evo_api_authorization?: string }>)
+    : [];
+  if (memberSettings[0]?.evo_api_authorization?.trim()) {
+    return memberSettings[0].evo_api_authorization.trim();
+  }
+  throw new Error("Configure a chave de acesso na aba API de atividades");
+}
+
+async function fetchDay(date: string, authorization: string, branchId: number) {
+  const url = new URL(process.env.EVO_ACTIVITIES_URL || ACTIVITIES_URL);
+  url.searchParams.set("idBranch", String(branchId));
+  url.searchParams.set("take", "1000");
+  url.searchParams.set("date", `${date}T00:00:00`);
+  url.searchParams.set("showFullWeek", "false");
+  url.searchParams.set("onlyAvailables", "false");
+
+  let lastError = "";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(url.toString(), {
+        headers: { Authorization: authorization, Accept: "application/json" },
+        cache: "no-store",
+      });
+      const body = await response.text();
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
+      return extractActivities(JSON.parse(body));
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Falha desconhecida";
+    }
+  }
+  throw new Error(`Falha ao consultar ${date} após 3 tentativas: ${lastError}`);
+}
+
+async function existingKeys(keys: string[]) {
+  if (!keys.length) return new Set<string>();
+  const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
+  const headers = { apikey: requiredEnv("SUPABASE_SECRET_KEY") };
+  const existing = new Set<string>();
+  for (let start = 0; start < keys.length; start += 100) {
+    const values = keys
+      .slice(start, start + 100)
+      .map(encodeURIComponent)
+      .join(",");
+    const response = await fetch(
+      `${url}/rest/v1/activities?select=source_key&source_key=in.(${values})`,
+      {
+        headers,
+        cache: "no-store",
+      },
+    );
+    if (!response.ok)
+      throw new Error(`Falha ao consultar atividades existentes: ${await response.text()}`);
+    const rows = (await response.json()) as Array<{ source_key: string }>;
+    rows.forEach((row) => existing.add(row.source_key));
+  }
+  return existing;
+}
+
+async function upsertActivities(rows: Record<string, unknown>[]) {
+  const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
+  const key = requiredEnv("SUPABASE_SECRET_KEY");
+  for (let start = 0; start < rows.length; start += UPSERT_BATCH_SIZE) {
+    const response = await fetchWithTimeout(`${url}/rest/v1/activities?on_conflict=source_key`, {
+      method: "POST",
+      headers: {
+        apikey: key,
+        "content-type": "application/json",
+        prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify(rows.slice(start, start + UPSERT_BATCH_SIZE)),
+    });
+    if (!response.ok)
+      throw new Error(
+        `Supabase returned HTTP ${response.status}: ${(await response.text()).slice(0, 500)}`,
+      );
+  }
+}
+
+async function recordHistory(entry: Record<string, unknown>) {
+  const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
+  const response = await fetch(`${url}/rest/v1/activity_sync_history`, {
+    method: "POST",
+    headers: {
+      apikey: requiredEnv("SUPABASE_SECRET_KEY"),
+      "content-type": "application/json",
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify(entry),
+  });
+  if (!response.ok) throw new Error(`Falha ao registrar histórico: ${await response.text()}`);
+}
+
+export const Route = createFileRoute("/api/sync-activities")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const origin = request.headers.get("origin");
+        if (origin && new URL(origin).host !== new URL(request.url).host) {
+          return Response.json({ error: "Origin not allowed" }, { status: 403 });
+        }
+        const startedAt = Date.now();
+        const startedAtIso = new Date(startedAt).toISOString();
+        const trigger =
+          new URL(request.url).searchParams.get("trigger") === "scheduled" ? "scheduled" : "manual";
+        const { year, month, days } = currentMonth();
+        const monthStart = isoDate(year, month, 1);
+        const monthEnd = isoDate(year, month, days);
+        let daysQueried = 0;
+        try {
+          const authorization = await getAuthorization();
+          const branchId = Number(process.env.EVO_BRANCH_ID || "1");
+          const rows: Record<string, unknown>[] = [];
+          for (let day = 1; day <= days; day += 1) {
+            const date = isoDate(year, month, day);
+            const activities = await fetchDay(date, authorization, branchId);
+            daysQueried += 1;
+            for (const activity of activities) {
+              rows.push({
+                source_key: await sourceKey(date, activity),
+                query_date: date,
+                branch_id: branchId,
+                payload: activity,
+                last_synced_at: new Date().toISOString(),
+              });
+            }
+          }
+          const uniqueRows = Array.from(
+            new Map(rows.map((row) => [String(row.source_key), row])).values(),
+          );
+          const currentKeys = await existingKeys(uniqueRows.map((row) => String(row.source_key)));
+          const newActivities = uniqueRows.filter(
+            (row) => !currentKeys.has(String(row.source_key)),
+          ).length;
+          await upsertActivities(uniqueRows);
+          const finishedAt = new Date().toISOString();
+          await recordHistory({
+            started_at: startedAtIso,
+            finished_at: finishedAt,
+            trigger_type: trigger,
+            status: "success",
+            month_start: monthStart,
+            month_end: monthEnd,
+            days_queried: daysQueried,
+            total_fetched: uniqueRows.length,
+            new_activities: newActivities,
+            duration_ms: Date.now() - startedAt,
+          });
+          return Response.json({
+            ok: true,
+            synchronized: uniqueRows.length,
+            newActivities,
+            daysQueried,
+            trigger,
+            finishedAt,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Falha ao sincronizar atividades";
+          try {
+            await recordHistory({
+              started_at: startedAtIso,
+              finished_at: new Date().toISOString(),
+              trigger_type: trigger,
+              status: "error",
+              month_start: monthStart,
+              month_end: monthEnd,
+              days_queried: daysQueried,
+              duration_ms: Date.now() - startedAt,
+              error_message: message.slice(0, 1000),
+            });
+          } catch {
+            /* Preserve the original error. */
+          }
+          return Response.json({ error: message }, { status: 502 });
+        }
+      },
+    },
+  },
+});
