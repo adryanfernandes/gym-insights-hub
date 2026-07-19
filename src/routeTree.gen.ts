@@ -22,6 +22,7 @@ import { Route as ApiMemberSyncSchedulerRouteImport } from './routes/api/member-
 import { Route as ApiKeepaliveRouteImport } from './routes/api/keepalive'
 import { Route as ApiActivitySyncSettingsRouteImport } from './routes/api/activity-sync-settings'
 import { Route as ApiActivitySyncSchedulerRouteImport } from './routes/api/activity-sync-scheduler'
+import { Route as ApiActivitiesRouteImport } from './routes/api/activities'
 import { Route as AuthenticatedProfessoresRouteImport } from './routes/_authenticated/professores'
 import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
@@ -94,6 +95,11 @@ const ApiActivitySyncSchedulerRoute =
     path: '/api/activity-sync-scheduler',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiActivitiesRoute = ApiActivitiesRouteImport.update({
+  id: '/api/activities',
+  path: '/api/activities',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedProfessoresRoute =
   AuthenticatedProfessoresRouteImport.update({
     id: '/professores',
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/perfil': typeof AuthenticatedPerfilRoute
   '/professores': typeof AuthenticatedProfessoresRoute
+  '/api/activities': typeof ApiActivitiesRoute
   '/api/activity-sync-scheduler': typeof ApiActivitySyncSchedulerRoute
   '/api/activity-sync-settings': typeof ApiActivitySyncSettingsRoute
   '/api/keepalive': typeof ApiKeepaliveRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/perfil': typeof AuthenticatedPerfilRoute
   '/professores': typeof AuthenticatedProfessoresRoute
+  '/api/activities': typeof ApiActivitiesRoute
   '/api/activity-sync-scheduler': typeof ApiActivitySyncSchedulerRoute
   '/api/activity-sync-settings': typeof ApiActivitySyncSettingsRoute
   '/api/keepalive': typeof ApiKeepaliveRoute
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
   '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
   '/_authenticated/professores': typeof AuthenticatedProfessoresRoute
+  '/api/activities': typeof ApiActivitiesRoute
   '/api/activity-sync-scheduler': typeof ApiActivitySyncSchedulerRoute
   '/api/activity-sync-settings': typeof ApiActivitySyncSettingsRoute
   '/api/keepalive': typeof ApiKeepaliveRoute
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/perfil'
     | '/professores'
+    | '/api/activities'
     | '/api/activity-sync-scheduler'
     | '/api/activity-sync-settings'
     | '/api/keepalive'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/perfil'
     | '/professores'
+    | '/api/activities'
     | '/api/activity-sync-scheduler'
     | '/api/activity-sync-settings'
     | '/api/keepalive'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro'
     | '/_authenticated/perfil'
     | '/_authenticated/professores'
+    | '/api/activities'
     | '/api/activity-sync-scheduler'
     | '/api/activity-sync-settings'
     | '/api/keepalive'
@@ -257,6 +269,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiActivitiesRoute: typeof ApiActivitiesRoute
   ApiActivitySyncSchedulerRoute: typeof ApiActivitySyncSchedulerRoute
   ApiActivitySyncSettingsRoute: typeof ApiActivitySyncSettingsRoute
   ApiKeepaliveRoute: typeof ApiKeepaliveRoute
@@ -362,6 +375,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiActivitySyncSchedulerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/activities': {
+      id: '/api/activities'
+      path: '/api/activities'
+      fullPath: '/api/activities'
+      preLoaderRoute: typeof ApiActivitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/professores': {
       id: '/_authenticated/professores'
       path: '/professores'
@@ -433,6 +453,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiActivitiesRoute: ApiActivitiesRoute,
   ApiActivitySyncSchedulerRoute: ApiActivitySyncSchedulerRoute,
   ApiActivitySyncSettingsRoute: ApiActivitySyncSettingsRoute,
   ApiKeepaliveRoute: ApiKeepaliveRoute,

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Filters } from "@/contexts/AppContext";
+import { getActivityDashboardData, type StoredActivity } from "@/lib/activityDashboardData";
 import {
   getDashboardFilterOptions,
   getFilteredDashboardDataFromRows,
@@ -17,14 +18,46 @@ import {
 
 type MemberRecord = Record<string, unknown>;
 
-const NAME_FIELDS = ["nome", "name", "full_name", "nome_completo", "display_name", "member_name", "registerName"];
+const NAME_FIELDS = [
+  "nome",
+  "name",
+  "full_name",
+  "nome_completo",
+  "display_name",
+  "member_name",
+  "registerName",
+];
 const GENDER_FIELDS = ["genero", "sexo", "gender", "sex"];
 const AGE_FIELDS = ["idade", "age"];
 const BIRTH_DATE_FIELDS = ["data_nascimento", "birthDate", "birth_date", "birthday", "nascimento"];
-const DISTRICT_FIELDS = ["branchName", "bairro", "unidade", "branch", "location", "unit", "neighborhood"];
+const DISTRICT_FIELDS = [
+  "branchName",
+  "bairro",
+  "unidade",
+  "branch",
+  "location",
+  "unit",
+  "neighborhood",
+];
 const CITY_FIELDS = ["cidade", "city"];
-const CONTRACT_FIELDS = ["contrato", "plano", "plan", "membership", "membership_type", "tipo_contrato"];
-const START_FIELDS = ["registerDate", "conversionDate", "inicio", "data_inicio", "data_matricula", "created_at", "joined_at", "start_date"];
+const CONTRACT_FIELDS = [
+  "contrato",
+  "plano",
+  "plan",
+  "membership",
+  "membership_type",
+  "tipo_contrato",
+];
+const START_FIELDS = [
+  "registerDate",
+  "conversionDate",
+  "inicio",
+  "data_inicio",
+  "data_matricula",
+  "created_at",
+  "joined_at",
+  "start_date",
+];
 const DUE_FIELDS = ["vencimento", "data_vencimento", "expires_at", "end_date", "membership_end"];
 const LAST_FREQUENCY_FIELDS = [
   "lastAccessDate",
@@ -37,10 +70,19 @@ const LAST_FREQUENCY_FIELDS = [
   "updated_at",
 ];
 const VALUE_FIELDS = ["valor", "mensalidade", "monthly_fee", "amount", "price", "valor_contrato"];
-const STATUS_FIELDS = ["status", "membershipStatus", "situacao", "active", "ativo", "is_active", "membership_status"];
+const STATUS_FIELDS = [
+  "status",
+  "membershipStatus",
+  "situacao",
+  "active",
+  "ativo",
+  "is_active",
+  "membership_status",
+];
 const ID_FIELDS = ["idMember", "id", "member_id", "codigo", "code", "uuid"];
 
 let membersRequest: Promise<MemberRecord[]> | null = null;
+let activitiesRequest: Promise<StoredActivity[]> | null = null;
 
 function pick(record: MemberRecord, fields: string[]) {
   for (const field of fields) {
@@ -60,7 +102,10 @@ function toStringValue(value: unknown, fallback = "") {
 function toNumberValue(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
-    const normalized = value.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+    const normalized = value
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .replace(/[^\d.-]/g, "");
     const parsed = Number(normalized);
     if (Number.isFinite(parsed)) return parsed;
   }
@@ -162,7 +207,9 @@ function memberToClient(member: MemberRecord, index: number): ClientRow {
     ultimaFrequencia: toBRDate(pick(member, LAST_FREQUENCY_FIELDS)),
     valor: value,
     valorTotal: value,
-    diasAtivo: startDate ? Math.max(differenceInCalendarDays(inferredDue ?? today, startDate), 0) : 0,
+    diasAtivo: startDate
+      ? Math.max(differenceInCalendarDays(inferredDue ?? today, startDate), 0)
+      : 0,
   };
 }
 
@@ -189,13 +236,35 @@ async function fetchMembersRequest() {
   }
 
   const data = (await response.json()) as unknown;
-  return Array.isArray(data) ? data as MemberRecord[] : [];
+  return Array.isArray(data) ? (data as MemberRecord[]) : [];
+}
+
+async function fetchActivities() {
+  if (!activitiesRequest) {
+    activitiesRequest = fetch("/api/activities", {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+        const data = (await response.json()) as unknown;
+        return Array.isArray(data) ? (data as StoredActivity[]) : [];
+      })
+      .catch((error) => {
+        activitiesRequest = null;
+        throw error;
+      });
+  }
+  return activitiesRequest;
 }
 
 function useDashboardDataState(filters: Filters) {
   const [members, setMembers] = useState<ClientRow[]>([]);
+  const [activities, setActivities] = useState<StoredActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingActivities, setLoadingActivities] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activitiesError, setActivitiesError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -223,10 +292,49 @@ function useDashboardDataState(filters: Filters) {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    fetchActivities()
+      .then((rows) => {
+        if (!mounted) return;
+        setActivities(rows);
+        setActivitiesError(null);
+      })
+      .catch((loadError) => {
+        if (!mounted) return;
+        setActivities([]);
+        setActivitiesError(
+          loadError instanceof Error ? loadError.message : "Falha ao carregar atividades",
+        );
+      })
+      .finally(() => {
+        if (mounted) setLoadingActivities(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const sourceRows = members;
-  const data = useMemo(
+  const memberData = useMemo(
     () => getFilteredDashboardDataFromRows(filters, sourceRows),
     [filters, sourceRows],
+  );
+  const activityData = useMemo(
+    () => getActivityDashboardData(activities, filters),
+    [activities, filters],
+  );
+  const data = useMemo(
+    () => ({
+      ...memberData,
+      overviewKpis: {
+        ...memberData.overviewKpis,
+        taxaOcupacaoAgenda: activityData.overviewOccupancy,
+      },
+      ocupacaoAgenda: activityData.ocupacaoAgenda,
+      professores: activityData.professores,
+    }),
+    [activityData, memberData],
   );
   const filterOptions = useMemo(() => getDashboardFilterOptions(sourceRows), [sourceRows]);
 
@@ -237,6 +345,10 @@ function useDashboardDataState(filters: Filters) {
     membersError: error,
     usingSupabaseMembers: !loading && !error,
     membersCount: members.length,
+    loadingActivities,
+    activitiesError,
+    usingSupabaseActivities: !loadingActivities && !activitiesError,
+    activitiesCount: activities.length,
   };
 }
 

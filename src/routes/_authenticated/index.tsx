@@ -133,7 +133,6 @@ function GeralPage() {
         <KpiCard
           label="Ocupação agenda"
           value={`${k.taxaOcupacaoAgenda}%`}
-          delta={3.1}
           icon={<CalendarCheck className="h-5 w-5" />}
         />
       </div>
