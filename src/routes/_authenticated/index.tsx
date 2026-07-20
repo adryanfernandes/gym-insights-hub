@@ -165,7 +165,10 @@ function GeralPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Ocupação da agenda por horário" description="Média do período">
+        <ChartCard
+          title="Ocupação da agenda por horário"
+          description="Inscritos em relação à capacidade média do período"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.ocupacaoAgenda}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
