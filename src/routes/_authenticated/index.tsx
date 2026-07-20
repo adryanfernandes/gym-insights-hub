@@ -12,14 +12,19 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { Users, UserX, DollarSign, TrendingDown, ShoppingCart, RefreshCw, CalendarCheck } from "lucide-react";
+import {
+  Users,
+  UserX,
+  DollarSign,
+  TrendingDown,
+  ShoppingCart,
+  RefreshCw,
+  CalendarCheck,
+} from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
-import {
-  formatBRL,
-  formatNum,
-} from "@/lib/mockData";
+import { formatBRL, formatNum } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
@@ -136,10 +141,10 @@ function GeralPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title="Evolução de alunos ativos"
-          description="Últimos 30 dias"
+          description="Saldo diário de alunos com contrato ativo no período"
         >
           <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data.evolucaoAlunos}>
+            <AreaChart data={data.evolucaoAlunos}>
               <defs>
                 <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.5} />
@@ -177,10 +182,7 @@ function GeralPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard
-          title="Evolução da taxa de renovação automática"
-          description="Últimos 12 meses"
-        >
+        <ChartCard title="Evolução da taxa de renovação automática" description="Últimos 12 meses">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data.taxaRenovacao}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -211,9 +213,7 @@ function GeralPage() {
             </li>
             <li className="flex items-center justify-between border-b border-border pb-2">
               <span className="text-muted-foreground">Receita gerada</span>
-              <span className="font-semibold text-success">
-                {formatBRL(k.vendas30d.valor)}
-              </span>
+              <span className="font-semibold text-success">{formatBRL(k.vendas30d.valor)}</span>
             </li>
             <li className="flex items-center justify-between border-b border-border pb-2">
               <span className="text-muted-foreground">Perda projetada</span>
