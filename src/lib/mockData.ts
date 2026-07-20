@@ -543,6 +543,22 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     ],
     rankingRetencao,
     alunosRisco,
+    alunosRiscoLista: riskRows
+      .slice()
+      .sort(
+        (a, b) =>
+          daysSinceLastFrequency(b, referenceDate) - daysSinceLastFrequency(a, referenceDate),
+      )
+      .map((client) => ({
+        id: client.id,
+        nome: client.nome,
+        contrato: client.contrato,
+        bairro: client.bairro,
+        ultimaFrequencia: client.ultimaFrequencia,
+        diasSemAtividade: daysSinceLastFrequency(client, referenceDate),
+        vencimento: client.vencimento,
+        nivelRisco: riskLevel(client, referenceDate),
+      })),
     alunosAtivosLista: activeRows
       .slice()
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))

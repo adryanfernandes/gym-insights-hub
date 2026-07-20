@@ -313,5 +313,30 @@ export function getMembershipDashboardData(
     evolucaoVendas,
     renovacoesMensais,
     tipoContratoData,
+    vendasLista: sales
+      .slice()
+      .sort((a, b) => (date(b.sale_date)?.getTime() ?? 0) - (date(a.sale_date)?.getTime() ?? 0))
+      .map((row) => ({
+        idVenda: row.id_sale ?? row.id_member_membership,
+        idAluno: row.id_member,
+        contrato: row.membership_name?.trim() || "Não informado",
+        dataVenda: row.sale_date,
+        inicio: row.membership_start,
+        vencimento: row.membership_end,
+        valor: num(row.sale_value),
+      })),
+    cancelamentosLista: cancellations
+      .slice()
+      .sort((a, b) => (date(b.cancel_date)?.getTime() ?? 0) - (date(a.cancel_date)?.getTime() ?? 0))
+      .map((row) => ({
+        idContrato: row.id_member_membership,
+        idAluno: row.id_member,
+        contrato: row.membership_name?.trim() || "Não informado",
+        dataCancelamento: row.cancel_date,
+        motivo: row.cancellation_reason?.trim() || "Não informado",
+        valorVenda: num(row.sale_value),
+        multa: num(row.cancellation_fine),
+        valorRestante: num(row.remaining_value),
+      })),
   };
 }
