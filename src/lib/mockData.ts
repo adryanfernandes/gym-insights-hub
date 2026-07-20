@@ -186,6 +186,7 @@ export function getDashboardFilterOptions(clients: ClientRow[]) {
     tiposContrato: [
       "Todos",
       ...countBy(clients, (client) => client.contrato)
+        .filter((row) => row.key !== "Nao informado")
         .sort((a, b) => b.qtd - a.qtd)
         .map((row) => row.key),
     ],
@@ -214,7 +215,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     isInRange(parseBRDate(client.vencimento), range),
   );
   const riskRows = periodRows.filter(
-    (client) => daysSinceLastFrequency(client, referenceDate) > 10,
+    (client) => client.ativo && daysSinceLastFrequency(client, referenceDate) > 10,
   );
   const highRiskRows = riskRows.filter((client) => riskLevel(client, referenceDate) === "alto");
   const activeRows = baseRows.filter((client) => client.ativo);
@@ -542,6 +543,18 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     ],
     rankingRetencao,
     alunosRisco,
+    alunosAtivosLista: activeRows
+      .slice()
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+      .map((client) => ({
+        id: client.id,
+        nome: client.nome,
+        contrato: client.contrato,
+        bairro: client.bairro,
+        inicio: client.inicio,
+        vencimento: client.vencimento,
+        ultimaFrequencia: client.ultimaFrequencia,
+      })),
     professores: {
       kpis: professoresKpis,
       ranking: professoresRanking,

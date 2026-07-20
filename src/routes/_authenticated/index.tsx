@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -27,6 +28,13 @@ import { useApp } from "@/contexts/AppContext";
 import { formatBRL, formatNum } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -50,6 +58,8 @@ function GeralPage() {
   const { filters } = useApp();
   const { data } = useDashboardData(filters);
   const k = data.overviewKpis;
+  const [activeStudentsOpen, setActiveStudentsOpen] = useState(false);
+  const renewalDeactivation = Number(k.taxaDesativacaoRenovacao).toFixed(2).replace(".", ",");
 
   const onExportExcel = () =>
     exportToExcel("geral", {
@@ -99,6 +109,8 @@ function GeralPage() {
           value={formatNum(k.alunosAtivos)}
           delta={4.2}
           icon={<Users className="h-5 w-5" />}
+          hint="Clique para ver a lista completa"
+          onClick={() => setActiveStudentsOpen(true)}
         />
         <KpiCard
           label="Alunos não ativos"
@@ -130,7 +142,7 @@ function GeralPage() {
         />
         <KpiCard
           label="Desat. renovação"
-          value={`${k.taxaDesativacaoRenovacao}%`}
+          value={`${renewalDeactivation}%`}
           accent="warning"
           icon={<RefreshCw className="h-5 w-5" />}
         />
@@ -147,6 +159,45 @@ function GeralPage() {
           icon={<TriangleAlert className="h-5 w-5" />}
         />
       </div>
+
+      <Dialog open={activeStudentsOpen} onOpenChange={setActiveStudentsOpen}>
+        <DialogContent className="max-h-[85vh] max-w-6xl overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5">
+            <DialogTitle>Alunos ativos</DialogTitle>
+            <DialogDescription>
+              {formatNum(data.alunosAtivosLista.length)} alunos conforme os filtros selecionados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3">Número</th>
+                  <th className="px-5 py-3">Aluno</th>
+                  <th className="px-5 py-3">Contrato</th>
+                  <th className="px-5 py-3">Bairro</th>
+                  <th className="px-5 py-3">Início</th>
+                  <th className="px-5 py-3">Vencimento</th>
+                  <th className="px-5 py-3">Última frequência</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.alunosAtivosLista.map((student) => (
+                  <tr key={student.id} className="border-t border-border hover:bg-accent/40">
+                    <td className="px-5 py-3 font-medium">{student.id}</td>
+                    <td className="px-5 py-3 font-medium">{student.nome}</td>
+                    <td className="px-5 py-3">{student.contrato}</td>
+                    <td className="px-5 py-3">{student.bairro}</td>
+                    <td className="px-5 py-3">{student.inicio ?? "-"}</td>
+                    <td className="px-5 py-3">{student.vencimento ?? "-"}</td>
+                    <td className="px-5 py-3">{student.ultimaFrequencia ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
