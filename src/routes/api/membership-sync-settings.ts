@@ -27,7 +27,12 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
       GET: async () => {
         try {
           const { url, headers } = config();
-          const [settingsResponse, historyResponse, activitySettingsResponse] = await Promise.all([
+          const [
+            settingsResponse,
+            historyResponse,
+            activitySettingsResponse,
+            memberSettingsResponse,
+          ] = await Promise.all([
             fetch(`${url}/rest/v1/membership_sync_settings?select=*&id=eq.true&limit=1`, {
               headers,
               cache: "no-store",
@@ -46,6 +51,13 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
                 cache: "no-store",
               },
             ),
+            fetch(
+              `${url}/rest/v1/member_sync_settings?select=evo_api_authorization&id=eq.true&limit=1`,
+              {
+                headers,
+                cache: "no-store",
+              },
+            ),
           ]);
           if (!settingsResponse.ok || !historyResponse.ok) {
             throw new Error("Tabelas de contratos indisponíveis; aplique a migration do Supabase");
@@ -54,8 +66,16 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
           const inherited = activitySettingsResponse.ok
             ? ((await activitySettingsResponse.json()) as Array<Record<string, unknown>>)
             : [];
+          const memberSettings = memberSettingsResponse.ok
+            ? ((await memberSettingsResponse.json()) as Array<Record<string, unknown>>)
+            : [];
           return Response.json({
-            settings: safe(settings[0], Boolean(inherited[0]?.evo_api_authorization)),
+            settings: safe(
+              settings[0],
+              Boolean(
+                inherited[0]?.evo_api_authorization || memberSettings[0]?.evo_api_authorization,
+              ),
+            ),
             history: await historyResponse.json(),
           });
         } catch (error) {
