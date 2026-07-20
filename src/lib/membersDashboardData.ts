@@ -403,6 +403,7 @@ function useDashboardDataState(filters: Filters) {
       },
       ocupacaoAgenda: activityData.ocupacaoAgenda,
       professores: activityData.professores,
+      activityFilterOptions: activityData.filterOptions,
       faturamentoMensal: membershipData.faturamentoMensal,
       receitaPorPlano: membershipData.receitaPorPlano,
       projecaoFaturamento: membershipData.projecaoFaturamento,

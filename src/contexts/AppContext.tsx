@@ -6,6 +6,10 @@ export type Filters = {
   tipoContrato: string;
   sexo: string;
   faixaEtaria: string;
+  professor: string;
+  modalidade: string;
+  atividadeUnidade: string;
+  horario: string;
 };
 
 export type AppRole = "admin" | "gestor";
@@ -77,6 +81,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tipoContrato: "Todos",
     sexo: "Todos",
     faixaEtaria: "Todas",
+    professor: "Todos",
+    modalidade: "Todas",
+    atividadeUnidade: "Todas",
+    horario: "Todos",
   });
   const [users, setUsers] = useState<AppUser[]>([ADMIN_USER]);
   const [user, setUser] = useState<AppUser | null>(null);

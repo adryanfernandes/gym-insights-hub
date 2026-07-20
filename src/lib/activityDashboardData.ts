@@ -108,10 +108,25 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   const start = rangeStart(filters.periodo, now);
-  const rows = source
+  const periodRows = source
     .map(normalize)
     .filter((row): row is NormalizedActivity => Boolean(row))
     .filter((row) => row.date >= start && row.date <= end && row.capacity > 0);
+  const options = (values: string[]) =>
+    Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const filterOptions = {
+    professores: ["Todos", ...options(periodRows.map((row) => row.instructor))],
+    modalidades: ["Todas", ...options(periodRows.map((row) => row.modality))],
+    unidades: ["Todas", ...options(periodRows.map((row) => row.area))],
+    horarios: ["Todos", ...options(periodRows.map((row) => row.startTime))],
+  };
+  const rows = periodRows.filter(
+    (row) =>
+      (filters.professor === "Todos" || row.instructor === filters.professor) &&
+      (filters.modalidade === "Todas" || row.modality === filters.modalidade) &&
+      (filters.atividadeUnidade === "Todas" || row.area === filters.atividadeUnidade) &&
+      (filters.horario === "Todos" || row.startTime === filters.horario),
+  );
   const totals = metrics(rows);
 
   const ranking = Array.from(aggregate(rows, (row) => row.instructor).entries())
@@ -178,6 +193,7 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
     });
 
   return {
+    filterOptions,
     overviewOccupancy: totals.occupancy,
     ocupacaoAgenda: porHorario.map(({ horario, ocupacao }) => ({ horario, ocupacao })),
     professores: {

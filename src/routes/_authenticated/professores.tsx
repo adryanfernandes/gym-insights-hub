@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -13,7 +13,7 @@ import {
   Line,
   ComposedChart,
 } from "recharts";
-import { CalendarCheck, Percent, UserRoundCheck, Users } from "lucide-react";
+import { CalendarCheck, Percent, RotateCcw, UserRoundCheck, Users } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ChartCard, KpiCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
@@ -42,13 +42,59 @@ const tooltipStyle = {
   color: "var(--foreground)",
 };
 
+function TeacherSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex min-w-[150px] flex-1 flex-col gap-1 sm:flex-none">
+      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </label>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 max-w-[240px] rounded-md border border-input bg-card px-2 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function ProfessoresPage() {
-  const { filters } = useApp();
+  const { filters, setFilters } = useApp();
   const { data, loadingActivities, activitiesError } = useDashboardData(filters);
   const professores = data.professores;
   const k = professores.kpis;
   const [showAllTeachers, setShowAllTeachers] = useState(false);
   const rankingData = showAllTeachers ? professores.ranking : professores.ranking.slice(0, 10);
+  const setFiltersRef = useRef(setFilters);
+
+  useEffect(() => {
+    setFiltersRef.current = setFilters;
+  }, [setFilters]);
+
+  useEffect(() => {
+    return () =>
+      setFiltersRef.current({
+        professor: "Todos",
+        modalidade: "Todas",
+        atividadeUnidade: "Todas",
+        horario: "Todos",
+      });
+  }, []);
 
   const onExportExcel = () =>
     exportToExcel("professores", {
@@ -94,7 +140,63 @@ function ProfessoresPage() {
       subtitle="Ocupação real da agenda e eficiência da grade"
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
+      showFilters={false}
     >
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
+        <TeacherSelect
+          label="Período"
+          value={filters.periodo}
+          options={["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Este ano"]}
+          onChange={(periodo) =>
+            setFilters({
+              periodo,
+              professor: "Todos",
+              modalidade: "Todas",
+              atividadeUnidade: "Todas",
+              horario: "Todos",
+            })
+          }
+        />
+        <TeacherSelect
+          label="Professor"
+          value={filters.professor}
+          options={data.activityFilterOptions.professores}
+          onChange={(professor) => setFilters({ professor })}
+        />
+        <TeacherSelect
+          label="Modalidade"
+          value={filters.modalidade}
+          options={data.activityFilterOptions.modalidades}
+          onChange={(modalidade) => setFilters({ modalidade })}
+        />
+        <TeacherSelect
+          label="Área / Unidade"
+          value={filters.atividadeUnidade}
+          options={data.activityFilterOptions.unidades}
+          onChange={(atividadeUnidade) => setFilters({ atividadeUnidade })}
+        />
+        <TeacherSelect
+          label="Horário"
+          value={filters.horario}
+          options={data.activityFilterOptions.horarios}
+          onChange={(horario) => setFilters({ horario })}
+        />
+        <button
+          type="button"
+          onClick={() =>
+            setFilters({
+              professor: "Todos",
+              modalidade: "Todas",
+              atividadeUnidade: "Todas",
+              horario: "Todos",
+            })
+          }
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-medium transition hover:bg-accent"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Limpar
+        </button>
+      </div>
       {(loadingActivities || activitiesError) && (
         <div className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
           {loadingActivities
