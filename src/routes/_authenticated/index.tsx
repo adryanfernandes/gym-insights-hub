@@ -19,6 +19,7 @@ import {
   ShoppingCart,
   RefreshCw,
   CalendarCheck,
+  TriangleAlert,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
@@ -62,6 +63,7 @@ function GeralPage() {
         { metrica: "Vendas 30d (R$)", valor: k.vendas30d.valor },
         { metrica: "Taxa desativação renovação (%)", valor: k.taxaDesativacaoRenovacao },
         { metrica: "Taxa ocupação agenda (%)", valor: k.taxaOcupacaoAgenda },
+        { metrica: "Alunos em risco", valor: k.alunosRisco },
       ],
       EvolucaoAlunos: data.evolucaoAlunos,
       OcupacaoAgenda: data.ocupacaoAgenda,
@@ -81,6 +83,7 @@ function GeralPage() {
       },
       { Métrica: "Desativação renovação", Valor: `${k.taxaDesativacaoRenovacao}%` },
       { Métrica: "Ocupação agenda", Valor: `${k.taxaOcupacaoAgenda}%` },
+      { Métrica: "Alunos em risco", Valor: formatNum(k.alunosRisco) },
     ]);
 
   return (
@@ -90,7 +93,7 @@ function GeralPage() {
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
     >
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Alunos ativos"
           value={formatNum(k.alunosAtivos)}
@@ -135,6 +138,13 @@ function GeralPage() {
           label="Ocupação agenda"
           value={`${k.taxaOcupacaoAgenda}%`}
           icon={<CalendarCheck className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Alunos em risco"
+          value={formatNum(k.alunosRisco)}
+          hint="Risco de cancelamento"
+          accent="warning"
+          icon={<TriangleAlert className="h-5 w-5" />}
         />
       </div>
 
