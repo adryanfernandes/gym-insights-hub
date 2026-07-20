@@ -17,7 +17,8 @@ export const Route = createFileRoute("/api/activities")({
         try {
           const supabaseUrl = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
           const key = requiredEnv("SUPABASE_SECRET_KEY");
-          const requestedLimit = Number(new URL(request.url).searchParams.get("limit"));
+          const limitParam = new URL(request.url).searchParams.get("limit");
+          const requestedLimit = limitParam === null ? Number.NaN : Number(limitParam);
           const maxRows = Number.isFinite(requestedLimit)
             ? Math.max(1, Math.min(10000, Math.round(requestedLimit)))
             : 10000;

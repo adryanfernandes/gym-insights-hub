@@ -1,6 +1,7 @@
 import {
   addMonths,
   differenceInCalendarDays,
+  endOfMonth,
   format,
   startOfMonth,
   startOfYear,
@@ -134,14 +135,35 @@ export function getMembershipDashboardData(
   memberships: MembershipRow[],
   receivables: ReceivableRow[],
   filters: Filters,
+  activeMemberIds?: Set<number>,
 ) {
   const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const start = periodStart(filters.periodo, now);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   const branch = filters.unidade.match(/^\d+$/) ? Number(filters.unidade) : null;
   const scoped = branch ? memberships.filter((row) => row.id_branch === branch) : memberships;
   const byId = new Map(scoped.map((row) => [row.id_member_membership, row]));
   const scopedReceivables = receivables.filter((row) => byId.has(row.id_member_membership));
+  const contractMembers = new Map<string, Set<number>>();
+  scoped.forEach((row) => {
+    if (activeMemberIds && !activeMemberIds.has(row.id_member)) return;
+    const contractStart = date(row.membership_start || row.sale_date);
+    const contractEnd = date(row.membership_end);
+    if ((contractStart && contractStart > end) || (contractEnd && contractEnd < todayStart)) {
+      return;
+    }
+    const name = row.membership_name?.trim() || "Não informado";
+    const memberIds = contractMembers.get(name) ?? new Set<number>();
+    memberIds.add(row.id_member);
+    contractMembers.set(name, memberIds);
+  });
+  const tipoContratoData = Array.from(contractMembers, ([tipo, memberIds]) => ({
+    tipo,
+    qtd: memberIds.size,
+  }))
+    .sort((a, b) => b.qtd - a.qtd)
+    .slice(0, 12);
   const sales = scoped.filter((row) => {
     const value = date(row.sale_date);
     return value && value >= start && value <= end;
@@ -156,13 +178,6 @@ export function getMembershipDashboardData(
     const reference = date(row.receiving_date || row.registration_date);
     return !row.canceled && reference && monthKey(reference) === currentMonth
       ? sum + num(row.amount_paid)
-      : sum;
-  }, 0);
-  const nextMonth = monthKey(addMonths(now, 1));
-  const nextMonthReceivables = scopedReceivables.reduce((sum, row) => {
-    const due = date(row.due_date);
-    return !row.canceled && due && monthKey(due) === nextMonth
-      ? sum + Math.max(num(row.amount) - num(row.amount_paid), 0)
       : sum;
   }, 0);
   const memberTotals = new Map<number, number>();
@@ -229,19 +244,43 @@ export function getMembershipDashboardData(
     };
   });
 
-  const projectionMonths = Array.from({ length: 6 }, (_, index) => monthKey(addMonths(now, index)));
-  const projecaoFaturamento = projectionMonths.map((key, index) => ({
-    mes: label(key),
-    real: index === 0 ? Math.round(paidCurrentMonth) : null,
-    projecao: Math.round(
-      scopedReceivables.reduce((sum, row) => {
-        const due = date(row.due_date);
-        return !row.canceled && due && monthKey(due) === key
-          ? sum + Math.max(num(row.amount) - num(row.amount_paid), 0)
-          : sum;
-      }, 0),
-    ),
-  }));
+  const projectionDates = Array.from({ length: 6 }, (_, index) =>
+    addMonths(startOfMonth(now), index),
+  );
+  const projecaoFaturamento = projectionDates.map((projectionDate, index) => {
+    const key = monthKey(projectionDate);
+    const monthStart = startOfMonth(projectionDate);
+    const monthEnd = endOfMonth(projectionDate);
+    let contratosAtivos = 0;
+    let contratosCancelados = 0;
+
+    scopedReceivables.forEach((row) => {
+      const due = date(row.due_date);
+      if (!due || monthKey(due) !== key) return;
+      const contract = byId.get(row.id_member_membership);
+      if (!contract) return;
+      const contractStart = date(contract.membership_start || contract.sale_date);
+      const contractEnd = date(contract.membership_end);
+      const canceledAt = date(contract.cancel_date);
+      const outstanding = Math.max(num(row.amount) - num(row.amount_paid), 0);
+      const canceled = row.canceled || Boolean(canceledAt && canceledAt <= monthEnd);
+      const activeInMonth =
+        (!contractStart || contractStart <= monthEnd) &&
+        (!contractEnd || contractEnd >= monthStart) &&
+        !canceled;
+
+      if (canceled) contratosCancelados += outstanding;
+      else if (activeInMonth) contratosAtivos += outstanding;
+    });
+
+    return {
+      mes: label(key),
+      real: index === 0 ? Math.round(paidCurrentMonth) : null,
+      contratosAtivos: Math.round(contratosAtivos),
+      contratosCancelados: Math.round(contratosCancelados),
+    };
+  });
+  const nextMonthProjection = projecaoFaturamento[1]?.contratosAtivos ?? 0;
 
   return {
     kpis: {
@@ -253,7 +292,7 @@ export function getMembershipDashboardData(
       },
       taxaDesativacaoRenovacao: (cancellations.length / Math.max(sales.length, 1)) * 100,
       faturamentoMes: paidCurrentMonth,
-      faturamentoEstimadoProx: nextMonthReceivables,
+      faturamentoEstimadoProx: nextMonthProjection,
       ltvMedio: ltv,
       cancelamentosFinanceiros: cancellations.reduce(
         (sum, row) => sum + num(row.remaining_value) + num(row.cancellation_fine),
@@ -265,5 +304,6 @@ export function getMembershipDashboardData(
     projecaoFaturamento,
     evolucaoVendas,
     renovacoesMensais,
+    tipoContratoData,
   };
 }

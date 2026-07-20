@@ -18,10 +18,7 @@ import { ShoppingCart, TrendingDown, AlertTriangle } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
-import {
-  formatBRL,
-  formatNum,
-} from "@/lib/mockData";
+import { formatBRL, formatNum } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
@@ -73,6 +70,7 @@ function ComercialPage() {
     exportToPdf(
       "Alunos em risco",
       data.alunosRisco.map((a) => ({
+        "Nº cliente": a.id,
         Nome: a.nome,
         "Último agend.": a.ultimoAgendamento,
         "Dias sem atividade": a.diasSemAtividade,
@@ -151,7 +149,12 @@ function ComercialPage() {
           <ResponsiveContainer width="100%" height="100%">
             <FunnelChart>
               <Tooltip contentStyle={tooltipStyle} />
-              <Funnel dataKey="valor" data={data.funilComercial} isAnimationActive fill="var(--chart-1)">
+              <Funnel
+                dataKey="valor"
+                data={data.funilComercial}
+                isAnimationActive
+                fill="var(--chart-1)"
+              >
                 <LabelList
                   position="right"
                   fill="var(--foreground)"
@@ -171,14 +174,15 @@ function ComercialPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard
-          title="Ranking de retenção por unidade"
-          description="% de alunos retidos"
-        >
+        <ChartCard title="Ranking de retenção por unidade" description="% de alunos retidos">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.rankingRetencao} layout="vertical">
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />
+              <XAxis
+                type="number"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                unit="%"
+              />
               <YAxis
                 type="category"
                 dataKey="unidade"
@@ -242,6 +246,7 @@ function ComercialPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
               <tr>
+                <th className="px-5 py-3 font-medium">Nº cliente</th>
                 <th className="px-5 py-3 font-medium">Aluno</th>
                 <th className="px-5 py-3 font-medium">Último agend.</th>
                 <th className="px-5 py-3 font-medium">Dias sem ativ.</th>
@@ -255,6 +260,7 @@ function ComercialPage() {
                 .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade)
                 .map((a) => (
                   <tr key={a.id} className="border-t border-border hover:bg-accent/40 transition">
+                    <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{a.id}</td>
                     <td className="px-5 py-3 font-medium">{a.nome}</td>
                     <td className="px-5 py-3 text-muted-foreground">{a.ultimoAgendamento}</td>
                     <td className="px-5 py-3 font-semibold">{a.diasSemAtividade}d</td>
