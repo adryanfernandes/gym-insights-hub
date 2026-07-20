@@ -25,7 +25,8 @@ export const Route = createFileRoute("/api/activity-sync-scheduler")({
           const settings = (await settingsResponse.json())[0] as
             | {
                 enabled: boolean;
-                interval_hours: number;
+                interval_minutes: number;
+                last_attempt_at?: string;
                 schedule_updated_at?: string;
                 updated_at: string;
               }
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/api/activity-sync-scheduler")({
           if (!settings?.enabled) return Response.json({ ok: true, action: "disabled" });
 
           const historyResponse = await fetch(
-            `${baseUrl}/rest/v1/activity_sync_history?select=finished_at&status=eq.success&order=finished_at.desc&limit=1`,
+            `${baseUrl}/rest/v1/activity_sync_history?select=finished_at&order=finished_at.desc&limit=1`,
             { headers, cache: "no-store" },
           );
           const last = historyResponse.ok
@@ -43,9 +44,12 @@ export const Route = createFileRoute("/api/activity-sync-scheduler")({
           const scheduleUpdatedAt = new Date(
             settings.schedule_updated_at || settings.updated_at,
           ).getTime();
+          const lastAttemptAt = settings.last_attempt_at
+            ? new Date(settings.last_attempt_at).getTime()
+            : 0;
           if (
-            Date.now() - Math.max(lastSuccessAt, scheduleUpdatedAt) <
-            settings.interval_hours * 3600000
+            Date.now() - Math.max(lastSuccessAt, lastAttemptAt, scheduleUpdatedAt) <
+            settings.interval_minutes * 60000
           ) {
             return Response.json({ ok: true, action: "not-due" });
           }

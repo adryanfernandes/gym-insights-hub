@@ -12,7 +12,10 @@ function publicSettings(settings?: Record<string, unknown>) {
   return {
     id: settings.id,
     enabled: settings.enabled,
-    interval_hours: settings.interval_hours,
+    interval_minutes: settings.interval_minutes,
+    next_query_date: settings.next_query_date,
+    cycle_month: settings.cycle_month,
+    last_attempt_at: settings.last_attempt_at,
     updated_at: settings.updated_at,
     schedule_updated_at: settings.schedule_updated_at,
     has_api_credential: Boolean(settings.evo_api_authorization),
@@ -76,7 +79,7 @@ export const Route = createFileRoute("/api/activity-sync-settings")({
           }
           const input = (await request.json()) as {
             enabled?: boolean;
-            intervalHours?: number;
+            intervalMinutes?: number;
             apiCredential?: string;
           };
           const { url, headers } = config();
@@ -87,8 +90,11 @@ export const Route = createFileRoute("/api/activity-sync-settings")({
             updates.enabled = input.enabled;
             scheduleChanged = true;
           }
-          if (typeof input.intervalHours === "number") {
-            updates.interval_hours = Math.max(1, Math.min(720, Math.round(input.intervalHours)));
+          if (typeof input.intervalMinutes === "number") {
+            updates.interval_minutes = Math.max(
+              1,
+              Math.min(1440, Math.round(input.intervalMinutes)),
+            );
             scheduleChanged = true;
           }
           if (scheduleChanged) updates.schedule_updated_at = changedAt;

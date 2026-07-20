@@ -5,6 +5,10 @@ const ACTIVITY_DETAIL_URL = `${ACTIVITIES_URL}/detail`;
 const UPSERT_BATCH_SIZE = 100;
 const DETAIL_CONCURRENCY = 8;
 type Activity = Record<string, unknown>;
+type ActivityQueueSettings = {
+  next_query_date?: string | null;
+  cycle_month?: string | null;
+};
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -266,6 +270,37 @@ async function recordHistory(entry: Record<string, unknown>) {
   if (!response.ok) throw new Error(`Falha ao registrar histórico: ${await response.text()}`);
 }
 
+async function loadQueueSettings() {
+  const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
+  const response = await fetch(
+    `${url}/rest/v1/activity_sync_settings?select=next_query_date,cycle_month&id=eq.true&limit=1`,
+    {
+      headers: { apikey: requiredEnv("SUPABASE_SECRET_KEY") },
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Falha ao carregar a fila de atividades: ${await response.text()}`);
+  }
+  return ((await response.json())[0] ?? {}) as ActivityQueueSettings;
+}
+
+async function updateQueueSettings(updates: Record<string, unknown>) {
+  const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
+  const response = await fetch(`${url}/rest/v1/activity_sync_settings?id=eq.true`, {
+    method: "PATCH",
+    headers: {
+      apikey: requiredEnv("SUPABASE_SECRET_KEY"),
+      "content-type": "application/json",
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) {
+    throw new Error(`Falha ao atualizar a fila de atividades: ${await response.text()}`);
+  }
+}
+
 export const Route = createFileRoute("/api/sync-activities")({
   server: {
     handlers: {
@@ -281,25 +316,35 @@ export const Route = createFileRoute("/api/sync-activities")({
         const { year, month, days } = currentMonth();
         const monthStart = isoDate(year, month, 1);
         const monthEnd = isoDate(year, month, days);
+        let queryDate = monthStart;
         let daysQueried = 0;
         try {
+          await updateQueueSettings({ last_attempt_at: startedAtIso });
+          const queue = await loadQueueSettings();
+          const queuedDate = queue.next_query_date?.slice(0, 10);
+          const queuedMonth = queue.cycle_month?.slice(0, 10);
+          if (
+            queuedMonth === monthStart &&
+            queuedDate &&
+            queuedDate >= monthStart &&
+            queuedDate <= monthEnd
+          ) {
+            queryDate = queuedDate;
+          }
           const authorization = await getAuthorization();
           const branchId = Number(process.env.EVO_BRANCH_ID || "1");
           const rows: Record<string, unknown>[] = [];
-          for (let day = 1; day <= days; day += 1) {
-            const date = isoDate(year, month, day);
-            const schedule = await fetchDay(date, authorization, branchId);
-            const activities = await enrichActivities(schedule, date, authorization);
-            daysQueried += 1;
-            for (const activity of activities) {
-              rows.push({
-                source_key: await sourceKey(date, activity),
-                query_date: date,
-                branch_id: branchId,
-                payload: activity,
-                last_synced_at: new Date().toISOString(),
-              });
-            }
+          const schedule = await fetchDay(queryDate, authorization, branchId);
+          const activities = await enrichActivities(schedule, queryDate, authorization);
+          daysQueried = 1;
+          for (const activity of activities) {
+            rows.push({
+              source_key: await sourceKey(queryDate, activity),
+              query_date: queryDate,
+              branch_id: branchId,
+              payload: activity,
+              last_synced_at: new Date().toISOString(),
+            });
           }
           const uniqueRows = Array.from(
             new Map(rows.map((row) => [String(row.source_key), row])).values(),
@@ -310,6 +355,14 @@ export const Route = createFileRoute("/api/sync-activities")({
           ).length;
           await upsertActivities(uniqueRows);
           const finishedAt = new Date().toISOString();
+          const currentDay = Number(queryDate.slice(8, 10));
+          const cycleCompleted = currentDay >= days;
+          const nextQueryDate = cycleCompleted ? monthStart : isoDate(year, month, currentDay + 1);
+          await updateQueueSettings({
+            next_query_date: nextQueryDate,
+            cycle_month: monthStart,
+            updated_at: finishedAt,
+          });
           await recordHistory({
             started_at: startedAtIso,
             finished_at: finishedAt,
@@ -317,6 +370,8 @@ export const Route = createFileRoute("/api/sync-activities")({
             status: "success",
             month_start: monthStart,
             month_end: monthEnd,
+            query_date: queryDate,
+            cycle_completed: cycleCompleted,
             days_queried: daysQueried,
             total_fetched: uniqueRows.length,
             new_activities: newActivities,
@@ -327,6 +382,9 @@ export const Route = createFileRoute("/api/sync-activities")({
             synchronized: uniqueRows.length,
             newActivities,
             daysQueried,
+            queryDate,
+            nextQueryDate,
+            cycleCompleted,
             trigger,
             finishedAt,
           });
@@ -341,6 +399,7 @@ export const Route = createFileRoute("/api/sync-activities")({
               status: "error",
               month_start: monthStart,
               month_end: monthEnd,
+              query_date: queryDate,
               days_queried: daysQueried,
               duration_ms: Date.now() - startedAt,
               error_message: message.slice(0, 1000),

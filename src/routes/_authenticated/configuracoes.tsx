@@ -425,14 +425,18 @@ type ActivitySyncLog = {
   new_activities: number;
   duration_ms: number;
   error_message?: string | null;
+  query_date?: string | null;
+  cycle_completed?: boolean;
 };
 
 function ActivitiesApiPanel() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [enabled, setEnabled] = useState(true);
-  const [intervalHours, setIntervalHours] = useState(24);
+  const [intervalMinutes, setIntervalMinutes] = useState(5);
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
+  const [lastAttemptAt, setLastAttemptAt] = useState<number | null>(null);
+  const [nextQueryDate, setNextQueryDate] = useState<string | null>(null);
   const [apiCredential, setApiCredential] = useState("");
   const [hasCredential, setHasCredential] = useState(false);
   const [isSavingCredential, setIsSavingCredential] = useState(false);
@@ -443,11 +447,10 @@ function ActivitiesApiPanel() {
 
   const nextScheduledAt = useMemo(() => {
     if (!enabled) return null;
-    const lastSuccess = history.find((log) => log.status === "success");
-    const lastSuccessAt = lastSuccess ? new Date(lastSuccess.finished_at).getTime() : 0;
-    const anchor = Math.max(lastSuccessAt, scheduleUpdatedAt ?? now);
-    return new Date(anchor + intervalHours * 3600000);
-  }, [enabled, history, intervalHours, now, scheduleUpdatedAt]);
+    const latestLogAt = history[0] ? new Date(history[0].finished_at).getTime() : 0;
+    const anchor = Math.max(latestLogAt, lastAttemptAt ?? 0, scheduleUpdatedAt ?? now);
+    return new Date(anchor + intervalMinutes * 60000);
+  }, [enabled, history, intervalMinutes, lastAttemptAt, now, scheduleUpdatedAt]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -459,7 +462,11 @@ function ActivitiesApiPanel() {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
     setEnabled(result.settings?.enabled !== false);
-    setIntervalHours(result.settings?.interval_hours ?? 24);
+    setIntervalMinutes(result.settings?.interval_minutes ?? 5);
+    setNextQueryDate(result.settings?.next_query_date ?? null);
+    setLastAttemptAt(
+      result.settings?.last_attempt_at ? new Date(result.settings.last_attempt_at).getTime() : null,
+    );
     setScheduleUpdatedAt(
       result.settings?.schedule_updated_at
         ? new Date(result.settings.schedule_updated_at).getTime()
@@ -488,7 +495,7 @@ function ActivitiesApiPanel() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
       setMessage(
-        `${result.synchronized ?? 0} atividades sincronizadas em ${result.daysQueried ?? 0} dias; ${result.newActivities ?? 0} novas adicionadas.`,
+        `${result.synchronized ?? 0} atividades de ${result.queryDate ?? "um dia"} sincronizadas; ${result.newActivities ?? 0} novas. Próximo dia: ${result.nextQueryDate ?? "-"}.`,
       );
       await loadSettings();
     } catch (cause) {
@@ -506,16 +513,16 @@ function ActivitiesApiPanel() {
       const response = await fetch("/api/activity-sync-settings", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: nextEnabled, intervalHours }),
+        body: JSON.stringify({ enabled: nextEnabled, intervalMinutes }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
       setEnabled(result.settings.enabled);
-      setIntervalHours(result.settings.interval_hours);
+      setIntervalMinutes(result.settings.interval_minutes);
       setScheduleUpdatedAt(new Date(result.settings.schedule_updated_at).getTime());
       setMessage(
         result.settings.enabled
-          ? `Atualização agendada a cada ${result.settings.interval_hours} hora(s).`
+          ? `Atualização agendada a cada ${result.settings.interval_minutes} minuto(s).`
           : "Atualização agendada pausada.",
       );
     } catch (cause) {
@@ -558,8 +565,8 @@ function ActivitiesApiPanel() {
               <h2 className="text-sm font-semibold">API de atividades</h2>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Consulta cada dia do mês corrente na EVO/W12 e atualiza a tabela activities no
-              Supabase.
+              Consulta um dia do mês por execução. A fila avança até completar todos os dias e então
+              reinicia o ciclo do mês corrente.
             </p>
             {message && <p className="mt-2 text-xs text-success">{message}</p>}
             {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
@@ -617,6 +624,12 @@ function ActivitiesApiPanel() {
                   <p className="mt-0.5 font-mono text-lg font-bold text-primary">
                     {formatCountdown(nextScheduledAt.getTime() - now)}
                   </p>
+                  {nextQueryDate && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Próximo dia da fila:{" "}
+                      {new Date(`${nextQueryDate}T12:00:00`).toLocaleDateString("pt-BR")}
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="mt-1 text-sm font-semibold text-muted-foreground">
@@ -628,14 +641,16 @@ function ActivitiesApiPanel() {
 
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-52 space-y-2">
-              <Label htmlFor="activity-sync-hours">Atualização em horas</Label>
+              <Label htmlFor="activity-sync-minutes">Intervalo entre dias (minutos)</Label>
               <Input
-                id="activity-sync-hours"
+                id="activity-sync-minutes"
                 type="number"
                 min={1}
-                max={720}
-                value={intervalHours}
-                onChange={(event) => setIntervalHours(Math.max(1, Number(event.target.value) || 1))}
+                max={1440}
+                value={intervalMinutes}
+                onChange={(event) =>
+                  setIntervalMinutes(Math.max(1, Math.min(1440, Number(event.target.value) || 1)))
+                }
               />
             </div>
             <Button
@@ -657,7 +672,7 @@ function ActivitiesApiPanel() {
             </Button>
             <Button type="button" onClick={synchronize} disabled={isSyncing}>
               {isSyncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-              {isSyncing ? "Sincronizando o mês..." : "Atualizar agora"}
+              {isSyncing ? "Sincronizando um dia..." : "Atualizar próximo dia"}
             </Button>
           </div>
         </div>
@@ -671,7 +686,7 @@ function ActivitiesApiPanel() {
               <TableHead>Horário</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Dias</TableHead>
+              <TableHead>Dia consultado</TableHead>
               <TableHead className="text-right">Consultadas</TableHead>
               <TableHead className="text-right">Novas</TableHead>
               <TableHead className="text-right">Tempo</TableHead>
@@ -688,7 +703,11 @@ function ActivitiesApiPanel() {
                       {log.status === "success" ? "Sucesso" : "Erro"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">{log.days_queried}</TableCell>
+                  <TableCell>
+                    {log.query_date
+                      ? new Date(`${log.query_date}T12:00:00`).toLocaleDateString("pt-BR")
+                      : "-"}
+                  </TableCell>
                   <TableCell className="text-right">{log.total_fetched}</TableCell>
                   <TableCell className="text-right font-semibold">{log.new_activities}</TableCell>
                   <TableCell className="text-right">
