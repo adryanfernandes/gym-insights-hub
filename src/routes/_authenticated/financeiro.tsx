@@ -47,7 +47,7 @@ const PIE_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(-
 
 function FinanceiroPage() {
   const { filters } = useApp();
-  const { data } = useDashboardData(filters);
+  const { data, loadingMemberships, membershipsError } = useDashboardData(filters);
   const k = data.overviewKpis;
 
   const onExportExcel = () =>
@@ -78,31 +78,34 @@ function FinanceiroPage() {
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
     >
+      {(loadingMemberships || membershipsError) && (
+        <div className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
+          {loadingMemberships
+            ? "Carregando contratos e recebíveis reais da EVO..."
+            : `Não foi possível carregar os dados financeiros da EVO: ${membershipsError}`}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Faturamento mês"
           value={formatBRL(k.faturamentoMes)}
-          delta={5.4}
           accent="success"
           icon={<Wallet className="h-5 w-5" />}
         />
         <KpiCard
           label="Estimativa próx. mês"
           value={formatBRL(k.faturamentoEstimadoProx)}
-          delta={6.5}
           accent="success"
           icon={<TrendingUp className="h-5 w-5" />}
         />
         <KpiCard
           label="LTV médio"
           value={formatBRL(k.ltvMedio)}
-          delta={2.1}
           icon={<Repeat className="h-5 w-5" />}
         />
         <KpiCard
           label="Canc. financeiros"
           value={formatBRL(k.cancelamentosFinanceiros)}
-          delta={-3.2}
           accent="destructive"
           icon={<AlertOctagon className="h-5 w-5" />}
         />

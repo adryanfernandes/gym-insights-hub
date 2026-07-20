@@ -43,7 +43,7 @@ const tooltipStyle = {
 
 function ProfessoresPage() {
   const { filters } = useApp();
-  const { data } = useDashboardData(filters);
+  const { data, loadingActivities, activitiesError } = useDashboardData(filters);
   const professores = data.professores;
   const k = professores.kpis;
 
@@ -51,11 +51,11 @@ function ProfessoresPage() {
     exportToExcel("professores", {
       KPIs: [
         { metrica: "Professores ativos", valor: k.totalProfessores },
-        { metrica: "Aulas ministradas", valor: k.aulasMinistradas },
+        { metrica: "Aulas na agenda", valor: k.aulasMinistradas },
         { metrica: "Ocupacao media (%)", valor: k.ocupacaoMedia },
-        { metrica: "Presencas registradas", valor: k.alunosPresentes },
+        { metrica: "Alunos inscritos", valor: k.alunosPresentes },
         { metrica: "Capacidade ofertada", valor: k.capacidadeTotal },
-        { metrica: "Taxa media no-show (%)", valor: k.taxaNoShowMedia },
+        { metrica: "Media de alunos por aula", valor: k.mediaAlunos },
       ],
       RankingProfessores: professores.ranking,
       Modalidades: professores.porModalidade,
@@ -71,32 +71,38 @@ function ProfessoresPage() {
         Modalidade: row.modalidade,
         Unidade: row.unidade,
         Aulas: row.aulas,
-        "Ocupacao": `${row.ocupacao}%`,
+        Ocupacao: `${row.ocupacao}%`,
         "Media alunos": row.mediaAlunos,
-        "No-show": `${row.noShow}%`,
+        "Alunos inscritos": row.presentes,
+        Capacidade: row.capacidade,
       })),
     );
 
   return (
     <DashboardLayout
       title="Professores"
-      subtitle="Ocupacao das aulas ministradas e eficiencia da grade"
+      subtitle="Ocupação real da agenda e eficiência da grade"
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
     >
+      {(loadingActivities || activitiesError) && (
+        <div className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
+          {loadingActivities
+            ? "Carregando os dados reais da agenda EVO..."
+            : `Não foi possível carregar a agenda EVO: ${activitiesError}`}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Ocupacao media"
           value={`${k.ocupacaoMedia}%`}
-          hint={`${formatNum(k.alunosPresentes)} de ${formatNum(k.capacidadeTotal)} vagas`}
-          delta={3.8}
+          hint={`${formatNum(k.alunosPresentes)} inscritos de ${formatNum(k.capacidadeTotal)} vagas`}
           icon={<Percent className="h-5 w-5" />}
         />
         <KpiCard
-          label="Aulas ministradas"
+          label="Aulas na agenda"
           value={formatNum(k.aulasMinistradas)}
           hint={`${k.totalProfessores} professores ativos`}
-          delta={5.2}
           accent="success"
           icon={<CalendarCheck className="h-5 w-5" />}
         />
@@ -104,16 +110,14 @@ function ProfessoresPage() {
           label="Professores acima de 80%"
           value={formatNum(k.professoresAltaOcupacao)}
           hint="Alta demanda no periodo"
-          delta={2.1}
           accent="success"
           icon={<UserRoundCheck className="h-5 w-5" />}
         />
         <KpiCard
-          label="No-show medio"
-          value={`${k.taxaNoShowMedia}%`}
-          hint="Alunos inscritos ausentes"
-          delta={-1.4}
-          accent="warning"
+          label="Média de alunos"
+          value={formatNum(k.mediaAlunos)}
+          hint="Inscritos por aula"
+          accent="success"
           icon={<Users className="h-5 w-5" />}
         />
       </div>
@@ -123,7 +127,11 @@ function ProfessoresPage() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={professores.ranking} layout="vertical" margin={{ left: 16 }}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />
+              <XAxis
+                type="number"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                unit="%"
+              />
               <YAxis
                 type="category"
                 dataKey="professor"
@@ -145,11 +153,25 @@ function ProfessoresPage() {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                 interval={0}
               />
-              <YAxis yAxisId="left" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />
-              <YAxis yAxisId="right" orientation="right" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+              <YAxis
+                yAxisId="left"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                unit="%"
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+              />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar yAxisId="left" dataKey="ocupacao" name="Ocupacao" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+              <Bar
+                yAxisId="left"
+                dataKey="ocupacao"
+                name="Ocupacao"
+                fill="var(--chart-2)"
+                radius={[4, 4, 0, 0]}
+              />
               <Line
                 yAxisId="right"
                 type="monotone"
@@ -168,8 +190,16 @@ function ProfessoresPage() {
             <LineChart data={professores.evolucao}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="semana" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-              <YAxis yAxisId="left" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />
-              <YAxis yAxisId="right" orientation="right" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+              <YAxis
+                yAxisId="left"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                unit="%"
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+              />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Line
@@ -192,15 +222,38 @@ function ProfessoresPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Ocupacao por horario" description="Janelas com maior demanda">
+        <ChartCard title="Ocupação por horário" description="Ocupação e média de inscritos">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={professores.porHorario}>
+            <ComposedChart data={professores.porHorario}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="horario" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-              <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />
+              <YAxis
+                yAxisId="left"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                unit="%"
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+              />
               <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="ocupacao" fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar
+                yAxisId="left"
+                dataKey="ocupacao"
+                name="Ocupação (%)"
+                fill="var(--chart-4)"
+                radius={[4, 4, 0, 0]}
+              />
+              <Line
+                yAxisId="right"
+                dataKey="mediaAlunos"
+                name="Média de inscritos"
+                stroke="var(--chart-2)"
+                strokeWidth={2.5}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         </ChartCard>
       </div>
@@ -223,19 +276,24 @@ function ProfessoresPage() {
                   <th className="px-5 py-3 font-medium">Aulas</th>
                   <th className="px-5 py-3 font-medium">Ocupacao</th>
                   <th className="px-5 py-3 font-medium">Media alunos</th>
-                  <th className="px-5 py-3 font-medium">No-show</th>
+                  <th className="px-5 py-3 font-medium">Inscritos</th>
+                  <th className="px-5 py-3 font-medium">Capacidade</th>
                 </tr>
               </thead>
               <tbody>
                 {professores.ranking.map((row) => (
-                  <tr key={row.professor} className="border-t border-border hover:bg-accent/40 transition">
+                  <tr
+                    key={row.professor}
+                    className="border-t border-border hover:bg-accent/40 transition"
+                  >
                     <td className="px-5 py-3 font-medium">{row.professor}</td>
                     <td className="px-5 py-3 text-muted-foreground">{row.modalidade}</td>
                     <td className="px-5 py-3 text-muted-foreground">{row.unidade}</td>
                     <td className="px-5 py-3">{formatNum(row.aulas)}</td>
                     <td className="px-5 py-3 font-semibold">{row.ocupacao}%</td>
                     <td className="px-5 py-3">{row.mediaAlunos}</td>
-                    <td className="px-5 py-3">{row.noShow}%</td>
+                    <td className="px-5 py-3">{formatNum(row.presentes)}</td>
+                    <td className="px-5 py-3">{formatNum(row.capacidade)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -246,11 +304,14 @@ function ProfessoresPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <h3 className="text-sm font-semibold">Pontos de atencao</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Sugestoes geradas a partir dos indicadores ficticios.
+            Sugestões geradas a partir da ocupação real registrada na agenda EVO.
           </p>
           <div className="mt-5 space-y-3">
             {professores.oportunidades.map((item) => (
-              <div key={`${item.professor}-${item.foco}`} className="rounded-lg border border-border p-3">
+              <div
+                key={`${item.professor}-${item.foco}`}
+                className="rounded-lg border border-border p-3"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-medium">{item.professor}</span>
                   <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-warning">

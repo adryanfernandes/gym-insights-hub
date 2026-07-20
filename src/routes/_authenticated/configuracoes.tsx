@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   Clock,
+  CreditCard,
   DatabaseZap,
   KeyRound,
   Loader2,
@@ -77,12 +79,26 @@ function ConfiguracoesPage() {
             <ServerCog className="h-4 w-4" />
             Status do sistema
           </TabsTrigger>
+          <TabsTrigger value="activities-api" className="gap-2">
+            <CalendarDays className="h-4 w-4" />
+            API de atividades
+          </TabsTrigger>
+          <TabsTrigger value="memberships-api" className="gap-2">
+            <CreditCard className="h-4 w-4" />
+            API de contratos
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="clients-api" className="space-y-4">
           <ClientsApiPanel />
         </TabsContent>
         <TabsContent value="status-api" className="space-y-4">
           <ApiMonitorPanel />
+        </TabsContent>
+        <TabsContent value="activities-api" className="space-y-4">
+          <ActivitiesApiPanel />
+        </TabsContent>
+        <TabsContent value="memberships-api" className="space-y-4">
+          <MembershipsApiPanel />
         </TabsContent>
       </Tabs>
     </DashboardLayout>
@@ -395,6 +411,572 @@ function formatCountdown(milliseconds: number) {
   const seconds = totalSeconds % 60;
   const time = [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
   return days ? `${days}d ${time}` : time;
+}
+
+type ActivitySyncLog = {
+  id: string;
+  finished_at: string;
+  trigger_type: "manual" | "scheduled";
+  status: "success" | "error";
+  month_start?: string | null;
+  month_end?: string | null;
+  days_queried: number;
+  total_fetched: number;
+  new_activities: number;
+  duration_ms: number;
+  error_message?: string | null;
+};
+
+function ActivitiesApiPanel() {
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [enabled, setEnabled] = useState(true);
+  const [intervalHours, setIntervalHours] = useState(24);
+  const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
+  const [apiCredential, setApiCredential] = useState("");
+  const [hasCredential, setHasCredential] = useState(false);
+  const [isSavingCredential, setIsSavingCredential] = useState(false);
+  const [history, setHistory] = useState<ActivitySyncLog[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const nextScheduledAt = useMemo(() => {
+    if (!enabled) return null;
+    const lastSuccess = history.find((log) => log.status === "success");
+    const lastSuccessAt = lastSuccess ? new Date(lastSuccess.finished_at).getTime() : 0;
+    const anchor = Math.max(lastSuccessAt, scheduleUpdatedAt ?? now);
+    return new Date(anchor + intervalHours * 3600000);
+  }, [enabled, history, intervalHours, now, scheduleUpdatedAt]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const loadSettings = useCallback(async () => {
+    const response = await fetch("/api/activity-sync-settings", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    setEnabled(result.settings?.enabled !== false);
+    setIntervalHours(result.settings?.interval_hours ?? 24);
+    setScheduleUpdatedAt(
+      result.settings?.schedule_updated_at
+        ? new Date(result.settings.schedule_updated_at).getTime()
+        : result.settings?.updated_at
+          ? new Date(result.settings.updated_at).getTime()
+          : Date.now(),
+    );
+    setHasCredential(result.settings?.has_api_credential === true);
+    setHistory(Array.isArray(result.history) ? result.history : []);
+  }, []);
+
+  useEffect(() => {
+    loadSettings().catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Falha ao carregar o agendamento."),
+    );
+    const timer = window.setInterval(() => loadSettings().catch(() => undefined), 30000);
+    return () => window.clearInterval(timer);
+  }, [loadSettings]);
+
+  async function synchronize() {
+    setIsSyncing(true);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/sync-activities", { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setMessage(
+        `${result.synchronized ?? 0} atividades sincronizadas em ${result.daysQueried ?? 0} dias; ${result.newActivities ?? 0} novas adicionadas.`,
+      );
+      await loadSettings();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao sincronizar atividades.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
+  async function saveSchedule(nextEnabled = enabled) {
+    setIsSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/activity-sync-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: nextEnabled, intervalHours }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setEnabled(result.settings.enabled);
+      setIntervalHours(result.settings.interval_hours);
+      setScheduleUpdatedAt(new Date(result.settings.schedule_updated_at).getTime());
+      setMessage(
+        result.settings.enabled
+          ? `Atualização agendada a cada ${result.settings.interval_hours} hora(s).`
+          : "Atualização agendada pausada.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao salvar o agendamento.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function saveCredential() {
+    if (!apiCredential.trim()) return;
+    setIsSavingCredential(true);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/activity-sync-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ apiCredential }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setHasCredential(result.settings?.has_api_credential === true);
+      setApiCredential("");
+      setMessage("Chave da API EVO salva com sucesso.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao salvar a chave da API.");
+    } finally {
+      setIsSavingCredential(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">API de atividades</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Consulta cada dia do mês corrente na EVO/W12 e atualiza a tabela activities no
+              Supabase.
+            </p>
+            {message && <p className="mt-2 text-xs text-success">{message}</p>}
+            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-sm font-semibold">Chave de acesso da API EVO</p>
+                <p className="text-xs text-muted-foreground">
+                  {hasCredential
+                    ? "Chave configurada. A chave da API de clientes também pode ser reutilizada."
+                    : "Nenhuma chave configurada."}
+                </p>
+              </div>
+              <Badge variant={hasCredential ? "outline" : "destructive"} className="ml-auto">
+                {hasCredential ? "Configurada" : "Pendente"}
+              </Badge>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="password"
+                autoComplete="off"
+                value={apiCredential}
+                onChange={(event) => setApiCredential(event.target.value)}
+                placeholder="Basic ... ou apenas o token Base64"
+                aria-label="Chave de acesso da API de atividades"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={saveCredential}
+                disabled={isSavingCredential || !apiCredential.trim()}
+              >
+                {isSavingCredential ? <Loader2 className="animate-spin" /> : <KeyRound />}
+                Salvar chave
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">
+                Próxima atualização agendada
+              </p>
+              {nextScheduledAt ? (
+                <>
+                  <p className="mt-0.5 text-sm font-semibold">
+                    {nextScheduledAt.toLocaleString("pt-BR")}
+                  </p>
+                  <p className="mt-0.5 font-mono text-lg font-bold text-primary">
+                    {formatCountdown(nextScheduledAt.getTime() - now)}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                  Agendamento pausado
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-52 space-y-2">
+              <Label htmlFor="activity-sync-hours">Atualização em horas</Label>
+              <Input
+                id="activity-sync-hours"
+                type="number"
+                min={1}
+                max={720}
+                value={intervalHours}
+                onChange={(event) => setIntervalHours(Math.max(1, Number(event.target.value) || 1))}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => saveSchedule()}
+              disabled={isSaving}
+            >
+              Salvar intervalo
+            </Button>
+            <Button
+              type="button"
+              variant={enabled ? "outline" : "default"}
+              onClick={() => saveSchedule(!enabled)}
+              disabled={isSaving}
+            >
+              {enabled ? <Square /> : <Play />}
+              {enabled ? "Pausar" : "Iniciar"}
+            </Button>
+            <Button type="button" onClick={synchronize} disabled={isSyncing}>
+              {isSyncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {isSyncing ? "Sincronizando o mês..." : "Atualizar agora"}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-4 text-sm font-semibold">Histórico de atualização de atividades</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Horário</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Dias</TableHead>
+              <TableHead className="text-right">Consultadas</TableHead>
+              <TableHead className="text-right">Novas</TableHead>
+              <TableHead className="text-right">Tempo</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {history.length ? (
+              history.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>{new Date(log.finished_at).toLocaleString("pt-BR")}</TableCell>
+                  <TableCell>{log.trigger_type === "scheduled" ? "Agendada" : "Manual"}</TableCell>
+                  <TableCell>
+                    <Badge variant={log.status === "success" ? "outline" : "destructive"}>
+                      {log.status === "success" ? "Sucesso" : "Erro"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{log.days_queried}</TableCell>
+                  <TableCell className="text-right">{log.total_fetched}</TableCell>
+                  <TableCell className="text-right font-semibold">{log.new_activities}</TableCell>
+                  <TableCell className="text-right">
+                    {Math.round(log.duration_ms / 1000)}s
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  Nenhuma atualização registrada.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+    </div>
+  );
+}
+
+type MembershipSyncLog = {
+  id: string;
+  finished_at: string;
+  trigger_type: "manual" | "scheduled";
+  status: "success" | "error";
+  total_fetched: number;
+  new_memberships: number;
+  receivables_synced: number;
+  next_skip: number;
+  cycle_completed: boolean;
+  duration_ms: number;
+};
+
+function MembershipsApiPanel() {
+  const [enabled, setEnabled] = useState(true);
+  const [intervalHours, setIntervalHours] = useState(24);
+  const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
+  const [nextSkip, setNextSkip] = useState(0);
+  const [history, setHistory] = useState<MembershipSyncLog[]>([]);
+  const [credential, setCredential] = useState("");
+  const [hasCredential, setHasCredential] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const nextScheduledAt = useMemo(() => {
+    if (!enabled) return null;
+    const success = history.find((row) => row.status === "success");
+    const lastSuccess = success ? new Date(success.finished_at).getTime() : 0;
+    return new Date(Math.max(lastSuccess, scheduleUpdatedAt ?? now) + intervalHours * 3600000);
+  }, [enabled, history, intervalHours, now, scheduleUpdatedAt]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const load = useCallback(async () => {
+    const response = await fetch("/api/membership-sync-settings", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    setEnabled(result.settings?.enabled !== false);
+    setIntervalHours(result.settings?.interval_hours ?? 24);
+    setScheduleUpdatedAt(
+      new Date(
+        result.settings?.schedule_updated_at || result.settings?.updated_at || Date.now(),
+      ).getTime(),
+    );
+    setNextSkip(result.settings?.next_skip ?? 0);
+    setHasCredential(result.settings?.has_api_credential === true);
+    setHistory(Array.isArray(result.history) ? result.history : []);
+  }, []);
+
+  useEffect(() => {
+    load().catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Falha ao carregar."),
+    );
+    const timer = window.setInterval(() => load().catch(() => undefined), 30000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  async function patchSettings(body: Record<string, unknown>) {
+    const response = await fetch("/api/membership-sync-settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    return result.settings;
+  }
+
+  async function saveSchedule(nextEnabled = enabled) {
+    setSaving(true);
+    setError("");
+    try {
+      const settings = await patchSettings({ enabled: nextEnabled, intervalHours });
+      setEnabled(settings.enabled);
+      setIntervalHours(settings.interval_hours);
+      setScheduleUpdatedAt(new Date(settings.schedule_updated_at).getTime());
+      setMessage(
+        settings.enabled
+          ? `Atualização a cada ${settings.interval_hours} hora(s).`
+          : "Agendamento pausado.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveCredential() {
+    if (!credential.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const settings = await patchSettings({ apiCredential: credential });
+      setHasCredential(settings.has_api_credential === true);
+      setCredential("");
+      setMessage("Chave salva com sucesso.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao salvar chave.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function sync() {
+    setSyncing(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/sync-memberships", { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setMessage(
+        `${result.synchronized} contratos e ${result.receivablesSynced} recebíveis processados; ${result.newMemberships} contratos novos.${result.cycleCompleted ? " Ciclo concluído." : " A próxima execução continuará do cursor salvo."}`,
+      );
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao sincronizar contratos.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">API de contratos e recebíveis</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sincronização incremental e segura. Documentos, TID, NSU e autorizações não são
+              armazenados.
+            </p>
+            {message && <p className="mt-2 text-xs text-success">{message}</p>}
+            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <p className="text-sm font-semibold">Chave da API EVO</p>
+              <Badge variant={hasCredential ? "outline" : "destructive"} className="ml-auto">
+                {hasCredential ? "Configurada" : "Pendente"}
+              </Badge>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="password"
+                value={credential}
+                onChange={(event) => setCredential(event.target.value)}
+                placeholder="Basic ... ou token Base64"
+                autoComplete="off"
+              />
+              <Button
+                variant="outline"
+                onClick={saveCredential}
+                disabled={saving || !credential.trim()}
+              >
+                <KeyRound /> Salvar chave
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <Clock className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Próxima atualização</p>
+              {nextScheduledAt ? (
+                <>
+                  <p className="text-sm font-semibold">{nextScheduledAt.toLocaleString("pt-BR")}</p>
+                  <p className="font-mono text-lg font-bold text-primary">
+                    {formatCountdown(nextScheduledAt.getTime() - now)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm font-semibold text-muted-foreground">Agendamento pausado</p>
+              )}
+            </div>
+            <Badge variant="outline" className="ml-auto">
+              Cursor: {nextSkip}
+            </Badge>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-52 space-y-2">
+              <Label htmlFor="membership-sync-hours">Atualização em horas</Label>
+              <Input
+                id="membership-sync-hours"
+                type="number"
+                min={1}
+                max={720}
+                value={intervalHours}
+                onChange={(event) => setIntervalHours(Math.max(1, Number(event.target.value) || 1))}
+              />
+            </div>
+            <Button variant="outline" onClick={() => saveSchedule()} disabled={saving}>
+              Salvar intervalo
+            </Button>
+            <Button
+              variant={enabled ? "outline" : "default"}
+              onClick={() => saveSchedule(!enabled)}
+              disabled={saving}
+            >
+              {enabled ? <Square /> : <Play />} {enabled ? "Pausar" : "Iniciar"}
+            </Button>
+            <Button onClick={sync} disabled={syncing}>
+              {syncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {syncing ? "Processando lote..." : "Atualizar agora"}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-4 text-sm font-semibold">Histórico de contratos</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Horário</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Contratos</TableHead>
+              <TableHead className="text-right">Novos</TableHead>
+              <TableHead className="text-right">Recebíveis</TableHead>
+              <TableHead>Ciclo</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {history.length ? (
+              history.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{new Date(row.finished_at).toLocaleString("pt-BR")}</TableCell>
+                  <TableCell>{row.trigger_type === "scheduled" ? "Agendada" : "Manual"}</TableCell>
+                  <TableCell>
+                    <Badge variant={row.status === "success" ? "outline" : "destructive"}>
+                      {row.status === "success" ? "Sucesso" : "Erro"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{row.total_fetched}</TableCell>
+                  <TableCell className="text-right font-semibold">{row.new_memberships}</TableCell>
+                  <TableCell className="text-right">{row.receivables_synced}</TableCell>
+                  <TableCell>
+                    {row.cycle_completed ? "Concluído" : `Cursor ${row.next_skip}`}
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  Nenhuma atualização registrada.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+    </div>
+  );
 }
 
 function ApiMonitorPanel() {
