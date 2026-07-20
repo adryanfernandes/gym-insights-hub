@@ -53,7 +53,10 @@ function ProfessoresPage() {
         { metrica: "Professores ativos", valor: k.totalProfessores },
         { metrica: "Aulas na agenda", valor: k.aulasMinistradas },
         { metrica: "Ocupacao media (%)", valor: k.ocupacaoMedia },
-        { metrica: "Alunos inscritos", valor: k.alunosPresentes },
+        { metrica: "Alunos inscritos", valor: k.alunosInscritos },
+        { metrica: "Alunos presentes", valor: k.alunosPresentes },
+        { metrica: "Faltas", valor: k.faltas },
+        { metrica: "Faltas justificadas", valor: k.faltasJustificadas },
         { metrica: "Capacidade ofertada", valor: k.capacidadeTotal },
         { metrica: "Media de alunos por aula", valor: k.mediaAlunos },
       ],
@@ -73,7 +76,11 @@ function ProfessoresPage() {
         Aulas: row.aulas,
         Ocupacao: `${row.ocupacao}%`,
         "Media alunos": row.mediaAlunos,
-        "Alunos inscritos": row.presentes,
+        "Alunos inscritos": row.inscritos,
+        "Alunos presentes": row.presentes,
+        Faltas: row.faltas,
+        "Faltas justificadas": row.faltasJustificadas,
+        "No-show": `${row.noShow}%`,
         Capacidade: row.capacidade,
       })),
     );
@@ -96,7 +103,7 @@ function ProfessoresPage() {
         <KpiCard
           label="Ocupacao media"
           value={`${k.ocupacaoMedia}%`}
-          hint={`${formatNum(k.alunosPresentes)} inscritos de ${formatNum(k.capacidadeTotal)} vagas`}
+          hint={`${formatNum(k.alunosInscritos)} inscritos de ${formatNum(k.capacidadeTotal)} vagas`}
           icon={<Percent className="h-5 w-5" />}
         />
         <KpiCard
@@ -275,8 +282,12 @@ function ProfessoresPage() {
                   <th className="px-5 py-3 font-medium">Unidade</th>
                   <th className="px-5 py-3 font-medium">Aulas</th>
                   <th className="px-5 py-3 font-medium">Ocupacao</th>
-                  <th className="px-5 py-3 font-medium">Media alunos</th>
                   <th className="px-5 py-3 font-medium">Inscritos</th>
+                  <th className="px-5 py-3 font-medium">Presentes</th>
+                  <th className="px-5 py-3 font-medium">Faltas</th>
+                  <th className="px-5 py-3 font-medium">Justificadas</th>
+                  <th className="px-5 py-3 font-medium">No-show</th>
+                  <th className="px-5 py-3 font-medium">Média/aula</th>
                   <th className="px-5 py-3 font-medium">Capacidade</th>
                 </tr>
               </thead>
@@ -291,8 +302,12 @@ function ProfessoresPage() {
                     <td className="px-5 py-3 text-muted-foreground">{row.unidade}</td>
                     <td className="px-5 py-3">{formatNum(row.aulas)}</td>
                     <td className="px-5 py-3 font-semibold">{row.ocupacao}%</td>
-                    <td className="px-5 py-3">{row.mediaAlunos}</td>
+                    <td className="px-5 py-3">{formatNum(row.inscritos)}</td>
                     <td className="px-5 py-3">{formatNum(row.presentes)}</td>
+                    <td className="px-5 py-3">{formatNum(row.faltas)}</td>
+                    <td className="px-5 py-3">{formatNum(row.faltasJustificadas)}</td>
+                    <td className="px-5 py-3 font-semibold">{row.noShow}%</td>
+                    <td className="px-5 py-3">{row.mediaAlunos}</td>
                     <td className="px-5 py-3">{formatNum(row.capacidade)}</td>
                   </tr>
                 ))}

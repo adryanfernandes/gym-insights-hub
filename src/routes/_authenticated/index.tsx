@@ -9,6 +9,7 @@ import {
   Tooltip,
   BarChart,
   Bar,
+  Legend,
 } from "recharts";
 import {
   Users,
@@ -184,7 +185,10 @@ function GeralPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Renovações realizadas por mês" description="Últimos 12 meses">
+        <ChartCard
+          title="Renovações e vencimentos por mês"
+          description="Comparativo dos últimos 12 meses"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.renovacoesMensais}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -194,7 +198,19 @@ function GeralPage() {
                 allowDecimals={false}
               />
               <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="renovacoes" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+              <Legend />
+              <Bar
+                dataKey="renovacoes"
+                name="Renovações"
+                fill="var(--chart-3)"
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar
+                dataKey="vencimentos"
+                name="Vencimentos"
+                fill="var(--chart-4)"
+                radius={[4, 4, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
