@@ -44,6 +44,7 @@ function normalize(row: StoredActivity): NormalizedActivity | null {
       : null;
   const status = number(row.payload.status);
   const finalized = [6, 10, 11].includes(status);
+  const enrolled = summary ? number(summary.total) : null;
   return {
     date,
     instructor: text(row.payload.instructor, "Não informado"),
@@ -51,7 +52,7 @@ function normalize(row: StoredActivity): NormalizedActivity | null {
     area: text(row.payload.area, `Unidade ${row.branch_id}`),
     startTime: text(row.payload.startTime, "--:--").slice(0, 5),
     capacity: number(row.payload.capacity),
-    occupied: number(row.payload.ocupation ?? row.payload.occupation),
+    occupied: enrolled ?? number(row.payload.ocupation ?? row.payload.occupation),
     present: finalized && summary ? number(summary.present) : 0,
     absent: finalized && summary ? number(summary.absent) : 0,
     justifiedAbsence: finalized && summary ? number(summary.justified_absence) : 0,
