@@ -15,6 +15,10 @@ type NormalizedActivity = {
   startTime: string;
   capacity: number;
   occupied: number;
+  present: number;
+  absent: number;
+  justifiedAbsence: number;
+  hasAttendance: boolean;
 };
 
 function text(value: unknown, fallback: string) {
@@ -34,6 +38,12 @@ function round(value: number, digits = 1) {
 function normalize(row: StoredActivity): NormalizedActivity | null {
   const date = new Date(`${row.query_date}T12:00:00`);
   if (Number.isNaN(date.getTime())) return null;
+  const summary =
+    row.payload.enrollmentSummary && typeof row.payload.enrollmentSummary === "object"
+      ? (row.payload.enrollmentSummary as Record<string, unknown>)
+      : null;
+  const status = number(row.payload.status);
+  const finalized = [6, 10, 11].includes(status);
   return {
     date,
     instructor: text(row.payload.instructor, "Não informado"),
@@ -42,6 +52,10 @@ function normalize(row: StoredActivity): NormalizedActivity | null {
     startTime: text(row.payload.startTime, "--:--").slice(0, 5),
     capacity: number(row.payload.capacity),
     occupied: number(row.payload.ocupation ?? row.payload.occupation),
+    present: finalized && summary ? number(summary.present) : 0,
+    absent: finalized && summary ? number(summary.absent) : 0,
+    justifiedAbsence: finalized && summary ? number(summary.justified_absence) : 0,
+    hasAttendance: finalized && Boolean(summary),
   };
 }
 
@@ -70,12 +84,22 @@ function aggregate<T extends string>(
 function metrics(rows: NormalizedActivity[]) {
   const capacity = rows.reduce((total, row) => total + row.capacity, 0);
   const occupied = rows.reduce((total, row) => total + row.occupied, 0);
+  const present = rows.reduce(
+    (total, row) => total + (row.hasAttendance ? row.present : row.occupied),
+    0,
+  );
+  const absent = rows.reduce((total, row) => total + row.absent, 0);
+  const justifiedAbsence = rows.reduce((total, row) => total + row.justifiedAbsence, 0);
   return {
     classes: rows.length,
     capacity,
     occupied,
     occupancy: round((occupied / Math.max(capacity, 1)) * 100),
-    averageStudents: round(occupied / Math.max(rows.length, 1)),
+    averageStudents: round(present / Math.max(rows.length, 1)),
+    present,
+    absent,
+    justifiedAbsence,
+    noShow: round((absent / Math.max(present + absent + justifiedAbsence, 1)) * 100),
   };
 }
 
@@ -104,9 +128,9 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
         unidade: areas[0]?.[0] ?? "Não informada",
         aulas: teacherMetrics.classes,
         capacidade: teacherMetrics.capacity,
-        presentes: teacherMetrics.occupied,
+        presentes: teacherMetrics.present,
         ocupacao: teacherMetrics.occupancy,
-        noShow: 0,
+        noShow: teacherMetrics.noShow,
         mediaAlunos: teacherMetrics.averageStudents,
       };
     })
@@ -161,9 +185,9 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
         totalProfessores: ranking.length,
         aulasMinistradas: totals.classes,
         capacidadeTotal: totals.capacity,
-        alunosPresentes: totals.occupied,
+        alunosPresentes: totals.present,
         ocupacaoMedia: totals.occupancy,
-        taxaNoShowMedia: 0,
+        taxaNoShowMedia: totals.noShow,
         professoresAltaOcupacao: ranking.filter((row) => row.ocupacao >= 80).length,
         mediaAlunos: totals.averageStudents,
       },
