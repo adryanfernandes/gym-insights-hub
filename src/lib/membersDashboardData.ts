@@ -429,7 +429,6 @@ function useDashboardDataState(filters: Filters) {
       projecaoFaturamento: membershipData.projecaoFaturamento,
       evolucaoVendas: membershipData.evolucaoVendas,
       renovacoesMensais: membershipData.renovacoesMensais,
-      tipoContratoData: membershipData.tipoContratoData,
       vendasLista: membershipData.vendasLista.map((sale) => ({
         ...sale,
         aluno: membersById.get(sale.idAluno)?.nome ?? `Aluno ${sale.idAluno}`,

@@ -1,5 +1,6 @@
 import { useApp, type Filters } from "@/contexts/AppContext";
 import { useDashboardData } from "@/lib/membersDashboardData";
+import { useRouterState } from "@tanstack/react-router";
 
 const PERIODOS = ["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Este ano"];
 
@@ -36,25 +37,49 @@ function Select({
 
 export function FiltersBar({ extra }: { extra?: React.ReactNode }) {
   const { filters, setFilters } = useApp();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { filterOptions } = useDashboardData(filters);
   const upd = (k: keyof Filters) => (v: string) => setFilters({ [k]: v });
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
-      <Select label="Período" value={filters.periodo} options={PERIODOS} onChange={upd("periodo")} />
-      <Select label="Bairro" value={filters.unidade} options={filterOptions.unidades} onChange={upd("unidade")} />
+      <Select
+        label="Período"
+        value={filters.periodo}
+        options={PERIODOS}
+        onChange={upd("periodo")}
+      />
+      <Select
+        label="Bairro"
+        value={filters.unidade}
+        options={filterOptions.unidades}
+        onChange={upd("unidade")}
+      />
       <Select
         label="Contrato"
         value={filters.tipoContrato}
         options={filterOptions.tiposContrato}
         onChange={upd("tipoContrato")}
       />
-      <Select label="Sexo" value={filters.sexo} options={filterOptions.sexos} onChange={upd("sexo")} />
+      <Select
+        label="Sexo"
+        value={filters.sexo}
+        options={filterOptions.sexos}
+        onChange={upd("sexo")}
+      />
       <Select
         label="Faixa etária"
         value={filters.faixaEtaria}
         options={filterOptions.faixasEtarias}
         onChange={upd("faixaEtaria")}
       />
+      {pathname === "/perfil" && (
+        <Select
+          label="Status do aluno"
+          value={filters.statusAluno}
+          options={["Todos", "Ativos", "Inativos"]}
+          onChange={upd("statusAluno")}
+        />
+      )}
       {extra}
     </div>
   );

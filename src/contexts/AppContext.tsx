@@ -10,6 +10,7 @@ export type Filters = {
   modalidade: string;
   atividadeUnidade: string;
   horario: string;
+  statusAluno: string;
 };
 
 export type AppRole = "admin" | "gestor";
@@ -85,6 +86,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     modalidade: "Todas",
     atividadeUnidade: "Todas",
     horario: "Todos",
+    statusAluno: "Todos",
   });
   const [users, setUsers] = useState<AppUser[]>([ADMIN_USER]);
   const [user, setUser] = useState<AppUser | null>(null);

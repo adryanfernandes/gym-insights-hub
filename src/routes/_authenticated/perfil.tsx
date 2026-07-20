@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -12,7 +13,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Cake, Users, FileText } from "lucide-react";
+import { Cake, Users, FileText, UserRoundCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
@@ -47,7 +48,7 @@ const PIE_COLORS = [
 ];
 
 function PerfilPage() {
-  const { filters } = useApp();
+  const { filters, setFilters } = useApp();
   const { data } = useDashboardData(filters);
   const k = data.overviewKpis;
   const totalSexo = data.sexoData.reduce((s, d) => s + d.qtd, 0);
@@ -58,9 +59,16 @@ function PerfilPage() {
   const contratoDominante = data.tipoContratoData.slice().sort((a, b) => b.qtd - a.qtd)[0];
   const contratoTotal = data.tipoContratoData.reduce((s, d) => s + d.qtd, 0);
   const contratoPct =
-    contratoDominante && contratoTotal
-      ? Math.round((contratoDominante.qtd / contratoTotal) * 100)
-      : 0;
+    contratoDominante && contratoTotal ? (contratoDominante.qtd / contratoTotal) * 100 : 0;
+  const setFiltersRef = useRef(setFilters);
+
+  useEffect(() => {
+    setFiltersRef.current = setFilters;
+  }, [setFilters]);
+
+  useEffect(() => {
+    return () => setFiltersRef.current({ statusAluno: "Todos" });
+  }, []);
 
   const onExportExcel = () =>
     exportToExcel("perfil-clientes", {
@@ -89,7 +97,13 @@ function PerfilPage() {
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
     >
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label="Alunos no recorte"
+          value={formatNum(k.clientesFiltrados)}
+          hint={`Status: ${filters.statusAluno.toLowerCase()}`}
+          icon={<UserRoundCheck className="h-5 w-5" />}
+        />
         <KpiCard
           label="Idade media"
           value={`${k.idadeMedia} anos`}
@@ -104,7 +118,7 @@ function PerfilPage() {
         />
         <KpiCard
           label="Tipo de contrato dominante"
-          value={`${contratoDominante?.tipo ?? "-"} (${contratoPct}%)`}
+          value={`${contratoDominante?.tipo ?? "-"} (${contratoPct.toFixed(1)}%)`}
           hint={`${formatNum(contratoDominante?.qtd ?? 0)} alunos no recorte`}
           icon={<FileText className="h-5 w-5" />}
           accent="warning"
@@ -145,7 +159,10 @@ function PerfilPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Tipo de contrato" description="Alunos ativos por contrato vigente">
+        <ChartCard
+          title="Tipo de contrato"
+          description="Alunos únicos por contrato mais recente no recorte"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.tipoContratoData} layout="vertical">
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
@@ -164,15 +181,20 @@ function PerfilPage() {
 
         <ChartCard
           title="Tempo medio de permanencia por perfil"
-          description="Em meses, por faixa etaria"
+          description="Média em meses por faixa etária e status selecionado"
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.permanenciaPerfil}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="perfil" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-              <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="m" />
+              <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit=" meses" />
               <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="meses" fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
+              <Bar
+                dataKey="meses"
+                name="Permanência média (meses)"
+                fill="var(--chart-4)"
+                radius={[4, 4, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>

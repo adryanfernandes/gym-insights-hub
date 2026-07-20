@@ -124,7 +124,9 @@ function matchesBaseFilters(client: ClientRow, filters: Filters) {
     (["Todas", "Todos"].includes(filters.unidade) || client.bairro === filters.unidade) &&
     (filters.tipoContrato === "Todos" || client.contrato === filters.tipoContrato) &&
     (filters.sexo === "Todos" || client.genero === filters.sexo) &&
-    (filters.faixaEtaria === "Todas" || ageRange(client.idade) === filters.faixaEtaria)
+    (filters.faixaEtaria === "Todas" || ageRange(client.idade) === filters.faixaEtaria) &&
+    (filters.statusAluno === "Todos" ||
+      (filters.statusAluno === "Ativos" ? client.ativo : !client.ativo))
   );
 }
 
@@ -281,6 +283,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     .slice(0, 8)
     .map((row) => ({ plano: row.key, valor: row.valor }));
   const tipoContratoData = countBy(periodRows, (client) => client.contrato)
+    .filter((row) => row.key !== "Nao informado")
     .sort((a, b) => b.qtd - a.qtd)
     .slice(0, 8)
     .map((row) => ({ tipo: row.key, qtd: row.qtd }));
@@ -293,7 +296,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     .map((row) => ({ faixa: row.key, qtd: row.qtd }));
   const permanenciaPerfil = faixaEtariaData.map((row) => {
     const group = periodRows.filter((client) => ageRange(client.idade) === row.faixa);
-    return { perfil: row.faixa, meses: Math.round(avg(group, (client) => client.diasAtivo) / 30) };
+    return { perfil: row.faixa, meses: round(avg(group, (client) => client.diasAtivo) / 30, 1) };
   });
   const rankingRetencao = countBy(periodRows, (client) => client.bairro)
     .map((row) => {
@@ -488,6 +491,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
           (client) => client.idade,
         ),
       ),
+      clientesFiltrados: periodRows.length,
     },
     evolucaoAlunos,
     ocupacaoAgenda: [
