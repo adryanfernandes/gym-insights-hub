@@ -412,8 +412,9 @@ function useDashboardDataState(filters: Filters) {
       filteredMemberIds,
     );
   }, [filters, memberships, receivables, sourceRows]);
-  const data = useMemo(
-    () => ({
+  const data = useMemo(() => {
+    const membersById = new Map(sourceRows.map((member) => [member.id, member]));
+    return {
       ...memberData,
       overviewKpis: {
         ...memberData.overviewKpis,
@@ -429,9 +430,16 @@ function useDashboardDataState(filters: Filters) {
       evolucaoVendas: membershipData.evolucaoVendas,
       renovacoesMensais: membershipData.renovacoesMensais,
       tipoContratoData: membershipData.tipoContratoData,
-    }),
-    [activityData, memberData, membershipData],
-  );
+      vendasLista: membershipData.vendasLista.map((sale) => ({
+        ...sale,
+        aluno: membersById.get(sale.idAluno)?.nome ?? `Aluno ${sale.idAluno}`,
+      })),
+      cancelamentosLista: membershipData.cancelamentosLista.map((cancellation) => ({
+        ...cancellation,
+        aluno: membersById.get(cancellation.idAluno)?.nome ?? `Aluno ${cancellation.idAluno}`,
+      })),
+    };
+  }, [activityData, memberData, membershipData, sourceRows]);
   const filterOptions = useMemo(() => getDashboardFilterOptions(sourceRows), [sourceRows]);
 
   return {
