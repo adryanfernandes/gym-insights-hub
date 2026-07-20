@@ -8,6 +8,7 @@ export function KpiCard({
   delta,
   icon,
   accent = "primary",
+  onClick,
 }: {
   label: string;
   value: ReactNode;
@@ -15,6 +16,7 @@ export function KpiCard({
   delta?: number;
   icon?: ReactNode;
   accent?: "primary" | "success" | "warning" | "destructive";
+  onClick?: () => void;
 }) {
   const accentBg = {
     primary: "bg-primary/10 text-primary",
@@ -24,7 +26,18 @@ export function KpiCard({
   }[accent];
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 transition hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
+    <div
+      className={`group relative overflow-hidden rounded-xl border border-border bg-card p-5 transition hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 ${onClick ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" : ""}`}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (onClick && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -34,7 +47,9 @@ export function KpiCard({
           {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
         </div>
         {icon && (
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${accentBg}`}>
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${accentBg}`}
+          >
             {icon}
           </div>
         )}

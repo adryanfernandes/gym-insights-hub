@@ -367,7 +367,24 @@ function useDashboardDataState(filters: Filters) {
     };
   }, []);
 
-  const sourceRows = members;
+  const sourceRows = useMemo(() => {
+    const contracts = new Map<number, { name: string; timestamp: number }>();
+    memberships.forEach((membership) => {
+      const name = membership.membership_name?.trim();
+      if (!name) return;
+      const timestamp = new Date(
+        membership.membership_start || membership.sale_date || 0,
+      ).getTime();
+      const current = contracts.get(membership.id_member);
+      if (!current || timestamp >= current.timestamp) {
+        contracts.set(membership.id_member, { name, timestamp });
+      }
+    });
+    return members.map((member) => {
+      const contract = contracts.get(member.id)?.name;
+      return contract ? { ...member, contrato: contract, contratoNome: contract } : member;
+    });
+  }, [members, memberships]);
   const memberData = useMemo(
     () => getFilteredDashboardDataFromRows(filters, sourceRows),
     [filters, sourceRows],
@@ -377,12 +394,14 @@ function useDashboardDataState(filters: Filters) {
     [activities, filters],
   );
   const membershipData = useMemo(() => {
-    const activeMemberIds = members.length
-      ? new Set(members.filter((member) => member.ativo).map((member) => member.id))
+    const activeMemberIds = sourceRows.length
+      ? new Set(sourceRows.filter((member) => member.ativo).map((member) => member.id))
       : undefined;
     const filteredMemberIds = !["Todas", "Todos"].includes(filters.unidade)
       ? new Set(
-          members.filter((member) => member.bairro === filters.unidade).map((member) => member.id),
+          sourceRows
+            .filter((member) => member.bairro === filters.unidade)
+            .map((member) => member.id),
         )
       : undefined;
     return getMembershipDashboardData(
@@ -392,7 +411,7 @@ function useDashboardDataState(filters: Filters) {
       activeMemberIds,
       filteredMemberIds,
     );
-  }, [filters, members, memberships, receivables]);
+  }, [filters, memberships, receivables, sourceRows]);
   const data = useMemo(
     () => ({
       ...memberData,

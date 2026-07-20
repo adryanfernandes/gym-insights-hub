@@ -143,11 +143,14 @@ export function getMembershipDashboardData(
   const start = periodStart(filters.periodo, now);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   const branch = filters.unidade.match(/^\d+$/) ? Number(filters.unidade) : null;
-  const scoped = filteredMemberIds
+  const memberScoped = filteredMemberIds
     ? memberships.filter((row) => filteredMemberIds.has(row.id_member))
     : branch
       ? memberships.filter((row) => row.id_branch === branch)
       : memberships;
+  const scoped = memberScoped.filter(
+    (row) => filters.tipoContrato === "Todos" || row.membership_name === filters.tipoContrato,
+  );
   const byId = new Map(scoped.map((row) => [row.id_member_membership, row]));
   const scopedReceivables = receivables.filter((row) => byId.has(row.id_member_membership));
   const contractMembers = new Map<string, Set<number>>();
