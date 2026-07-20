@@ -226,7 +226,11 @@ export const Route = createFileRoute("/api/sync-memberships")({
             const existing = await existingIds(base, key, ids);
             newMemberships += ids.filter((id) => !existing.has(id)).length;
             const memberships = records.map((record) => membershipRow(record, syncedAt));
-            const receivables = receivableRows(records, syncedAt);
+            const receivables = Array.from(
+              new Map(
+                receivableRows(records, syncedAt).map((row) => [row.id_receivable, row]),
+              ).values(),
+            );
             await upsert(base, key, "member_memberships", "id_member_membership", memberships);
             await upsert(base, key, "membership_receivables", "id_receivable", receivables);
             fetched += records.length;
