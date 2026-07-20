@@ -395,6 +395,7 @@ function useDashboardDataState(filters: Filters) {
         ...membershipData.kpis,
         taxaOcupacaoAgenda: activityData.overviewOccupancy,
       },
+      evolucaoAlunos: membershipData.evolucaoAlunos,
       ocupacaoAgenda: activityData.ocupacaoAgenda,
       professores: activityData.professores,
       faturamentoMensal: membershipData.faturamentoMensal,
