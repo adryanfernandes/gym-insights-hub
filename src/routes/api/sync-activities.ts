@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const ACTIVITIES_URL = "https://evo-integracao-api.w12app.com.br/api/v1/activities/schedule";
+const ACTIVITY_DETAIL_URL = `${ACTIVITIES_URL}/detail`;
 const UPSERT_BATCH_SIZE = 100;
+const DETAIL_CONCURRENCY = 8;
 type Activity = Record<string, unknown>;
 
 function requiredEnv(name: string) {
@@ -134,6 +136,77 @@ async function fetchDay(date: string, authorization: string, branchId: number) {
   throw new Error(`Falha ao consultar ${date} após 3 tentativas: ${lastError}`);
 }
 
+function enrollmentSummary(detail: Activity) {
+  const enrollments = Array.isArray(detail.enrollments)
+    ? detail.enrollments.filter(isObject).filter((row) => row.removed !== true)
+    : [];
+  return {
+    total: enrollments.length,
+    present: enrollments.filter((row) => Number(row.status) === 0).length,
+    absent: enrollments.filter((row) => Number(row.status) === 1).length,
+    justified_absence: enrollments.filter(
+      (row) => Number(row.status) === 2 || row.justifiedAbsence === true,
+    ).length,
+  };
+}
+
+async function fetchDetail(activity: Activity, activityDate: string, authorization: string) {
+  const idConfiguration = activity.idConfiguration;
+  const idActivitySession = activity.idActivitySession;
+  if (idConfiguration === undefined && idActivitySession === undefined) return activity;
+
+  const url = new URL(process.env.EVO_ACTIVITY_DETAIL_URL || ACTIVITY_DETAIL_URL);
+  if (
+    idActivitySession !== undefined &&
+    idActivitySession !== null &&
+    Number(idActivitySession) > 0
+  ) {
+    url.searchParams.set("idActivitySession", String(idActivitySession));
+  } else {
+    url.searchParams.set("idConfiguration", String(idConfiguration));
+    url.searchParams.set("activityDate", `${activityDate}T00:00:00`);
+  }
+
+  try {
+    const response = await fetchWithTimeout(
+      url.toString(),
+      {
+        headers: { Authorization: authorization, Accept: "application/json" },
+        cache: "no-store",
+      },
+      30000,
+    );
+    if (!response.ok) return activity;
+    const detail = (await response.json()) as unknown;
+    if (!isObject(detail)) return activity;
+    return {
+      ...activity,
+      idActivitySession: detail.idActivitySession ?? activity.idActivitySession,
+      enrollmentSummary: enrollmentSummary(detail),
+    };
+  } catch {
+    return activity;
+  }
+}
+
+async function enrichActivities(
+  activities: Activity[],
+  activityDate: string,
+  authorization: string,
+) {
+  const enriched: Activity[] = [];
+  for (let start = 0; start < activities.length; start += DETAIL_CONCURRENCY) {
+    enriched.push(
+      ...(await Promise.all(
+        activities
+          .slice(start, start + DETAIL_CONCURRENCY)
+          .map((activity) => fetchDetail(activity, activityDate, authorization)),
+      )),
+    );
+  }
+  return enriched;
+}
+
 async function existingKeys(keys: string[]) {
   if (!keys.length) return new Set<string>();
   const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
@@ -215,7 +288,8 @@ export const Route = createFileRoute("/api/sync-activities")({
           const rows: Record<string, unknown>[] = [];
           for (let day = 1; day <= days; day += 1) {
             const date = isoDate(year, month, day);
-            const activities = await fetchDay(date, authorization, branchId);
+            const schedule = await fetchDay(date, authorization, branchId);
+            const activities = await enrichActivities(schedule, date, authorization);
             daysQueried += 1;
             for (const activity of activities) {
               rows.push({
