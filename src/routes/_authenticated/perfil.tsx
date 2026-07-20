@@ -55,9 +55,7 @@ function PerfilPage() {
   const fem = data.sexoData.find((s) => s.sexo === "Feminino")?.qtd ?? 0;
   const mascPct = totalSexo ? (masc / totalSexo) * 100 : 0;
   const femPct = totalSexo ? (fem / totalSexo) * 100 : 0;
-  const contratoDominante = data.tipoContratoData
-    .slice()
-    .sort((a, b) => b.qtd - a.qtd)[0];
+  const contratoDominante = data.tipoContratoData.slice().sort((a, b) => b.qtd - a.qtd)[0];
   const contratoTotal = data.tipoContratoData.reduce((s, d) => s + d.qtd, 0);
   const contratoPct =
     contratoDominante && contratoTotal
@@ -147,7 +145,7 @@ function PerfilPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Tipo de contrato" description="Alunos por modalidade">
+        <ChartCard title="Tipo de contrato" description="Alunos ativos por contrato vigente">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.tipoContratoData} layout="vertical">
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
@@ -156,7 +154,7 @@ function PerfilPage() {
                 type="category"
                 dataKey="tipo"
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                width={90}
+                width={150}
               />
               <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="qtd" fill="var(--chart-3)" radius={[0, 4, 4, 0]} />

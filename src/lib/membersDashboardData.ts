@@ -384,10 +384,12 @@ function useDashboardDataState(filters: Filters) {
     () => getActivityDashboardData(activities, filters),
     [activities, filters],
   );
-  const membershipData = useMemo(
-    () => getMembershipDashboardData(memberships, receivables, filters),
-    [filters, memberships, receivables],
-  );
+  const membershipData = useMemo(() => {
+    const activeMemberIds = members.length
+      ? new Set(members.filter((member) => member.ativo).map((member) => member.id))
+      : undefined;
+    return getMembershipDashboardData(memberships, receivables, filters, activeMemberIds);
+  }, [filters, members, memberships, receivables]);
   const data = useMemo(
     () => ({
       ...memberData,
@@ -403,6 +405,7 @@ function useDashboardDataState(filters: Filters) {
       projecaoFaturamento: membershipData.projecaoFaturamento,
       evolucaoVendas: membershipData.evolucaoVendas,
       renovacoesMensais: membershipData.renovacoesMensais,
+      tipoContratoData: membershipData.tipoContratoData,
     }),
     [activityData, memberData, membershipData],
   );

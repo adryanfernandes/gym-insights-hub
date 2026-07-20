@@ -19,9 +19,7 @@ import { Wallet, TrendingUp, Repeat, AlertOctagon } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
-import {
-  formatBRL,
-} from "@/lib/mockData";
+import { formatBRL } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
@@ -127,7 +125,10 @@ function FinanceiroPage() {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => formatBRL(Number(v))} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number | string) => formatBRL(Number(v))}
+              />
               <Area
                 type="monotone"
                 dataKey="faturamento"
@@ -154,16 +155,16 @@ function FinanceiroPage() {
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => formatBRL(Number(v))} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number | string) => formatBRL(Number(v))}
+              />
               <Legend wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard
-          title="Faturamento x Cancelamentos"
-          description="Comparativo mensal"
-        >
+        <ChartCard title="Faturamento x Cancelamentos" description="Comparativo mensal">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data.faturamentoMensal}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -172,7 +173,10 @@ function FinanceiroPage() {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => formatBRL(Number(v))} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number | string) => formatBRL(Number(v))}
+              />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="faturamento" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="cancelamentos" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
@@ -180,7 +184,10 @@ function FinanceiroPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Projeção de faturamento" description="Próximos 6 meses">
+        <ChartCard
+          title="Projeção de faturamento"
+          description="Recebíveis de contratos ativos e perdas por cancelamento"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data.projecaoFaturamento}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -189,16 +196,29 @@ function FinanceiroPage() {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => (v ? formatBRL(Number(v)) : "-")} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number | string) => (v ? formatBRL(Number(v)) : "-")}
+              />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="real" fill="var(--chart-1)" radius={[4, 4, 0, 0]} name="Real" />
+              <Bar
+                dataKey="contratosAtivos"
+                fill="var(--chart-1)"
+                radius={[4, 4, 0, 0]}
+                name="Contratos ativos"
+              />
+              <Bar
+                dataKey="contratosCancelados"
+                fill="var(--chart-5)"
+                radius={[4, 4, 0, 0]}
+                name="Contratos cancelados"
+              />
               <Line
                 type="monotone"
-                dataKey="projecao"
+                dataKey="real"
                 stroke="var(--chart-4)"
                 strokeWidth={3}
-                strokeDasharray="5 5"
-                name="Projeção"
+                name="Recebido no mês"
               />
             </ComposedChart>
           </ResponsiveContainer>
