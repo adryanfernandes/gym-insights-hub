@@ -9,8 +9,6 @@ import {
   Tooltip,
   BarChart,
   Bar,
-  LineChart,
-  Line,
 } from "recharts";
 import {
   Users,
@@ -67,6 +65,7 @@ function GeralPage() {
       EvolucaoAlunos: data.evolucaoAlunos,
       OcupacaoAgenda: data.ocupacaoAgenda,
       TaxaRenovacao: data.taxaRenovacao,
+      RenovacoesMensais: data.renovacoesMensais,
     });
 
   const onExportPdf = () =>
@@ -182,21 +181,18 @@ function GeralPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Evolução da taxa de renovação automática" description="Últimos 12 meses">
+        <ChartCard title="Renovações realizadas por mês" description="Últimos 12 meses">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data.taxaRenovacao}>
+            <BarChart data={data.renovacoesMensais}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-              <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Line
-                type="monotone"
-                dataKey="taxa"
-                stroke="var(--chart-3)"
-                strokeWidth={3}
-                dot={{ fill: "var(--chart-3)", r: 4 }}
+              <YAxis
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                allowDecimals={false}
               />
-            </LineChart>
+              <Tooltip contentStyle={tooltipStyle} />
+              <Bar dataKey="renovacoes" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </ChartCard>
 
