@@ -402,6 +402,7 @@ function useDashboardDataState(filters: Filters) {
       receitaPorPlano: membershipData.receitaPorPlano,
       projecaoFaturamento: membershipData.projecaoFaturamento,
       evolucaoVendas: membershipData.evolucaoVendas,
+      renovacoesMensais: membershipData.renovacoesMensais,
     }),
     [activityData, memberData, membershipData],
   );

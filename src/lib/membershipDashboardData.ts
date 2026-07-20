@@ -1,4 +1,11 @@
-import { addMonths, format, startOfMonth, startOfYear, subDays } from "date-fns";
+import {
+  addMonths,
+  differenceInCalendarDays,
+  format,
+  startOfMonth,
+  startOfYear,
+  subDays,
+} from "date-fns";
 import type { Filters } from "@/contexts/AppContext";
 
 export type MembershipRow = {
@@ -60,6 +67,53 @@ function label(key: string) {
   return format(new Date(`${key}-01T12:00:00`), "MMM/yy");
 }
 
+function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
+  const byMember = new Map<number, MembershipRow[]>();
+  rows.forEach((row) => {
+    const group = byMember.get(row.id_member) ?? [];
+    group.push(row);
+    byMember.set(row.id_member, group);
+  });
+
+  const totals = new Map(monthKeys.map((key) => [key, 0]));
+  byMember.forEach((memberRows) => {
+    const periodsByStart = new Map<string, { start: Date; end: Date | null; performedAt: Date }>();
+
+    memberRows.forEach((row) => {
+      const start = date(row.membership_start || row.sale_date);
+      if (!start) return;
+      const key = format(start, "yyyy-MM-dd");
+      const end = date(row.membership_end);
+      const performedAt = date(row.sale_date) ?? start;
+      const current = periodsByStart.get(key);
+      periodsByStart.set(key, {
+        start,
+        end: end && (!current?.end || end > current.end) ? end : (current?.end ?? null),
+        performedAt:
+          current && current.performedAt < performedAt ? current.performedAt : performedAt,
+      });
+    });
+
+    const periods = Array.from(periodsByStart.values()).sort(
+      (a, b) => a.start.getTime() - b.start.getTime(),
+    );
+    let previousEnd = periods[0]?.end ?? null;
+
+    periods.slice(1).forEach((period) => {
+      const gap = previousEnd
+        ? differenceInCalendarDays(period.start, previousEnd)
+        : Number.POSITIVE_INFINITY;
+      if (gap >= -30 && gap <= 30) {
+        const key = monthKey(period.performedAt);
+        if (totals.has(key)) totals.set(key, (totals.get(key) ?? 0) + 1);
+      }
+      previousEnd = period.end;
+    });
+  });
+
+  return monthKeys.map((key) => ({ mes: label(key), renovacoes: totals.get(key) ?? 0 }));
+}
+
 export function getMembershipDashboardData(
   memberships: MembershipRow[],
   receivables: ReceivableRow[],
@@ -106,6 +160,7 @@ export function getMembershipDashboardData(
   const last12 = Array.from({ length: 12 }, (_, index) =>
     monthKey(addMonths(startOfMonth(now), index - 11)),
   );
+  const renovacoesMensais = monthlyRenewals(scoped, last12);
   const faturamentoMensal = last12.map((key) => ({
     mes: label(key),
     faturamento: Math.round(
@@ -193,5 +248,6 @@ export function getMembershipDashboardData(
     receitaPorPlano,
     projecaoFaturamento,
     evolucaoVendas,
+    renovacoesMensais,
   };
 }
