@@ -60,45 +60,6 @@ function label(key: string) {
   return format(new Date(`${key}-01T12:00:00`), "MMM/yy");
 }
 
-function activeInterval(row: MembershipRow) {
-  const start = date(row.membership_start || row.sale_date);
-  const possibleEnds = [date(row.cancel_date), date(row.membership_end)].filter(
-    (value): value is Date => Boolean(value),
-  );
-  const end = possibleEnds.length
-    ? new Date(Math.min(...possibleEnds.map((value) => value.getTime())))
-    : null;
-
-  return { start, end };
-}
-
-function activeMemberIds(rows: MembershipRow[], reference: Date) {
-  const referenceStart = new Date(
-    reference.getFullYear(),
-    reference.getMonth(),
-    reference.getDate(),
-  );
-  const referenceEnd = new Date(
-    reference.getFullYear(),
-    reference.getMonth(),
-    reference.getDate(),
-    23,
-    59,
-    59,
-    999,
-  );
-  const result = new Set<number>();
-
-  rows.forEach((row) => {
-    const { start, end } = activeInterval(row);
-    if (start && start <= referenceEnd && (!end || end >= referenceStart)) {
-      result.add(row.id_member);
-    }
-  });
-
-  return result;
-}
-
 export function getMembershipDashboardData(
   memberships: MembershipRow[],
   receivables: ReceivableRow[],
@@ -197,16 +158,6 @@ export function getMembershipDashboardData(
     };
   });
 
-  const evolucaoAlunos = Array.from({ length: days }, (_, index) => {
-    const current = subDays(end, days - 1 - index);
-    return {
-      data: format(current, "dd/MM"),
-      ativos: activeMemberIds(scoped, current).size,
-    };
-  });
-  const allMemberIds = new Set(scoped.map((row) => row.id_member));
-  const currentActiveMemberIds = activeMemberIds(scoped, end);
-
   const projectionMonths = Array.from({ length: 6 }, (_, index) => monthKey(addMonths(now, index)));
   const projecaoFaturamento = projectionMonths.map((key, index) => ({
     mes: label(key),
@@ -223,8 +174,6 @@ export function getMembershipDashboardData(
 
   return {
     kpis: {
-      alunosAtivos: currentActiveMemberIds.size,
-      alunosNaoAtivos: Math.max(allMemberIds.size - currentActiveMemberIds.size, 0),
       ticketMedio: totalSales / Math.max(sales.length, 1),
       vendas30d: { qtd: sales.length, valor: totalSales },
       cancelamentos30d: {
@@ -244,6 +193,5 @@ export function getMembershipDashboardData(
     receitaPorPlano,
     projecaoFaturamento,
     evolucaoVendas,
-    evolucaoAlunos,
   };
 }

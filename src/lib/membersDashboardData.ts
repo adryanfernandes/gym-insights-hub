@@ -219,6 +219,7 @@ function memberToClient(member: MemberRecord, index: number): ClientRow {
     diasAtivo: startDate
       ? Math.max(differenceInCalendarDays(inferredDue ?? today, startDate), 0)
       : 0,
+    ativo: !inactive,
   };
 }
 
@@ -395,7 +396,6 @@ function useDashboardDataState(filters: Filters) {
         ...membershipData.kpis,
         taxaOcupacaoAgenda: activityData.overviewOccupancy,
       },
-      evolucaoAlunos: membershipData.evolucaoAlunos,
       ocupacaoAgenda: activityData.ocupacaoAgenda,
       professores: activityData.professores,
       faturamentoMensal: membershipData.faturamentoMensal,
