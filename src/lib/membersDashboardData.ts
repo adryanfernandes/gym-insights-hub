@@ -35,15 +35,7 @@ const NAME_FIELDS = [
 const GENDER_FIELDS = ["genero", "sexo", "gender", "sex"];
 const AGE_FIELDS = ["idade", "age"];
 const BIRTH_DATE_FIELDS = ["data_nascimento", "birthDate", "birth_date", "birthday", "nascimento"];
-const DISTRICT_FIELDS = [
-  "branchName",
-  "bairro",
-  "unidade",
-  "branch",
-  "location",
-  "unit",
-  "neighborhood",
-];
+const DISTRICT_FIELDS = ["neighborhood", "bairro", "district", "neighborhood_name", "unidade"];
 const CITY_FIELDS = ["cidade", "city"];
 const CONTRACT_FIELDS = [
   "contrato",
@@ -388,7 +380,18 @@ function useDashboardDataState(filters: Filters) {
     const activeMemberIds = members.length
       ? new Set(members.filter((member) => member.ativo).map((member) => member.id))
       : undefined;
-    return getMembershipDashboardData(memberships, receivables, filters, activeMemberIds);
+    const filteredMemberIds = !["Todas", "Todos"].includes(filters.unidade)
+      ? new Set(
+          members.filter((member) => member.bairro === filters.unidade).map((member) => member.id),
+        )
+      : undefined;
+    return getMembershipDashboardData(
+      memberships,
+      receivables,
+      filters,
+      activeMemberIds,
+      filteredMemberIds,
+    );
   }, [filters, members, memberships, receivables]);
   const data = useMemo(
     () => ({

@@ -1,4 +1,4 @@
-import { format, startOfWeek, subDays, startOfYear } from "date-fns";
+import { format, subDays, startOfYear } from "date-fns";
 import type { Filters } from "@/contexts/AppContext";
 
 export type StoredActivity = {
@@ -165,17 +165,13 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
     })
     .sort((a, b) => a.horario.localeCompare(b.horario));
 
-  const evolucao = Array.from(
-    aggregate(rows, (row) =>
-      format(startOfWeek(row.date, { weekStartsOn: 1 }), "yyyy-MM-dd"),
-    ).entries(),
-  )
+  const evolucao = Array.from(aggregate(rows, (row) => format(row.date, "yyyy-MM-dd")).entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(-12)
-    .map(([week, weekRows]) => {
-      const value = metrics(weekRows);
+    .map(([day, dayRows]) => {
+      const value = metrics(dayRows);
       return {
-        semana: format(new Date(`${week}T12:00:00`), "dd/MM"),
+        semana: format(new Date(`${day}T12:00:00`), "dd/MM"),
         ocupacao: value.occupancy,
         aulas: value.classes,
       };

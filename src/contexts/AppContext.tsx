@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 export type Filters = {
   periodo: string;
@@ -79,7 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [filters, setFiltersState] = useState<Filters>({
     periodo: "Últimos 30 dias",
-    unidade: "Todas",
+    unidade: "Todos",
     tipoContrato: "Todos",
     sexo: "Todos",
     faixaEtaria: "Todas",
@@ -149,9 +143,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return { ok: false, error: "Preencha nome, login e senha." };
           }
           if (
-            users.some(
-              (item) => item.login.trim().toLowerCase() === normalizedLogin.toLowerCase(),
-            )
+            users.some((item) => item.login.trim().toLowerCase() === normalizedLogin.toLowerCase())
           ) {
             return { ok: false, error: "Já existe um usuário com esse login." };
           }
@@ -169,9 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
         updateUserRole: async (userId, nextRole) => {
           setAndPersistUsers(
-            users.map((item) =>
-              item.id === userId ? { ...item, role: nextRole } : item,
-            ),
+            users.map((item) => (item.id === userId ? { ...item, role: nextRole } : item)),
           );
         },
       }}
