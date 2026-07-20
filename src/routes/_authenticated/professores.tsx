@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -46,6 +47,8 @@ function ProfessoresPage() {
   const { data, loadingActivities, activitiesError } = useDashboardData(filters);
   const professores = data.professores;
   const k = professores.kpis;
+  const [showAllTeachers, setShowAllTeachers] = useState(false);
+  const rankingData = showAllTeachers ? professores.ranking : professores.ranking.slice(0, 10);
 
   const onExportExcel = () =>
     exportToExcel("professores", {
@@ -131,24 +134,45 @@ function ProfessoresPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ChartCard title="Ranking de ocupacao por professor" description="% de vagas preenchidas">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={professores.ranking} layout="vertical" margin={{ left: 16 }}>
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                unit="%"
-              />
-              <YAxis
-                type="category"
-                dataKey="professor"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                width={118}
-              />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="ocupacao" fill="var(--chart-1)" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="flex h-full min-h-0 flex-col">
+            {professores.ranking.length > 10 && (
+              <div className="flex justify-end pb-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAllTeachers((value) => !value)}
+                  className="rounded-md border border-border px-3 py-1 text-xs font-medium hover:bg-accent"
+                >
+                  {showAllTeachers ? "Mostrar somente 10" : "Mostrar mais"}
+                </button>
+              </div>
+            )}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div style={{ height: Math.max(230, rankingData.length * 30) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={rankingData} layout="vertical" margin={{ left: 24 }}>
+                    <CartesianGrid
+                      stroke="var(--border)"
+                      strokeDasharray="3 3"
+                      horizontal={false}
+                    />
+                    <XAxis
+                      type="number"
+                      tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                      unit="%"
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="professor"
+                      tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                      width={170}
+                    />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Bar dataKey="ocupacao" fill="var(--chart-1)" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
         </ChartCard>
 
         <ChartCard title="Modalidades" description="Ocupacao e media de alunos por aula">
@@ -192,7 +216,7 @@ function ProfessoresPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Evolucao semanal" description="Tendencia de ocupacao e volume de aulas">
+        <ChartCard title="Evolução diária" description="Ocupação e volume de aulas dia a dia">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={professores.evolucao}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -265,8 +289,8 @@ function ProfessoresPage() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
-        <div className="rounded-xl border border-border bg-card">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
           <div className="border-b border-border p-5">
             <h3 className="text-sm font-semibold">Detalhamento por professor</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -274,7 +298,7 @@ function ProfessoresPage() {
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1280px] text-sm">
               <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-5 py-3 font-medium">Professor</th>
@@ -316,7 +340,7 @@ function ProfessoresPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="min-w-0 self-start rounded-xl border border-border bg-card p-5">
           <h3 className="text-sm font-semibold">Pontos de atencao</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Sugestões geradas a partir da ocupação real registrada na agenda EVO.

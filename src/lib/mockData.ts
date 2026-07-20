@@ -121,7 +121,7 @@ function riskLevel(client: ClientRow, referenceDate: Date): "baixo" | "medio" | 
 
 function matchesBaseFilters(client: ClientRow, filters: Filters) {
   return (
-    (filters.unidade === "Todas" || client.bairro === filters.unidade) &&
+    (["Todas", "Todos"].includes(filters.unidade) || client.bairro === filters.unidade) &&
     (filters.tipoContrato === "Todos" || client.contrato === filters.tipoContrato) &&
     (filters.sexo === "Todos" || client.genero === filters.sexo) &&
     (filters.faixaEtaria === "Todas" || ageRange(client.idade) === filters.faixaEtaria)
@@ -167,11 +167,14 @@ function makeMonthKeys(range: { start: Date; end: Date }) {
   return keys;
 }
 
-function latestTopBairros(clients: ClientRow[]) {
-  return countBy(clients, (client) => client.bairro)
-    .sort((a, b) => b.qtd - a.qtd)
-    .slice(0, 12)
-    .map((row) => row.key);
+function bairros(clients: ClientRow[]) {
+  return Array.from(
+    new Set(
+      clients
+        .map((client) => client.bairro.trim())
+        .filter((bairro) => bairro && bairro !== "Nao informado"),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
 
 export const SEXOS = ["Todos", "Masculino", "Feminino", "Outro"];
@@ -179,7 +182,7 @@ export const FAIXAS_ETARIAS = ["Todas", "18-25", "26-35", "36-45", "46-55", "55+
 
 export function getDashboardFilterOptions(clients: ClientRow[]) {
   return {
-    unidades: ["Todas", ...latestTopBairros(clients)],
+    unidades: ["Todos", ...bairros(clients)],
     tiposContrato: [
       "Todos",
       ...countBy(clients, (client) => client.contrato)
