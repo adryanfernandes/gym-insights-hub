@@ -11,6 +11,11 @@ import {
 import type { Filters } from "@/contexts/AppContext";
 import { getActivityDashboardData, type StoredActivity } from "@/lib/activityDashboardData";
 import {
+  getMembershipDashboardData,
+  type MembershipRow,
+  type ReceivableRow,
+} from "@/lib/membershipDashboardData";
+import {
   getDashboardFilterOptions,
   getFilteredDashboardDataFromRows,
   type ClientRow,
@@ -83,6 +88,10 @@ const ID_FIELDS = ["idMember", "id", "member_id", "codigo", "code", "uuid"];
 
 let membersRequest: Promise<MemberRecord[]> | null = null;
 let activitiesRequest: Promise<StoredActivity[]> | null = null;
+let membershipsRequest: Promise<{
+  memberships: MembershipRow[];
+  receivables: ReceivableRow[];
+}> | null = null;
 
 function pick(record: MemberRecord, fields: string[]) {
   for (const field of fields) {
@@ -258,13 +267,38 @@ async function fetchActivities() {
   return activitiesRequest;
 }
 
+async function fetchMemberships() {
+  if (!membershipsRequest) {
+    membershipsRequest = fetch("/api/memberships", {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+        return (await response.json()) as {
+          memberships: MembershipRow[];
+          receivables: ReceivableRow[];
+        };
+      })
+      .catch((error) => {
+        membershipsRequest = null;
+        throw error;
+      });
+  }
+  return membershipsRequest;
+}
+
 function useDashboardDataState(filters: Filters) {
   const [members, setMembers] = useState<ClientRow[]>([]);
   const [activities, setActivities] = useState<StoredActivity[]>([]);
+  const [memberships, setMemberships] = useState<MembershipRow[]>([]);
+  const [receivables, setReceivables] = useState<ReceivableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingActivities, setLoadingActivities] = useState(true);
+  const [loadingMemberships, setLoadingMemberships] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activitiesError, setActivitiesError] = useState<string | null>(null);
+  const [membershipsError, setMembershipsError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -287,6 +321,31 @@ function useDashboardDataState(filters: Filters) {
 
     loadMembers();
 
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchMemberships()
+      .then((result) => {
+        if (!mounted) return;
+        setMemberships(result.memberships);
+        setReceivables(result.receivables);
+        setMembershipsError(null);
+      })
+      .catch((loadError) => {
+        if (!mounted) return;
+        setMemberships([]);
+        setReceivables([]);
+        setMembershipsError(
+          loadError instanceof Error ? loadError.message : "Falha ao carregar contratos",
+        );
+      })
+      .finally(() => {
+        if (mounted) setLoadingMemberships(false);
+      });
     return () => {
       mounted = false;
     };
@@ -324,17 +383,26 @@ function useDashboardDataState(filters: Filters) {
     () => getActivityDashboardData(activities, filters),
     [activities, filters],
   );
+  const membershipData = useMemo(
+    () => getMembershipDashboardData(memberships, receivables, filters),
+    [filters, memberships, receivables],
+  );
   const data = useMemo(
     () => ({
       ...memberData,
       overviewKpis: {
         ...memberData.overviewKpis,
+        ...membershipData.kpis,
         taxaOcupacaoAgenda: activityData.overviewOccupancy,
       },
       ocupacaoAgenda: activityData.ocupacaoAgenda,
       professores: activityData.professores,
+      faturamentoMensal: membershipData.faturamentoMensal,
+      receitaPorPlano: membershipData.receitaPorPlano,
+      projecaoFaturamento: membershipData.projecaoFaturamento,
+      evolucaoVendas: membershipData.evolucaoVendas,
     }),
-    [activityData, memberData],
+    [activityData, memberData, membershipData],
   );
   const filterOptions = useMemo(() => getDashboardFilterOptions(sourceRows), [sourceRows]);
 
@@ -349,6 +417,10 @@ function useDashboardDataState(filters: Filters) {
     activitiesError,
     usingSupabaseActivities: !loadingActivities && !activitiesError,
     activitiesCount: activities.length,
+    loadingMemberships,
+    membershipsError,
+    usingSupabaseMemberships: !loadingMemberships && !membershipsError,
+    membershipsCount: memberships.length,
   };
 }
 

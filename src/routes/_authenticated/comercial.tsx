@@ -53,7 +53,7 @@ const RISK_LABEL: Record<string, string> = { alto: "Alto", medio: "Médio", baix
 
 function ComercialPage() {
   const { filters } = useApp();
-  const { data } = useDashboardData(filters);
+  const { data, loadingMemberships, membershipsError } = useDashboardData(filters);
   const k = data.overviewKpis;
 
   const onExportExcel = () =>
@@ -88,20 +88,25 @@ function ComercialPage() {
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
     >
+      {(loadingMemberships || membershipsError) && (
+        <div className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
+          {loadingMemberships
+            ? "Carregando contratos reais da EVO..."
+            : `Não foi possível carregar os contratos da EVO: ${membershipsError}`}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <KpiCard
           label="Vendas (30d)"
           value={formatNum(k.vendas30d.qtd)}
           hint={formatBRL(k.vendas30d.valor)}
-          delta={6.1}
           accent="success"
           icon={<ShoppingCart className="h-5 w-5" />}
         />
         <KpiCard
-          label="Cancelamentos previstos (30d)"
+          label="Cancelamentos no período"
           value={formatNum(k.cancelamentos30d.qtd)}
           hint={formatBRL(k.cancelamentos30d.valor)}
-          delta={-2.4}
           accent="destructive"
           icon={<TrendingDown className="h-5 w-5" />}
         />

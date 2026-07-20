@@ -103,7 +103,6 @@ function GeralPage() {
         <KpiCard
           label="Ticket médio"
           value={formatBRL(k.ticketMedio)}
-          delta={1.8}
           accent="success"
           icon={<DollarSign className="h-5 w-5" />}
         />
@@ -111,7 +110,6 @@ function GeralPage() {
           label="Vendas 30d"
           value={formatNum(k.vendas30d.qtd)}
           hint={formatBRL(k.vendas30d.valor)}
-          delta={6.1}
           accent="success"
           icon={<ShoppingCart className="h-5 w-5" />}
         />
@@ -119,14 +117,12 @@ function GeralPage() {
           label="Cancelamentos 30d"
           value={formatNum(k.cancelamentos30d.qtd)}
           hint={formatBRL(k.cancelamentos30d.valor)}
-          delta={-2.4}
           accent="destructive"
           icon={<TrendingDown className="h-5 w-5" />}
         />
         <KpiCard
           label="Desat. renovação"
           value={`${k.taxaDesativacaoRenovacao}%`}
-          delta={-0.6}
           accent="warning"
           icon={<RefreshCw className="h-5 w-5" />}
         />

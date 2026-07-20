@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock,
+  CreditCard,
   DatabaseZap,
   KeyRound,
   Loader2,
@@ -82,6 +83,10 @@ function ConfiguracoesPage() {
             <CalendarDays className="h-4 w-4" />
             API de atividades
           </TabsTrigger>
+          <TabsTrigger value="memberships-api" className="gap-2">
+            <CreditCard className="h-4 w-4" />
+            API de contratos
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="clients-api" className="space-y-4">
           <ClientsApiPanel />
@@ -91,6 +96,9 @@ function ConfiguracoesPage() {
         </TabsContent>
         <TabsContent value="activities-api" className="space-y-4">
           <ActivitiesApiPanel />
+        </TabsContent>
+        <TabsContent value="memberships-api" className="space-y-4">
+          <MembershipsApiPanel />
         </TabsContent>
       </Tabs>
     </DashboardLayout>
@@ -685,6 +693,275 @@ function ActivitiesApiPanel() {
                   <TableCell className="text-right font-semibold">{log.new_activities}</TableCell>
                   <TableCell className="text-right">
                     {Math.round(log.duration_ms / 1000)}s
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  Nenhuma atualização registrada.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+    </div>
+  );
+}
+
+type MembershipSyncLog = {
+  id: string;
+  finished_at: string;
+  trigger_type: "manual" | "scheduled";
+  status: "success" | "error";
+  total_fetched: number;
+  new_memberships: number;
+  receivables_synced: number;
+  next_skip: number;
+  cycle_completed: boolean;
+  duration_ms: number;
+};
+
+function MembershipsApiPanel() {
+  const [enabled, setEnabled] = useState(true);
+  const [intervalHours, setIntervalHours] = useState(24);
+  const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
+  const [nextSkip, setNextSkip] = useState(0);
+  const [history, setHistory] = useState<MembershipSyncLog[]>([]);
+  const [credential, setCredential] = useState("");
+  const [hasCredential, setHasCredential] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const nextScheduledAt = useMemo(() => {
+    if (!enabled) return null;
+    const success = history.find((row) => row.status === "success");
+    const lastSuccess = success ? new Date(success.finished_at).getTime() : 0;
+    return new Date(Math.max(lastSuccess, scheduleUpdatedAt ?? now) + intervalHours * 3600000);
+  }, [enabled, history, intervalHours, now, scheduleUpdatedAt]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const load = useCallback(async () => {
+    const response = await fetch("/api/membership-sync-settings", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    setEnabled(result.settings?.enabled !== false);
+    setIntervalHours(result.settings?.interval_hours ?? 24);
+    setScheduleUpdatedAt(
+      new Date(
+        result.settings?.schedule_updated_at || result.settings?.updated_at || Date.now(),
+      ).getTime(),
+    );
+    setNextSkip(result.settings?.next_skip ?? 0);
+    setHasCredential(result.settings?.has_api_credential === true);
+    setHistory(Array.isArray(result.history) ? result.history : []);
+  }, []);
+
+  useEffect(() => {
+    load().catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Falha ao carregar."),
+    );
+    const timer = window.setInterval(() => load().catch(() => undefined), 30000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  async function patchSettings(body: Record<string, unknown>) {
+    const response = await fetch("/api/membership-sync-settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    return result.settings;
+  }
+
+  async function saveSchedule(nextEnabled = enabled) {
+    setSaving(true);
+    setError("");
+    try {
+      const settings = await patchSettings({ enabled: nextEnabled, intervalHours });
+      setEnabled(settings.enabled);
+      setIntervalHours(settings.interval_hours);
+      setScheduleUpdatedAt(new Date(settings.schedule_updated_at).getTime());
+      setMessage(
+        settings.enabled
+          ? `Atualização a cada ${settings.interval_hours} hora(s).`
+          : "Agendamento pausado.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveCredential() {
+    if (!credential.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const settings = await patchSettings({ apiCredential: credential });
+      setHasCredential(settings.has_api_credential === true);
+      setCredential("");
+      setMessage("Chave salva com sucesso.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao salvar chave.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function sync() {
+    setSyncing(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/sync-memberships", { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setMessage(
+        `${result.synchronized} contratos e ${result.receivablesSynced} recebíveis processados; ${result.newMemberships} contratos novos.${result.cycleCompleted ? " Ciclo concluído." : " A próxima execução continuará do cursor salvo."}`,
+      );
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao sincronizar contratos.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">API de contratos e recebíveis</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sincronização incremental e segura. Documentos, TID, NSU e autorizações não são
+              armazenados.
+            </p>
+            {message && <p className="mt-2 text-xs text-success">{message}</p>}
+            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <p className="text-sm font-semibold">Chave da API EVO</p>
+              <Badge variant={hasCredential ? "outline" : "destructive"} className="ml-auto">
+                {hasCredential ? "Configurada" : "Pendente"}
+              </Badge>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="password"
+                value={credential}
+                onChange={(event) => setCredential(event.target.value)}
+                placeholder="Basic ... ou token Base64"
+                autoComplete="off"
+              />
+              <Button
+                variant="outline"
+                onClick={saveCredential}
+                disabled={saving || !credential.trim()}
+              >
+                <KeyRound /> Salvar chave
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <Clock className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Próxima atualização</p>
+              {nextScheduledAt ? (
+                <>
+                  <p className="text-sm font-semibold">{nextScheduledAt.toLocaleString("pt-BR")}</p>
+                  <p className="font-mono text-lg font-bold text-primary">
+                    {formatCountdown(nextScheduledAt.getTime() - now)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm font-semibold text-muted-foreground">Agendamento pausado</p>
+              )}
+            </div>
+            <Badge variant="outline" className="ml-auto">
+              Cursor: {nextSkip}
+            </Badge>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-52 space-y-2">
+              <Label htmlFor="membership-sync-hours">Atualização em horas</Label>
+              <Input
+                id="membership-sync-hours"
+                type="number"
+                min={1}
+                max={720}
+                value={intervalHours}
+                onChange={(event) => setIntervalHours(Math.max(1, Number(event.target.value) || 1))}
+              />
+            </div>
+            <Button variant="outline" onClick={() => saveSchedule()} disabled={saving}>
+              Salvar intervalo
+            </Button>
+            <Button
+              variant={enabled ? "outline" : "default"}
+              onClick={() => saveSchedule(!enabled)}
+              disabled={saving}
+            >
+              {enabled ? <Square /> : <Play />} {enabled ? "Pausar" : "Iniciar"}
+            </Button>
+            <Button onClick={sync} disabled={syncing}>
+              {syncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {syncing ? "Processando lote..." : "Atualizar agora"}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-4 text-sm font-semibold">Histórico de contratos</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Horário</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Contratos</TableHead>
+              <TableHead className="text-right">Novos</TableHead>
+              <TableHead className="text-right">Recebíveis</TableHead>
+              <TableHead>Ciclo</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {history.length ? (
+              history.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{new Date(row.finished_at).toLocaleString("pt-BR")}</TableCell>
+                  <TableCell>{row.trigger_type === "scheduled" ? "Agendada" : "Manual"}</TableCell>
+                  <TableCell>
+                    <Badge variant={row.status === "success" ? "outline" : "destructive"}>
+                      {row.status === "success" ? "Sucesso" : "Erro"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{row.total_fetched}</TableCell>
+                  <TableCell className="text-right font-semibold">{row.new_memberships}</TableCell>
+                  <TableCell className="text-right">{row.receivables_synced}</TableCell>
+                  <TableCell>
+                    {row.cycle_completed ? "Concluído" : `Cursor ${row.next_skip}`}
                   </TableCell>
                 </TableRow>
               ))
