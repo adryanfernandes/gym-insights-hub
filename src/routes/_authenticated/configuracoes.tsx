@@ -413,6 +413,18 @@ function formatCountdown(milliseconds: number) {
   return days ? `${days}d ${time}` : time;
 }
 
+function formatIntervalMinutes(totalMinutes: number) {
+  const safeMinutes = Math.max(1, Math.round(totalMinutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  const parts = [];
+
+  if (hours) parts.push(`${hours} hora${hours === 1 ? "" : "s"}`);
+  if (minutes) parts.push(`${minutes} minuto${minutes === 1 ? "" : "s"}`);
+
+  return parts.join(" e ") || "1 minuto";
+}
+
 type ActivitySyncLog = {
   id: string;
   finished_at: string;
@@ -745,6 +757,7 @@ type MembershipSyncLog = {
 function MembershipsApiPanel() {
   const [enabled, setEnabled] = useState(true);
   const [intervalHours, setIntervalHours] = useState(24);
+  const [intervalMinutesPart, setIntervalMinutesPart] = useState(0);
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
   const [nextSkip, setNextSkip] = useState(0);
   const [history, setHistory] = useState<MembershipSyncLog[]>([]);
@@ -756,12 +769,14 @@ function MembershipsApiPanel() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const totalIntervalMinutes = Math.max(1, intervalHours * 60 + intervalMinutesPart);
+
   const nextScheduledAt = useMemo(() => {
     if (!enabled) return null;
     const success = history.find((row) => row.status === "success");
     const lastSuccess = success ? new Date(success.finished_at).getTime() : 0;
-    return new Date(Math.max(lastSuccess, scheduleUpdatedAt ?? now) + intervalHours * 3600000);
-  }, [enabled, history, intervalHours, now, scheduleUpdatedAt]);
+    return new Date(Math.max(lastSuccess, scheduleUpdatedAt ?? now) + totalIntervalMinutes * 60000);
+  }, [enabled, history, now, scheduleUpdatedAt, totalIntervalMinutes]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -772,8 +787,13 @@ function MembershipsApiPanel() {
     const response = await fetch("/api/membership-sync-settings", { cache: "no-store" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    const savedIntervalMinutes = Math.max(
+      1,
+      Number(result.settings?.interval_minutes ?? (result.settings?.interval_hours ?? 24) * 60),
+    );
     setEnabled(result.settings?.enabled !== false);
-    setIntervalHours(result.settings?.interval_hours ?? 24);
+    setIntervalHours(Math.floor(savedIntervalMinutes / 60));
+    setIntervalMinutesPart(savedIntervalMinutes % 60);
     setScheduleUpdatedAt(
       new Date(
         result.settings?.schedule_updated_at || result.settings?.updated_at || Date.now(),
@@ -807,13 +827,19 @@ function MembershipsApiPanel() {
     setSaving(true);
     setError("");
     try {
-      const settings = await patchSettings({ enabled: nextEnabled, intervalHours });
+      const intervalMinutes = Math.max(1, intervalHours * 60 + intervalMinutesPart);
+      const settings = await patchSettings({ enabled: nextEnabled, intervalMinutes });
+      const savedIntervalMinutes = Math.max(
+        1,
+        Number(settings.interval_minutes ?? (settings.interval_hours ?? 24) * 60),
+      );
       setEnabled(settings.enabled);
-      setIntervalHours(settings.interval_hours);
+      setIntervalHours(Math.floor(savedIntervalMinutes / 60));
+      setIntervalMinutesPart(savedIntervalMinutes % 60);
       setScheduleUpdatedAt(new Date(settings.schedule_updated_at).getTime());
       setMessage(
         settings.enabled
-          ? `Atualização a cada ${settings.interval_hours} hora(s).`
+          ? `Atualização a cada ${formatIntervalMinutes(savedIntervalMinutes)}.`
           : "Agendamento pausado.",
       );
     } catch (cause) {
@@ -923,14 +949,31 @@ function MembershipsApiPanel() {
 
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-52 space-y-2">
-              <Label htmlFor="membership-sync-hours">Atualização em horas</Label>
+              <Label htmlFor="membership-sync-hours">Horas</Label>
               <Input
                 id="membership-sync-hours"
                 type="number"
-                min={1}
+                min={0}
                 max={720}
                 value={intervalHours}
-                onChange={(event) => setIntervalHours(Math.max(1, Number(event.target.value) || 1))}
+                onChange={(event) =>
+                  setIntervalHours(Math.max(0, Math.min(720, Number(event.target.value) || 0)))
+                }
+              />
+            </div>
+            <div className="w-32 space-y-2">
+              <Label htmlFor="membership-sync-minutes">Minutos</Label>
+              <Input
+                id="membership-sync-minutes"
+                type="number"
+                min={0}
+                max={59}
+                value={intervalMinutesPart}
+                onChange={(event) =>
+                  setIntervalMinutesPart(
+                    Math.max(0, Math.min(59, Number(event.target.value) || 0)),
+                  )
+                }
               />
             </div>
             <Button variant="outline" onClick={() => saveSchedule()} disabled={saving}>

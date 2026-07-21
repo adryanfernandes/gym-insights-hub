@@ -8,11 +8,16 @@ function config() {
 }
 
 function safe(settings?: Record<string, unknown>, inheritedCredential = false) {
+  const intervalMinutes =
+    typeof settings?.interval_minutes === "number"
+      ? settings.interval_minutes
+      : Math.max(1, Number(settings?.interval_hours ?? 24) * 60);
   return settings
     ? {
         id: settings.id,
         enabled: settings.enabled,
         interval_hours: settings.interval_hours,
+        interval_minutes: intervalMinutes,
         updated_at: settings.updated_at,
         schedule_updated_at: settings.schedule_updated_at,
         next_skip: settings.next_skip,
@@ -94,6 +99,7 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
           const input = (await request.json()) as {
             enabled?: boolean;
             intervalHours?: number;
+            intervalMinutes?: number;
             apiCredential?: string;
             restartCycle?: boolean;
           };
@@ -107,6 +113,12 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
           }
           if (typeof input.intervalHours === "number") {
             updates.interval_hours = Math.max(1, Math.min(720, Math.round(input.intervalHours)));
+            scheduleChanged = true;
+          }
+          if (typeof input.intervalMinutes === "number") {
+            const minutes = Math.max(1, Math.min(43200, Math.round(input.intervalMinutes)));
+            updates.interval_minutes = minutes;
+            updates.interval_hours = Math.max(1, Math.ceil(minutes / 60));
             scheduleChanged = true;
           }
           if (scheduleChanged) updates.schedule_updated_at = changedAt;
