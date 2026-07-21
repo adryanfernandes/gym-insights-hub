@@ -107,7 +107,7 @@ function TeacherMultiSelect({
   }
 
   return (
-    <div className="relative flex min-w-[150px] flex-1 flex-col gap-1 sm:flex-none">
+    <div className="relative z-30 flex min-w-[150px] flex-1 flex-col gap-1 sm:flex-none">
       <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </label>
@@ -116,7 +116,7 @@ function TeacherMultiSelect({
           <span className="truncate">{summary}</span>
           <span className="text-[10px] text-muted-foreground">▼</span>
         </summary>
-        <div className="absolute z-50 mt-1 max-h-72 min-w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg">
+        <div className="absolute z-[1000] mt-1 max-h-72 min-w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg">
           {options.map((option) => (
             <label
               key={option}
@@ -206,7 +206,7 @@ function ProfessoresPage() {
       onExportExcel={onExportExcel}
       showFilters={false}
     >
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
+      <div className="relative z-40 flex flex-wrap items-end gap-3 overflow-visible rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
         <TeacherSelect
           label="Período"
           value={filters.periodo}

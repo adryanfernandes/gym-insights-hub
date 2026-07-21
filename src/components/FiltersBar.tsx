@@ -77,7 +77,7 @@ function MultiSelect({
   }
 
   return (
-    <div className="relative flex min-w-40 flex-col gap-1">
+    <div className="relative z-30 flex min-w-40 flex-col gap-1">
       <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </label>
@@ -86,7 +86,7 @@ function MultiSelect({
           <span className="truncate">{summary}</span>
           <span className="text-[10px] text-muted-foreground">▼</span>
         </summary>
-        <div className="absolute z-50 mt-1 max-h-72 min-w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg">
+        <div className="absolute z-[1000] mt-1 max-h-72 min-w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg">
           {options.map((option) => (
             <label
               key={option}
@@ -115,7 +115,7 @@ export function FiltersBar({ extra }: { extra?: React.ReactNode }) {
     (k: "unidade" | "tipoContrato" | "sexo" | "faixaEtaria" | "statusAluno") => (value: string[]) =>
       setFilters({ [k]: value });
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
+    <div className="relative z-40 flex flex-wrap items-end gap-3 overflow-visible rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
       <Select
         label="Período"
         value={filters.periodo}
