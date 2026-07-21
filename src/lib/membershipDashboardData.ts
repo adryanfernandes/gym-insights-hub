@@ -68,6 +68,18 @@ function label(key: string) {
   return format(new Date(`${key}-01T12:00:00`), "MMM/yy");
 }
 
+function selectedValues(selected: string[] | string, allOptions: string[]) {
+  const list = Array.isArray(selected) ? selected : [selected];
+  return list.filter((item) => !allOptions.includes(item));
+}
+
+function matchesSelection(value: string, selected: string[] | string, allOptions: string[]) {
+  const list = Array.isArray(selected) ? selected : [selected];
+  return (
+    list.length === 0 || list.some((item) => allOptions.includes(item)) || list.includes(value)
+  );
+}
+
 function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
   const byMember = new Map<number, MembershipRow[]>();
   rows.forEach((row) => {
@@ -142,14 +154,18 @@ export function getMembershipDashboardData(
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const start = periodStart(filters.periodo, now);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-  const branch = filters.unidade.match(/^\d+$/) ? Number(filters.unidade) : null;
+  const branches = selectedValues(filters.unidade, ["Todas", "Todos"])
+    .filter((value) => value.match(/^\d+$/))
+    .map(Number);
   const memberScoped = filteredMemberIds
     ? memberships.filter((row) => filteredMemberIds.has(row.id_member))
-    : branch
-      ? memberships.filter((row) => row.id_branch === branch)
+    : branches.length
+      ? memberships.filter((row) => row.id_branch != null && branches.includes(row.id_branch))
       : memberships;
-  const scoped = memberScoped.filter(
-    (row) => filters.tipoContrato === "Todos" || row.membership_name === filters.tipoContrato,
+  const scoped = memberScoped.filter((row) =>
+    matchesSelection(row.membership_name?.trim() || "Não informado", filters.tipoContrato, [
+      "Todos",
+    ]),
   );
   const byId = new Map(scoped.map((row) => [row.id_member_membership, row]));
   const scopedReceivables = receivables.filter((row) => byId.has(row.id_member_membership));

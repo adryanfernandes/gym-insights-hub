@@ -119,14 +119,23 @@ function riskLevel(client: ClientRow, referenceDate: Date): "baixo" | "medio" | 
   return "baixo";
 }
 
+function matchesSelection(value: string, selected: string[] | string, allOptions: string[]) {
+  const list = Array.isArray(selected) ? selected : [selected];
+  return (
+    list.length === 0 || list.some((item) => allOptions.includes(item)) || list.includes(value)
+  );
+}
+
 function matchesBaseFilters(client: ClientRow, filters: Filters) {
   return (
-    (["Todas", "Todos"].includes(filters.unidade) || client.bairro === filters.unidade) &&
-    (filters.tipoContrato === "Todos" || client.contrato === filters.tipoContrato) &&
-    (filters.sexo === "Todos" || client.genero === filters.sexo) &&
-    (filters.faixaEtaria === "Todas" || ageRange(client.idade) === filters.faixaEtaria) &&
-    (filters.statusAluno === "Todos" ||
-      (filters.statusAluno === "Ativos" ? client.ativo : !client.ativo))
+    matchesSelection(client.bairro, filters.unidade, ["Todas", "Todos"]) &&
+    matchesSelection(client.contrato, filters.tipoContrato, ["Todos"]) &&
+    matchesSelection(client.genero, filters.sexo, ["Todos"]) &&
+    matchesSelection(ageRange(client.idade), filters.faixaEtaria, ["Todas"]) &&
+    (matchesSelection("Todos", filters.statusAluno, ["Todos"]) ||
+      (client.ativo
+        ? matchesSelection("Ativos", filters.statusAluno, [])
+        : matchesSelection("Inativos", filters.statusAluno, [])))
   );
 }
 
@@ -341,17 +350,20 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     { professor: "Juliana Alves", modalidade: "Alongamento" },
     { professor: "Marcos Vieira", modalidade: "HIIT" },
   ];
-  const teacherBase =
-    filters.unidade === "Todas"
-      ? teacherSeed
-      : teacherSeed.filter((_, index) => index % 3 !== 1).slice(0, 6);
+  const selectedUnidades = Array.isArray(filters.unidade) ? filters.unidade : [filters.unidade];
+  const allUnidadesSelected =
+    selectedUnidades.length === 0 ||
+    selectedUnidades.some((item) => ["Todas", "Todos"].includes(item));
+  const filteredUnidades = selectedUnidades.filter((item) => !["Todas", "Todos"].includes(item));
+  const teacherBase = allUnidadesSelected
+    ? teacherSeed
+    : teacherSeed.filter((_, index) => index % 3 !== 1).slice(0, 6);
   const ocupacaoBase = ocupacao;
   const professoresRanking = teacherBase
     .map((teacher, index) => {
-      const unidade =
-        filters.unidade === "Todas"
-          ? (unidadesPeriodo[index % Math.max(unidadesPeriodo.length, 1)] ?? "Centro")
-          : filters.unidade;
+      const unidade = allUnidadesSelected
+        ? (unidadesPeriodo[index % Math.max(unidadesPeriodo.length, 1)] ?? "Centro")
+        : filteredUnidades[index % Math.max(filteredUnidades.length, 1)];
       const aulas = Math.max(
         12,
         Math.round((range.days / 30) * (18 + (index % 4) * 4 + starts.length / 18)),

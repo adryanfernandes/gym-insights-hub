@@ -104,6 +104,11 @@ function metrics(rows: NormalizedActivity[]) {
   };
 }
 
+function matchesSelection(value: string, selected: string[] | string, allOption: string) {
+  const list = Array.isArray(selected) ? selected : [selected];
+  return list.length === 0 || list.includes(allOption) || list.includes(value);
+}
+
 export function getActivityDashboardData(source: StoredActivity[], filters: Filters) {
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -122,10 +127,10 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
   };
   const rows = periodRows.filter(
     (row) =>
-      (filters.professor === "Todos" || row.instructor === filters.professor) &&
-      (filters.modalidade === "Todas" || row.modality === filters.modalidade) &&
-      (filters.atividadeUnidade === "Todas" || row.area === filters.atividadeUnidade) &&
-      (filters.horario === "Todos" || row.startTime === filters.horario),
+      matchesSelection(row.instructor, filters.professor, "Todos") &&
+      matchesSelection(row.modality, filters.modalidade, "Todas") &&
+      matchesSelection(row.area, filters.atividadeUnidade, "Todas") &&
+      matchesSelection(row.startTime, filters.horario, "Todos"),
   );
   const totals = metrics(rows);
 

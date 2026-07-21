@@ -73,6 +73,70 @@ function TeacherSelect({
   );
 }
 
+function TeacherMultiSelect({
+  label,
+  value,
+  options,
+  allOption,
+  onChange,
+}: {
+  label: string;
+  value: string[];
+  options: string[];
+  allOption: string;
+  onChange: (value: string[]) => void;
+}) {
+  const selected = value.length ? value : [allOption];
+  const activeOptions = selected.includes(allOption) ? [] : selected;
+  const summary = activeOptions.length
+    ? activeOptions.length === 1
+      ? activeOptions[0]
+      : `${activeOptions.length} selecionados`
+    : allOption;
+
+  function toggle(option: string) {
+    if (option === allOption) {
+      onChange([allOption]);
+      return;
+    }
+    const withoutAll = selected.filter((item) => item !== allOption);
+    const next = withoutAll.includes(option)
+      ? withoutAll.filter((item) => item !== option)
+      : [...withoutAll, option];
+    onChange(next.length ? next : [allOption]);
+  }
+
+  return (
+    <div className="relative flex min-w-[150px] flex-1 flex-col gap-1 sm:flex-none">
+      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </label>
+      <details className="group">
+        <summary className="flex h-9 max-w-[240px] cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-input bg-card px-2 text-sm text-foreground transition hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring">
+          <span className="truncate">{summary}</span>
+          <span className="text-[10px] text-muted-foreground">▼</span>
+        </summary>
+        <div className="absolute z-50 mt-1 max-h-72 min-w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg">
+          {options.map((option) => (
+            <label
+              key={option}
+              className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-popover-foreground hover:bg-accent"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={() => toggle(option)}
+                className="h-4 w-4 rounded border-input accent-primary"
+              />
+              <span className="whitespace-nowrap">{option}</span>
+            </label>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function ProfessoresPage() {
   const { filters, setFilters } = useApp();
   const { data, loadingActivities, activitiesError } = useDashboardData(filters);
@@ -89,10 +153,10 @@ function ProfessoresPage() {
   useEffect(() => {
     return () =>
       setFiltersRef.current({
-        professor: "Todos",
-        modalidade: "Todas",
-        atividadeUnidade: "Todas",
-        horario: "Todos",
+        professor: ["Todos"],
+        modalidade: ["Todas"],
+        atividadeUnidade: ["Todas"],
+        horario: ["Todos"],
       });
   }, []);
 
@@ -150,45 +214,49 @@ function ProfessoresPage() {
           onChange={(periodo) =>
             setFilters({
               periodo,
-              professor: "Todos",
-              modalidade: "Todas",
-              atividadeUnidade: "Todas",
-              horario: "Todos",
+              professor: ["Todos"],
+              modalidade: ["Todas"],
+              atividadeUnidade: ["Todas"],
+              horario: ["Todos"],
             })
           }
         />
-        <TeacherSelect
+        <TeacherMultiSelect
           label="Professor"
           value={filters.professor}
           options={data.activityFilterOptions.professores}
+          allOption="Todos"
           onChange={(professor) => setFilters({ professor })}
         />
-        <TeacherSelect
+        <TeacherMultiSelect
           label="Modalidade"
           value={filters.modalidade}
           options={data.activityFilterOptions.modalidades}
+          allOption="Todas"
           onChange={(modalidade) => setFilters({ modalidade })}
         />
-        <TeacherSelect
+        <TeacherMultiSelect
           label="Área / Unidade"
           value={filters.atividadeUnidade}
           options={data.activityFilterOptions.unidades}
+          allOption="Todas"
           onChange={(atividadeUnidade) => setFilters({ atividadeUnidade })}
         />
-        <TeacherSelect
+        <TeacherMultiSelect
           label="Horário"
           value={filters.horario}
           options={data.activityFilterOptions.horarios}
+          allOption="Todos"
           onChange={(horario) => setFilters({ horario })}
         />
         <button
           type="button"
           onClick={() =>
             setFilters({
-              professor: "Todos",
-              modalidade: "Todas",
-              atividadeUnidade: "Todas",
-              horario: "Todos",
+              professor: ["Todos"],
+              modalidade: ["Todas"],
+              atividadeUnidade: ["Todas"],
+              horario: ["Todos"],
             })
           }
           className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-medium transition hover:bg-accent"

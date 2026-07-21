@@ -47,6 +47,13 @@ const PIE_COLORS = [
   "var(--chart-5)",
 ];
 
+function selectionLabel(values: string[], allOption: string) {
+  const active = values.includes(allOption) ? [] : values;
+  if (!active.length) return allOption.toLowerCase();
+  if (active.length === 1) return active[0].toLowerCase();
+  return `${active.length} selecionados`;
+}
+
 function PerfilPage() {
   const { filters, setFilters } = useApp();
   const { data } = useDashboardData(filters);
@@ -67,7 +74,7 @@ function PerfilPage() {
   }, [setFilters]);
 
   useEffect(() => {
-    return () => setFiltersRef.current({ statusAluno: "Todos" });
+    return () => setFiltersRef.current({ statusAluno: ["Todos"] });
   }, []);
 
   const onExportExcel = () =>
@@ -101,7 +108,7 @@ function PerfilPage() {
         <KpiCard
           label="Alunos no recorte"
           value={formatNum(k.clientesFiltrados)}
-          hint={`Status: ${filters.statusAluno.toLowerCase()}`}
+          hint={`Status: ${selectionLabel(filters.statusAluno, "Todos")}`}
           icon={<UserRoundCheck className="h-5 w-5" />}
         />
         <KpiCard

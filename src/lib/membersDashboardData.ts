@@ -397,10 +397,14 @@ function useDashboardDataState(filters: Filters) {
     const activeMemberIds = sourceRows.length
       ? new Set(sourceRows.filter((member) => member.ativo).map((member) => member.id))
       : undefined;
-    const filteredMemberIds = !["Todas", "Todos"].includes(filters.unidade)
+    const selectedUnidades = Array.isArray(filters.unidade) ? filters.unidade : [filters.unidade];
+    const filteredUnidades = selectedUnidades.filter(
+      (unidade) => !["Todas", "Todos"].includes(unidade),
+    );
+    const filteredMemberIds = filteredUnidades.length
       ? new Set(
           sourceRows
-            .filter((member) => member.bairro === filters.unidade)
+            .filter((member) => filteredUnidades.includes(member.bairro))
             .map((member) => member.id),
         )
       : undefined;

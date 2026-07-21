@@ -2,15 +2,15 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 export type Filters = {
   periodo: string;
-  unidade: string;
-  tipoContrato: string;
-  sexo: string;
-  faixaEtaria: string;
-  professor: string;
-  modalidade: string;
-  atividadeUnidade: string;
-  horario: string;
-  statusAluno: string;
+  unidade: string[];
+  tipoContrato: string[];
+  sexo: string[];
+  faixaEtaria: string[];
+  professor: string[];
+  modalidade: string[];
+  atividadeUnidade: string[];
+  horario: string[];
+  statusAluno: string[];
 };
 
 export type AppRole = "admin" | "gestor";
@@ -78,15 +78,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [filters, setFiltersState] = useState<Filters>({
     periodo: "Últimos 30 dias",
-    unidade: "Todos",
-    tipoContrato: "Todos",
-    sexo: "Todos",
-    faixaEtaria: "Todas",
-    professor: "Todos",
-    modalidade: "Todas",
-    atividadeUnidade: "Todas",
-    horario: "Todos",
-    statusAluno: "Todos",
+    unidade: ["Todos"],
+    tipoContrato: ["Todos"],
+    sexo: ["Todos"],
+    faixaEtaria: ["Todas"],
+    professor: ["Todos"],
+    modalidade: ["Todas"],
+    atividadeUnidade: ["Todas"],
+    horario: ["Todos"],
+    statusAluno: ["Todos"],
   });
   const [users, setUsers] = useState<AppUser[]>([ADMIN_USER]);
   const [user, setUser] = useState<AppUser | null>(null);
