@@ -426,6 +426,7 @@ function useDashboardDataState(filters: Filters) {
         taxaOcupacaoAgenda: activityData.overviewOccupancy,
       },
       ocupacaoAgenda: activityData.ocupacaoAgenda,
+      agendaHoje: activityData.agendaHoje,
       professores: activityData.professores,
       activityFilterOptions: activityData.filterOptions,
       faturamentoMensal: membershipData.faturamentoMensal,
