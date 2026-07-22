@@ -209,10 +209,9 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
       matchesSelection(row.startTime, filters.horario, "Todos"),
   );
   const totals = metrics(rows);
-  const agendaHoje = normalizedRows
+  const agendaEventos = normalizedRows
     .filter(
       (row) =>
-        format(row.date, "yyyy-MM-dd") === todayKey &&
         matchesSelection(row.instructor, filters.professor, "Todos") &&
         matchesSelection(row.modality, filters.modalidade, "Todas") &&
         matchesSelection(row.area, filters.atividadeUnidade, "Todas") &&
@@ -222,7 +221,9 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
     .map((row) => {
       const startMinutes = timeToMinutes(row.startTime);
       const endMinutes = row.endTime ? timeToMinutes(row.endTime) : startMinutes + 60;
+      const dateKey = format(row.date, "yyyy-MM-dd");
       return {
+        data: dateKey,
         horario: row.startTime,
         fim: row.endTime || "--:--",
         atividade: row.modality,
@@ -231,9 +232,11 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
         capacidade: row.capacity,
         participantes: row.participants.length || row.occupied,
         participantesLista: row.participants,
-        acontecendoAgora: nowMinutes >= startMinutes && nowMinutes <= endMinutes,
+        acontecendoAgora:
+          dateKey === todayKey && nowMinutes >= startMinutes && nowMinutes <= endMinutes,
       };
     });
+  const agendaHoje = agendaEventos.filter((row) => row.data === todayKey);
 
   const ranking = Array.from(aggregate(rows, (row) => row.instructor).entries())
     .map(([professor, teacherRows]) => {
@@ -302,6 +305,7 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
     filterOptions,
     overviewOccupancy: totals.occupancy,
     ocupacaoAgenda: porHorario.map(({ horario, ocupacao }) => ({ horario, ocupacao })),
+    agendaEventos,
     agendaHoje,
     professores: {
       kpis: {

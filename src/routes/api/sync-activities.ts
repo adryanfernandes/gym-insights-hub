@@ -324,6 +324,23 @@ async function upsertActivities(rows: Record<string, unknown>[]) {
   }
 }
 
+async function hasSavedParticipantsForDate(date: string) {
+  const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
+  const response = await fetch(
+    `${url}/rest/v1/activities?select=payload&query_date=eq.${date}&limit=1000`,
+    {
+      headers: { apikey: requiredEnv("SUPABASE_SECRET_KEY") },
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) return false;
+  const rows = (await response.json()) as Array<{ payload?: unknown }>;
+  return rows.some((row) => {
+    if (!isObject(row.payload)) return false;
+    return Array.isArray(row.payload.enrollments) && row.payload.enrollments.length > 0;
+  });
+}
+
 async function recordHistory(entry: Record<string, unknown>) {
   const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
   const response = await fetch(`${url}/rest/v1/activity_sync_history`, {
@@ -394,8 +411,11 @@ export const Route = createFileRoute("/api/sync-activities")({
           const queuedDate = queue.next_query_date?.slice(0, 10);
           const queuedMonth = queue.cycle_month?.slice(0, 10);
           const lastAttemptDate = fortalezaDateFromIso(queue.last_attempt_at);
+          const todayHasParticipants = await hasSavedParticipantsForDate(today);
           if (queuedDate && priorityDates.includes(queuedDate)) {
             queryDate = queuedDate;
+          } else if (!todayHasParticipants) {
+            queryDate = today;
           } else if (lastAttemptDate !== today) {
             queryDate = today;
           } else if (

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -74,6 +74,16 @@ function displayDate(value: string | null) {
   return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleDateString("pt-BR");
 }
 
+function todayInputDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Fortaleza",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
+}
+
 function GeralPage() {
   const { filters } = useApp();
   const { data } = useDashboardData(filters);
@@ -85,6 +95,8 @@ function GeralPage() {
   const [selectedActivity, setSelectedActivity] = useState<
     (typeof data.agendaHoje)[number] | null
   >(null);
+  const [selectedAgendaDate, setSelectedAgendaDate] = useState(todayInputDate);
+  const currentActivityRef = useRef<HTMLTableRowElement | null>(null);
   const [activePage, setActivePage] = useState(1);
   const renewalDeactivation = Number(k.taxaDesativacaoRenovacao).toFixed(2).replace(".", ",");
   const activePages = Math.max(1, Math.ceil(data.alunosAtivosLista.length / ACTIVE_PAGE_SIZE));
@@ -92,6 +104,12 @@ function GeralPage() {
     (activePage - 1) * ACTIVE_PAGE_SIZE,
     activePage * ACTIVE_PAGE_SIZE,
   );
+  const agendaSelecionada = data.agendaEventos.filter(
+    (activity) => activity.data === selectedAgendaDate,
+  );
+  useEffect(() => {
+    currentActivityRef.current?.scrollIntoView({ block: "center" });
+  }, [agendaSelecionada]);
 
   const exportActiveStudents = () =>
     exportToExcel("alunos-ativos", {
@@ -122,7 +140,8 @@ function GeralPage() {
       ],
       EvolucaoAlunos: data.evolucaoAlunos,
       OcupacaoAgenda: data.ocupacaoAgenda,
-      AgendaHoje: data.agendaHoje.map((activity) => ({
+      Agenda: agendaSelecionada.map((activity) => ({
+        Data: displayDate(activity.data),
         Horário: `${activity.horario} - ${activity.fim}`,
         Atividade: activity.atividade,
         Professor: activity.professor,
@@ -612,25 +631,36 @@ function GeralPage() {
             </li>
           </ul>
         </div>
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="rounded-xl border border-border bg-card p-5 lg:col-span-2">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Agenda de hoje</h2>
+              <h2 className="text-sm font-semibold">Agenda por dia</h2>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Atividades do dia atual com professor, lotação e destaque da aula em andamento.
+              Escolha uma data para verificar eventos passados ou futuros com professor e lotação.
             </p>
           </div>
-          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-            {formatNum(data.agendaHoje.length)} atividades
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-xs font-medium text-muted-foreground">
+              Dia
+              <input
+                type="date"
+                value={selectedAgendaDate}
+                onChange={(event) => setSelectedAgendaDate(event.target.value)}
+                className="ml-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              {formatNum(agendaSelecionada.length)} atividades
+            </span>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="max-h-[390px] overflow-auto rounded-lg border border-border">
           <table className="w-full min-w-[860px] text-sm">
-            <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
+            <thead className="sticky top-0 z-10 bg-muted text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">Horário</th>
                 <th className="px-4 py-3">Atividade</th>
@@ -642,8 +672,9 @@ function GeralPage() {
               </tr>
             </thead>
             <tbody>
-              {data.agendaHoje.map((activity) => (
+              {agendaSelecionada.map((activity) => (
                 <tr
+                  ref={activity.acontecendoAgora ? currentActivityRef : null}
                   key={`${activity.horario}-${activity.atividade}-${activity.professor}`}
                   className={`border-t border-border transition hover:bg-accent/40 ${
                     activity.acontecendoAgora ? "bg-primary/5" : ""
@@ -679,10 +710,10 @@ function GeralPage() {
                   </td>
                 </tr>
               ))}
-              {!data.agendaHoje.length && (
+              {!agendaSelecionada.length && (
                 <tr>
                   <td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">
-                    Nenhuma atividade encontrada para hoje com os filtros atuais.
+                    Nenhuma atividade encontrada para o dia selecionado com os filtros atuais.
                   </td>
                 </tr>
               )}
