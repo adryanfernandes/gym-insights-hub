@@ -34,8 +34,6 @@ function ClientesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  if (pathname !== "/clientes") return <Outlet />;
-
   const contractsByClient = useMemo(() => {
     const map = new Map<number, { total: number; latest: string }>();
     memberships.forEach((contract) => {
@@ -74,6 +72,8 @@ function ClientesPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  if (pathname !== "/clientes") return <Outlet />;
 
   return (
     <DashboardLayout
