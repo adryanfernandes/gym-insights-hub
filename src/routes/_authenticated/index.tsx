@@ -217,85 +217,6 @@ function GeralPage() {
         />
       </div>
 
-      <section className="rounded-xl border border-border bg-card p-5">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Agenda de hoje</h2>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Atividades do dia atual com professor, lotação e destaque da aula em andamento.
-            </p>
-          </div>
-          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-            {formatNum(data.agendaHoje.length)} atividades
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Horário</th>
-                <th className="px-4 py-3">Atividade</th>
-                <th className="px-4 py-3">Professor</th>
-                <th className="px-4 py-3">Unidade</th>
-                <th className="px-4 py-3 text-right">Participantes</th>
-                <th className="px-4 py-3 text-right">Capacidade</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.agendaHoje.map((activity) => (
-                <tr
-                  key={`${activity.horario}-${activity.atividade}-${activity.professor}`}
-                  className={`border-t border-border transition hover:bg-accent/40 ${
-                    activity.acontecendoAgora ? "bg-primary/5" : ""
-                  }`}
-                >
-                  <td className="px-4 py-3 font-mono font-medium">
-                    {activity.horario} - {activity.fim}
-                  </td>
-                  <td className="px-4 py-3 font-medium">{activity.atividade}</td>
-                  <td className="px-4 py-3">{activity.professor}</td>
-                  <td className="px-4 py-3">{activity.unidade}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedActivity(activity)}
-                      className="rounded-md px-2 py-1 font-semibold text-primary transition hover:bg-primary/10"
-                      title="Clique para ver os participantes"
-                    >
-                      {formatNum(activity.participantes)}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-right">{formatNum(activity.capacidade)}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
-                        activity.acontecendoAgora
-                          ? "bg-success/15 text-success"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {activity.acontecendoAgora ? "Acontecendo agora" : "Programada"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {!data.agendaHoje.length && (
-                <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">
-                    Nenhuma atividade encontrada para hoje com os filtros atuais.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       <Dialog
         open={activeStudentsOpen}
         onOpenChange={(open) => {
@@ -691,6 +612,86 @@ function GeralPage() {
             </li>
           </ul>
         </div>
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Agenda de hoje</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Atividades do dia atual com professor, lotação e destaque da aula em andamento.
+            </p>
+          </div>
+          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+            {formatNum(data.agendaHoje.length)} atividades
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3">Horário</th>
+                <th className="px-4 py-3">Atividade</th>
+                <th className="px-4 py-3">Professor</th>
+                <th className="px-4 py-3">Unidade</th>
+                <th className="px-4 py-3 text-right">Participantes</th>
+                <th className="px-4 py-3 text-right">Capacidade</th>
+                <th className="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.agendaHoje.map((activity) => (
+                <tr
+                  key={`${activity.horario}-${activity.atividade}-${activity.professor}`}
+                  className={`border-t border-border transition hover:bg-accent/40 ${
+                    activity.acontecendoAgora ? "bg-primary/5" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3 font-mono font-medium">
+                    {activity.horario} - {activity.fim}
+                  </td>
+                  <td className="px-4 py-3 font-medium">{activity.atividade}</td>
+                  <td className="px-4 py-3">{activity.professor}</td>
+                  <td className="px-4 py-3">{activity.unidade}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedActivity(activity)}
+                      className="rounded-md px-2 py-1 font-semibold text-primary transition hover:bg-primary/10"
+                      title="Clique para ver os participantes"
+                    >
+                      {formatNum(activity.participantes)}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-right">{formatNum(activity.capacidade)}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
+                        activity.acontecendoAgora
+                          ? "bg-success/15 text-success"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {activity.acontecendoAgora ? "Acontecendo agora" : "Programada"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {!data.agendaHoje.length && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">
+                    Nenhuma atividade encontrada para hoje com os filtros atuais.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+
       </div>
     </DashboardLayout>
   );

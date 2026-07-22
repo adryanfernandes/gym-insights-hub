@@ -8,6 +8,7 @@ type Activity = Record<string, unknown>;
 type ActivityQueueSettings = {
   next_query_date?: string | null;
   cycle_month?: string | null;
+  last_attempt_at?: string | null;
 };
 
 function requiredEnv(name: string) {
@@ -84,6 +85,48 @@ function currentMonth() {
 
 function isoDate(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function fortalezaToday() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Fortaleza",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
+}
+
+function addIsoDays(date: string, days: number) {
+  const parsed = new Date(`${date}T12:00:00Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function priorityActivityDates() {
+  const today = fortalezaToday();
+  return Array.from({ length: 6 }, (_, index) => addIsoDays(today, index));
+}
+
+function fortalezaDateFromIso(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Fortaleza",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
+}
+
+function nextActivityQueueDate(queryDate: string, priorityDates: string[], monthStart: string) {
+  const priorityIndex = priorityDates.indexOf(queryDate);
+  if (priorityIndex >= 0) {
+    return priorityDates[priorityIndex + 1] ?? monthStart;
+  }
+  return null;
 }
 
 async function getAuthorization() {
@@ -298,7 +341,7 @@ async function recordHistory(entry: Record<string, unknown>) {
 async function loadQueueSettings() {
   const url = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
   const response = await fetch(
-    `${url}/rest/v1/activity_sync_settings?select=next_query_date,cycle_month&id=eq.true&limit=1`,
+    `${url}/rest/v1/activity_sync_settings?select=next_query_date,cycle_month,last_attempt_at&id=eq.true&limit=1`,
     {
       headers: { apikey: requiredEnv("SUPABASE_SECRET_KEY") },
       cache: "no-store",
@@ -341,14 +384,21 @@ export const Route = createFileRoute("/api/sync-activities")({
         const { year, month, days } = currentMonth();
         const monthStart = isoDate(year, month, 1);
         const monthEnd = isoDate(year, month, days);
-        let queryDate = monthStart;
+        const priorityDates = priorityActivityDates();
+        const today = priorityDates[0] ?? monthStart;
+        let queryDate = priorityDates[0] ?? monthStart;
         let daysQueried = 0;
         try {
-          await updateQueueSettings({ last_attempt_at: startedAtIso });
           const queue = await loadQueueSettings();
+          await updateQueueSettings({ last_attempt_at: startedAtIso });
           const queuedDate = queue.next_query_date?.slice(0, 10);
           const queuedMonth = queue.cycle_month?.slice(0, 10);
-          if (
+          const lastAttemptDate = fortalezaDateFromIso(queue.last_attempt_at);
+          if (queuedDate && priorityDates.includes(queuedDate)) {
+            queryDate = queuedDate;
+          } else if (lastAttemptDate !== today) {
+            queryDate = today;
+          } else if (
             queuedMonth === monthStart &&
             queuedDate &&
             queuedDate >= monthStart &&
@@ -381,8 +431,12 @@ export const Route = createFileRoute("/api/sync-activities")({
           await upsertActivities(uniqueRows);
           const finishedAt = new Date().toISOString();
           const currentDay = Number(queryDate.slice(8, 10));
-          const cycleCompleted = currentDay >= days;
-          const nextQueryDate = cycleCompleted ? monthStart : isoDate(year, month, currentDay + 1);
+          const priorityNextDate = nextActivityQueueDate(queryDate, priorityDates, monthStart);
+          const isMonthlyQuery = queryDate >= monthStart && queryDate <= monthEnd;
+          const cycleCompleted = isMonthlyQuery && currentDay >= days;
+          const nextQueryDate =
+            priorityNextDate ??
+            (cycleCompleted ? monthStart : isoDate(year, month, currentDay + 1));
           await updateQueueSettings({
             next_query_date: nextQueryDate,
             cycle_month: monthStart,
