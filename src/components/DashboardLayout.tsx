@@ -106,7 +106,7 @@ export function DashboardLayout({
                 Administração
               </p>
               {ADMIN_NAV.map((item) => {
-                const active = pathname === item.to || (item.to !== "/" && pathname.StartsWith(`${item.to}/`));
+                const active = pathname === item.to || (item.to !== "/" && pathname.startsWith(`${item.to}/`));
                 const Icon = item.icon;
                 return (
                   <Link
