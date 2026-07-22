@@ -143,6 +143,52 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
   }));
 }
 
+function renewalsInPeriod(rows: MembershipRow[], start: Date, end: Date) {
+  const byMember = new Map<number, MembershipRow[]>();
+  rows.forEach((row) => {
+    const group = byMember.get(row.id_member) ?? [];
+    group.push(row);
+    byMember.set(row.id_member, group);
+  });
+
+  let total = 0;
+  byMember.forEach((memberRows) => {
+    const periodsByStart = new Map<string, { start: Date; end: Date | null; performedAt: Date }>();
+
+    memberRows.forEach((row) => {
+      const startDate = date(row.membership_start || row.sale_date);
+      if (!startDate) return;
+      const key = format(startDate, "yyyy-MM-dd");
+      const endDate = date(row.membership_end);
+      const performedAt = date(row.sale_date) ?? startDate;
+      const current = periodsByStart.get(key);
+      periodsByStart.set(key, {
+        start: startDate,
+        end: endDate && (!current?.end || endDate > current.end) ? endDate : (current?.end ?? null),
+        performedAt:
+          current && current.performedAt < performedAt ? current.performedAt : performedAt,
+      });
+    });
+
+    const periods = Array.from(periodsByStart.values()).sort(
+      (a, b) => a.start.getTime() - b.start.getTime(),
+    );
+    let previousEnd = periods[0]?.end ?? null;
+
+    periods.slice(1).forEach((period) => {
+      const gap = previousEnd
+        ? differenceInCalendarDays(period.start, previousEnd)
+        : Number.POSITIVE_INFINITY;
+      if (gap >= -30 && gap <= 30 && period.performedAt >= start && period.performedAt <= end) {
+        total += 1;
+      }
+      previousEnd = period.end;
+    });
+  });
+
+  return total;
+}
+
 export function getMembershipDashboardData(
   memberships: MembershipRow[],
   receivables: ReceivableRow[],
@@ -197,6 +243,7 @@ export function getMembershipDashboardData(
     return value && value >= start && value <= end;
   });
   const totalSales = sales.reduce((sum, row) => sum + num(row.sale_value), 0);
+  const renovacoesPeriodo = renewalsInPeriod(scoped, start, end);
   const currentMonth = monthKey(now);
   const paidCurrentMonth = scopedReceivables.reduce((sum, row) => {
     const reference = date(row.receiving_date || row.registration_date);
@@ -313,6 +360,12 @@ export function getMembershipDashboardData(
       cancelamentos30d: {
         qtd: cancellations.length,
         valor: cancellations.reduce((sum, row) => sum + num(row.sale_value), 0),
+      },
+      movimentacaoPeriodo: {
+        entradas: sales.length,
+        saidas: cancellations.length,
+        saldo: sales.length - cancellations.length,
+        renovacoes: renovacoesPeriodo,
       },
       taxaDesativacaoRenovacao: (cancellations.length / Math.max(sales.length, 1)) * 100,
       faturamentoMes: paidCurrentMonth,

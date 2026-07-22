@@ -11,6 +11,8 @@ export type ActivityParticipant = {
   id: string;
   name: string;
   status: string;
+  contrato?: string;
+  vigencia?: string;
 };
 
 type NormalizedActivity = {

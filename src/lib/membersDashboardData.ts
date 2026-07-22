@@ -137,6 +137,36 @@ function toBRDate(value: unknown) {
   return date ? format(date, "dd/MM/yyyy") : null;
 }
 
+function contractForMemberAt(
+  contracts: MembershipRow[],
+  memberId: number,
+  referenceDate: string,
+) {
+  const activityDate = new Date(`${referenceDate}T12:00:00`);
+  const memberContracts = contracts.filter((contract) => contract.id_member === memberId);
+  const ordered = memberContracts
+    .map((contract) => {
+      const start = toDate(contract.membership_start || contract.sale_date);
+      const end = toDate(contract.membership_end);
+      return { contract, start, end };
+    })
+    .sort((a, b) => (b.start?.getTime() ?? 0) - (a.start?.getTime() ?? 0));
+  const selected =
+    ordered.find(
+      (row) =>
+        (!row.start || row.start <= activityDate) &&
+        (!row.end || row.end >= activityDate) &&
+        !row.contract.cancel_date,
+    ) ?? ordered[0];
+  if (!selected) return null;
+  return {
+    contrato: selected.contract.membership_name || "Contrato não informado",
+    vigencia: `${toBRDate(selected.contract.membership_start || selected.contract.sale_date) ?? "-"} a ${
+      toBRDate(selected.contract.membership_end) ?? "-"
+    }`,
+  };
+}
+
 function normalizeGender(value: unknown) {
   const raw = toStringValue(value).toLowerCase();
   if (["m", "masc", "masculino", "male", "homem"].includes(raw)) return "Masculino";
@@ -418,6 +448,17 @@ function useDashboardDataState(filters: Filters) {
   }, [filters, memberships, receivables, sourceRows]);
   const data = useMemo(() => {
     const membersById = new Map(sourceRows.map((member) => [member.id, member]));
+    const enrichAgenda = (agenda: typeof activityData.agendaHoje) =>
+      agenda.map((activity) => ({
+        ...activity,
+        participantesLista: activity.participantesLista.map((participant) => {
+          const memberId = Number(participant.id);
+          const contract = Number.isFinite(memberId)
+            ? contractForMemberAt(memberships, memberId, activity.data)
+            : null;
+          return contract ? { ...participant, ...contract } : participant;
+        }),
+      }));
     return {
       ...memberData,
       overviewKpis: {
@@ -426,8 +467,8 @@ function useDashboardDataState(filters: Filters) {
         taxaOcupacaoAgenda: activityData.overviewOccupancy,
       },
       ocupacaoAgenda: activityData.ocupacaoAgenda,
-      agendaEventos: activityData.agendaEventos,
-      agendaHoje: activityData.agendaHoje,
+      agendaEventos: enrichAgenda(activityData.agendaEventos),
+      agendaHoje: enrichAgenda(activityData.agendaHoje),
       professores: activityData.professores,
       activityFilterOptions: activityData.filterOptions,
       faturamentoMensal: membershipData.faturamentoMensal,
@@ -444,7 +485,7 @@ function useDashboardDataState(filters: Filters) {
         aluno: membersById.get(cancellation.idAluno)?.nome ?? `Aluno ${cancellation.idAluno}`,
       })),
     };
-  }, [activityData, memberData, membershipData, sourceRows]);
+  }, [activityData, memberData, membershipData, memberships, sourceRows]);
   const filterOptions = useMemo(() => getDashboardFilterOptions(sourceRows), [sourceRows]);
 
   return {

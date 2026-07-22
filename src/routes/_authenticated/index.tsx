@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -84,6 +84,84 @@ function todayInputDate() {
   return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
 }
 
+type SortDirection = "asc" | "desc";
+type SortState = { key: string; direction: SortDirection } | null;
+
+function parseSortableDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const raw = value.trim();
+  const iso = new Date(raw);
+  if (!Number.isNaN(iso.getTime())) return iso.getTime();
+  const br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!br) return null;
+  const [, day, month, year] = br;
+  const fullYear = year.length === 2 ? `20${year}` : year;
+  const parsed = new Date(Number(fullYear), Number(month) - 1, Number(day));
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+function compareSortableValues(a: unknown, b: unknown) {
+  const aDate = parseSortableDate(a);
+  const bDate = parseSortableDate(b);
+  if (aDate !== null && bDate !== null) return aDate - bDate;
+
+  const aNumber = typeof a === "number" ? a : Number(String(a ?? "").replace(",", "."));
+  const bNumber = typeof b === "number" ? b : Number(String(b ?? "").replace(",", "."));
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+
+  return String(a ?? "").localeCompare(String(b ?? ""), "pt-BR", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function sortedRows<T>(
+  rows: T[],
+  sort: SortState,
+  accessors: Record<string, (row: T) => unknown>,
+) {
+  if (!sort) return rows;
+  const accessor = accessors[sort.key];
+  if (!accessor) return rows;
+  const multiplier = sort.direction === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => compareSortableValues(accessor(a), accessor(b)) * multiplier);
+}
+
+function nextSort(current: SortState, key: string): SortState {
+  if (current?.key !== key) return { key, direction: "asc" };
+  return { key, direction: current.direction === "asc" ? "desc" : "asc" };
+}
+
+function SortHeader({
+  id,
+  label,
+  sort,
+  onSort,
+  align = "left",
+}: {
+  id: string;
+  label: string;
+  sort: SortState;
+  onSort: (key: string) => void;
+  align?: "left" | "right";
+}) {
+  const active = sort?.key === id;
+  return (
+    <th className={`px-5 py-3 ${align === "right" ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={() => onSort(id)}
+        className={`inline-flex items-center gap-1 font-semibold uppercase transition hover:text-foreground ${
+          align === "right" ? "justify-end" : ""
+        }`}
+      >
+        {label}
+        <span className="text-[10px]">{active ? (sort.direction === "asc" ? "▲" : "▼") : "↕"}</span>
+      </button>
+    </th>
+  );
+}
+
 function GeralPage() {
   const { filters } = useApp();
   const { data } = useDashboardData(filters);
@@ -98,18 +176,93 @@ function GeralPage() {
   const [selectedAgendaDate, setSelectedAgendaDate] = useState(todayInputDate);
   const currentActivityRef = useRef<HTMLTableRowElement | null>(null);
   const [activePage, setActivePage] = useState(1);
+  const [activeSort, setActiveSort] = useState<SortState>(null);
+  const [salesSort, setSalesSort] = useState<SortState>(null);
+  const [cancellationsSort, setCancellationsSort] = useState<SortState>(null);
+  const [riskSort, setRiskSort] = useState<SortState>(null);
+  const [participantsSort, setParticipantsSort] = useState<SortState>(null);
   const renewalDeactivation = Number(k.taxaDesativacaoRenovacao).toFixed(2).replace(".", ",");
-  const activePages = Math.max(1, Math.ceil(data.alunosAtivosLista.length / ACTIVE_PAGE_SIZE));
-  const activeRows = data.alunosAtivosLista.slice(
+  const movimentacaoPeriodo = k.movimentacaoPeriodo ?? {
+    entradas: 0,
+    saidas: 0,
+    saldo: 0,
+    renovacoes: 0,
+  };
+  const sortedActiveStudents = useMemo(
+    () =>
+      sortedRows(data.alunosAtivosLista, activeSort, {
+        id: (row) => row.id,
+        nome: (row) => row.nome,
+        contrato: (row) => row.contrato,
+        bairro: (row) => row.bairro,
+        inicio: (row) => row.inicio,
+        vencimento: (row) => row.vencimento,
+        ultimaFrequencia: (row) => row.ultimaFrequencia,
+      }),
+    [activeSort, data.alunosAtivosLista],
+  );
+  const activePages = Math.max(1, Math.ceil(sortedActiveStudents.length / ACTIVE_PAGE_SIZE));
+  const activeRows = sortedActiveStudents.slice(
     (activePage - 1) * ACTIVE_PAGE_SIZE,
     activePage * ACTIVE_PAGE_SIZE,
+  );
+  const sortedSales = useMemo(
+    () =>
+      sortedRows(data.vendasLista, salesSort, {
+        idVenda: (row) => row.idVenda,
+        aluno: (row) => row.aluno,
+        contrato: (row) => row.contrato,
+        dataVenda: (row) => row.dataVenda,
+        vencimento: (row) => row.vencimento,
+        valor: (row) => row.valor,
+      }),
+    [data.vendasLista, salesSort],
+  );
+  const sortedCancellations = useMemo(
+    () =>
+      sortedRows(data.cancelamentosLista, cancellationsSort, {
+        idContrato: (row) => row.idContrato,
+        aluno: (row) => row.aluno,
+        contrato: (row) => row.contrato,
+        dataCancelamento: (row) => row.dataCancelamento,
+        motivo: (row) => row.motivo,
+        valorVenda: (row) => row.valorVenda,
+        multa: (row) => row.multa,
+        valorRestante: (row) => row.valorRestante,
+      }),
+    [cancellationsSort, data.cancelamentosLista],
+  );
+  const sortedRiskStudents = useMemo(
+    () =>
+      sortedRows(data.alunosRiscoLista, riskSort, {
+        id: (row) => row.id,
+        nome: (row) => row.nome,
+        contrato: (row) => row.contrato,
+        bairro: (row) => row.bairro,
+        ultimaFrequencia: (row) => row.ultimaFrequencia,
+        diasSemAtividade: (row) => row.diasSemAtividade,
+        vencimento: (row) => row.vencimento,
+        nivelRisco: (row) => row.nivelRisco,
+      }),
+    [data.alunosRiscoLista, riskSort],
   );
   const agendaSelecionada = data.agendaEventos.filter(
     (activity) => activity.data === selectedAgendaDate,
   );
+  const sortedParticipants = useMemo(
+    () =>
+      sortedRows(selectedActivity?.participantesLista ?? [], participantsSort, {
+        id: (row) => row.id,
+        name: (row) => row.name,
+        contrato: (row) => row.contrato,
+        vigencia: (row) => row.vigencia,
+        status: (row) => row.status,
+      }),
+    [participantsSort, selectedActivity],
+  );
   useEffect(() => {
     currentActivityRef.current?.scrollIntoView({ block: "center" });
-  }, [agendaSelecionada]);
+  }, [selectedAgendaDate, data.agendaEventos.length]);
 
   const exportActiveStudents = () =>
     exportToExcel("alunos-ativos", {
@@ -180,9 +333,12 @@ function GeralPage() {
         <KpiCard
           label="Alunos ativos"
           value={formatNum(k.alunosAtivos)}
-          delta={4.2}
           icon={<Users className="h-5 w-5" />}
-          hint="Clique para ver a lista completa"
+          hint={`Entraram ${formatNum(movimentacaoPeriodo.entradas)} • Saíram ${formatNum(
+            movimentacaoPeriodo.saidas,
+          )} • Saldo ${movimentacaoPeriodo.saldo >= 0 ? "+" : ""}${formatNum(
+            movimentacaoPeriodo.saldo,
+          )} • Renovações ${formatNum(movimentacaoPeriodo.renovacoes)}`}
           onClick={() => setActiveStudentsOpen(true)}
         />
         <KpiCard
@@ -267,13 +423,13 @@ function GeralPage() {
             <table className="w-full min-w-[980px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-5 py-3">Número</th>
-                  <th className="px-5 py-3">Aluno</th>
-                  <th className="px-5 py-3">Contrato</th>
-                  <th className="px-5 py-3">Bairro</th>
-                  <th className="px-5 py-3">Início</th>
-                  <th className="px-5 py-3">Vencimento</th>
-                  <th className="px-5 py-3">Última frequência</th>
+                  <SortHeader id="id" label="Número" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="nome" label="Aluno" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="contrato" label="Contrato" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="bairro" label="Bairro" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="inicio" label="Início" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="vencimento" label="Vencimento" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="ultimaFrequencia" label="Última frequência" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
                 </tr>
               </thead>
               <tbody>
@@ -330,16 +486,16 @@ function GeralPage() {
             <table className="w-full min-w-[850px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-5 py-3">Venda</th>
-                  <th className="px-5 py-3">Aluno</th>
-                  <th className="px-5 py-3">Contrato</th>
-                  <th className="px-5 py-3">Data</th>
-                  <th className="px-5 py-3">Vencimento</th>
-                  <th className="px-5 py-3 text-right">Valor</th>
+                  <SortHeader id="idVenda" label="Venda" sort={salesSort} onSort={(key) => setSalesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="aluno" label="Aluno" sort={salesSort} onSort={(key) => setSalesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="contrato" label="Contrato" sort={salesSort} onSort={(key) => setSalesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="dataVenda" label="Data" sort={salesSort} onSort={(key) => setSalesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="vencimento" label="Vencimento" sort={salesSort} onSort={(key) => setSalesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="valor" label="Valor" sort={salesSort} onSort={(key) => setSalesSort((sort) => nextSort(sort, key))} align="right" />
                 </tr>
               </thead>
               <tbody>
-                {data.vendasLista.map((sale) => (
+                {sortedSales.map((sale) => (
                   <tr
                     key={`${sale.idVenda}-${sale.idAluno}`}
                     className="border-t border-border hover:bg-accent/40"
@@ -378,18 +534,18 @@ function GeralPage() {
             <table className="w-full min-w-[1050px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-5 py-3">Contrato Nº</th>
-                  <th className="px-5 py-3">Aluno</th>
-                  <th className="px-5 py-3">Contrato</th>
-                  <th className="px-5 py-3">Data</th>
-                  <th className="px-5 py-3">Motivo</th>
-                  <th className="px-5 py-3 text-right">Venda</th>
-                  <th className="px-5 py-3 text-right">Multa</th>
-                  <th className="px-5 py-3 text-right">Restante</th>
+                  <SortHeader id="idContrato" label="Contrato Nº" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="aluno" label="Aluno" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="contrato" label="Contrato" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="dataCancelamento" label="Data" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="motivo" label="Motivo" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="valorVenda" label="Venda" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} align="right" />
+                  <SortHeader id="multa" label="Multa" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} align="right" />
+                  <SortHeader id="valorRestante" label="Restante" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} align="right" />
                 </tr>
               </thead>
               <tbody>
-                {data.cancelamentosLista.map((cancellation) => (
+                {sortedCancellations.map((cancellation) => (
                   <tr
                     key={`${cancellation.idContrato}-${cancellation.idAluno}`}
                     className="border-t border-border hover:bg-accent/40"
@@ -434,18 +590,18 @@ function GeralPage() {
             <table className="w-full min-w-[1000px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-5 py-3">Número</th>
-                  <th className="px-5 py-3">Aluno</th>
-                  <th className="px-5 py-3">Contrato</th>
-                  <th className="px-5 py-3">Bairro</th>
-                  <th className="px-5 py-3">Última frequência</th>
-                  <th className="px-5 py-3 text-right">Dias sem atividade</th>
-                  <th className="px-5 py-3">Vencimento</th>
-                  <th className="px-5 py-3">Risco</th>
+                  <SortHeader id="id" label="Número" sort={riskSort} onSort={(key) => setRiskSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="nome" label="Aluno" sort={riskSort} onSort={(key) => setRiskSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="contrato" label="Contrato" sort={riskSort} onSort={(key) => setRiskSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="bairro" label="Bairro" sort={riskSort} onSort={(key) => setRiskSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="ultimaFrequencia" label="Última frequência" sort={riskSort} onSort={(key) => setRiskSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="diasSemAtividade" label="Dias sem atividade" sort={riskSort} onSort={(key) => setRiskSort((sort) => nextSort(sort, key))} align="right" />
+                  <SortHeader id="vencimento" label="Vencimento" sort={riskSort} onSort={(key) => setRiskSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="nivelRisco" label="Risco" sort={riskSort} onSort={(key) => setRiskSort((sort) => nextSort(sort, key))} />
                 </tr>
               </thead>
               <tbody>
-                {data.alunosRiscoLista.map((student) => (
+                {sortedRiskStudents.map((student) => (
                   <tr key={student.id} className="border-t border-border hover:bg-accent/40">
                     <td className="px-5 py-3 font-medium">{student.id}</td>
                     <td className="px-5 py-3 font-medium">{student.nome}</td>
@@ -495,25 +651,29 @@ function GeralPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[620px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-5 py-3">Nº</th>
-                  <th className="px-5 py-3">Aluno</th>
-                  <th className="px-5 py-3">Status</th>
+                  <SortHeader id="id" label="Nº" sort={participantsSort} onSort={(key) => setParticipantsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="name" label="Aluno" sort={participantsSort} onSort={(key) => setParticipantsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="contrato" label="Contrato" sort={participantsSort} onSort={(key) => setParticipantsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="vigencia" label="Vigência" sort={participantsSort} onSort={(key) => setParticipantsSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="status" label="Status" sort={participantsSort} onSort={(key) => setParticipantsSort((sort) => nextSort(sort, key))} />
                 </tr>
               </thead>
               <tbody>
-                {selectedActivity?.participantesLista.map((participant) => (
+                {sortedParticipants.map((participant) => (
                   <tr key={`${participant.id}-${participant.name}`} className="border-t border-border">
                     <td className="px-5 py-3 font-medium">{participant.id}</td>
                     <td className="px-5 py-3">{participant.name}</td>
+                    <td className="px-5 py-3">{participant.contrato ?? "-"}</td>
+                    <td className="px-5 py-3">{participant.vigencia ?? "-"}</td>
                     <td className="px-5 py-3">{participant.status}</td>
                   </tr>
                 ))}
                 {selectedActivity && selectedActivity.participantesLista.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
+                    <td colSpan={5} className="px-5 py-10 text-center text-muted-foreground">
                       Esta atividade ainda não possui lista nominal salva. A próxima sincronização
                       da API de atividades passará a guardar os participantes sem dados sensíveis.
                     </td>
