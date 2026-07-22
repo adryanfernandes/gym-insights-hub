@@ -90,14 +90,16 @@ type SortState = { key: string; direction: SortDirection } | null;
 function parseSortableDate(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
   const raw = value.trim();
-  const iso = new Date(raw);
-  if (!Number.isNaN(iso.getTime())) return iso.getTime();
   const br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (!br) return null;
-  const [, day, month, year] = br;
-  const fullYear = year.length === 2 ? `20${year}` : year;
-  const parsed = new Date(Number(fullYear), Number(month) - 1, Number(day));
-  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+  if (br) {
+    const [, day, month, year] = br;
+    const fullYear = year.length === 2 ? `20${year}` : year;
+    const parsed = new Date(Number(fullYear), Number(month) - 1, Number(day));
+    return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+  }
+  if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return null;
+  const iso = new Date(raw);
+  return Number.isNaN(iso.getTime()) ? null : iso.getTime();
 }
 
 function compareSortableValues(a: unknown, b: unknown) {
