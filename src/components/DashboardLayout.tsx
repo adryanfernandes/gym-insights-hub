@@ -28,6 +28,7 @@ const NAV = [
   { to: "/comercial", label: "Comercial", icon: Target },
   { to: "/professores", label: "Professores", icon: UserRoundCheck },
   { to: "/perfil", label: "Perfil dos Clientes", icon: Users },
+  { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
@@ -81,7 +82,7 @@ export function DashboardLayout({
             Visões
           </p>
           {NAV.map((item) => {
-            const active = pathname === item.to;
+            const active = pathname === item.to || (item.to !== "/" && pathname.startsWith(`${item.to}/`));
             const Icon = item.icon;
             return (
               <Link
@@ -105,7 +106,7 @@ export function DashboardLayout({
                 Administração
               </p>
               {ADMIN_NAV.map((item) => {
-                const active = pathname === item.to;
+                const active = pathname === item.to || (item.to !== "/" && pathname.StartsWith(`${item.to}/`));
                 const Icon = item.icon;
                 return (
                   <Link

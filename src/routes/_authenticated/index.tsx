@@ -90,26 +90,56 @@ type SortState = { key: string; direction: SortDirection } | null;
 function parseSortableDate(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
   const raw = value.trim();
-  const br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (raw === "-") return null;
+  const br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?$/);
   if (br) {
-    const [, day, month, year] = br;
+    const [, day, month, year, hour = "0", minute = "0"] = br;
     const fullYear = year.length === 2 ? `20${year}` : year;
-    const parsed = new Date(Number(fullYear), Number(month) - 1, Number(day));
+    const parsed = new Date(
+      Number(fullYear),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+    );
     return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
   }
-  if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}(?:T|\s|$)/.test(raw)) return null;
   const iso = new Date(raw);
   return Number.isNaN(iso.getTime()) ? null : iso.getTime();
+}
+
+function parseSortableNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw || raw === "-") return null;
+  const numeric = raw.replace(/[^\d,.-]/g, "");
+  if (!numeric || numeric === "-" || numeric === "," || numeric === ".") return null;
+  const hasComma = numeric.includes(",");
+  const hasDot = numeric.includes(".");
+  const normalized =
+    hasComma && hasDot
+      ? numeric.replace(/\./g, "").replace(",", ".")
+      : hasComma
+        ? numeric.replace(",", ".")
+        : numeric;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function compareSortableValues(a: unknown, b: unknown) {
   const aDate = parseSortableDate(a);
   const bDate = parseSortableDate(b);
   if (aDate !== null && bDate !== null) return aDate - bDate;
+  if (aDate !== null) return -1;
+  if (bDate !== null) return 1;
 
-  const aNumber = typeof a === "number" ? a : Number(String(a ?? "").replace(",", "."));
-  const bNumber = typeof b === "number" ? b : Number(String(b ?? "").replace(",", "."));
-  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+  const aNumber = parseSortableNumber(a);
+  const bNumber = parseSortableNumber(b);
+  if (aNumber !== null && bNumber !== null) return aNumber - bNumber;
+  if (aNumber !== null) return -1;
+  if (bNumber !== null) return 1;
 
   return String(a ?? "").localeCompare(String(b ?? ""), "pt-BR", {
     numeric: true,
@@ -126,7 +156,13 @@ function sortedRows<T>(
   const accessor = accessors[sort.key];
   if (!accessor) return rows;
   const multiplier = sort.direction === "asc" ? 1 : -1;
-  return [...rows].sort((a, b) => compareSortableValues(accessor(a), accessor(b)) * multiplier);
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const compared = compareSortableValues(accessor(a.row), accessor(b.row));
+      return compared === 0 ? a.index - b.index : compared * multiplier;
+    })
+    .map(({ row }) => row);
 }
 
 function nextSort(current: SortState, key: string): SortState {

@@ -491,6 +491,9 @@ function useDashboardDataState(filters: Filters) {
   return {
     data,
     filterOptions,
+    clients: sourceRows,
+    memberships,
+    receivables,
     loadingMembers: loading,
     membersError: error,
     usingSupabaseMembers: !loading && !error,
