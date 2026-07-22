@@ -1,4 +1,10 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  createFileRoute,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { Search, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -24,8 +30,11 @@ function ClientesPage() {
   const { clients, memberships, loadingMembers, membersError, loadingMemberships } =
     useDashboardData(filters);
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  if (pathname !== "/clientes") return <Outlet />;
 
   const contractsByClient = useMemo(() => {
     const map = new Map<number, { total: number; latest: string }>();
