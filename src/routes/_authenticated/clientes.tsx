@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -23,6 +23,7 @@ function ClientesPage() {
   const { filters } = useApp();
   const { clients, memberships, loadingMembers, membersError, loadingMemberships } =
     useDashboardData(filters);
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -143,12 +144,19 @@ function ClientesPage() {
                   {pageRows.map((client) => {
                     const contracts = contractsByClient.get(client.id);
                     return (
-                      <tr key={client.id} className="border-t border-border hover:bg-muted/30">
+                      <tr
+                        key={client.id}
+                        onClick={() =>
+                          navigate({ to: "/clientes/$id", params: { id: String(client.id) } })
+                        }
+                        className="cursor-pointer border-t border-border hover:bg-muted/30"
+                      >
                         <td className="px-5 py-3 font-mono text-xs">{client.id}</td>
                         <td className="px-5 py-3">
                           <Link
                             to="/clientes/$id"
                             params={{ id: String(client.id) }}
+                            onClick={(event) => event.stopPropagation()}
                             className="font-semibold text-primary hover:underline"
                           >
                             {client.nome}
