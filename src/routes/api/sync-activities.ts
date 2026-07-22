@@ -154,6 +154,30 @@ function enrollmentSummary(detail: Activity) {
   };
 }
 
+function enrollmentParticipants(detail: Activity) {
+  const enrollments = Array.isArray(detail.enrollments)
+    ? detail.enrollments.filter(isObject).filter((row) => row.removed !== true)
+    : [];
+  return enrollments.map((row, index) => {
+    const firstName =
+      typeof (row.firstName ?? row.registerName) === "string"
+        ? String(row.firstName ?? row.registerName).trim()
+        : "";
+    const lastName =
+      typeof (row.lastName ?? row.registerLastName) === "string"
+        ? String(row.lastName ?? row.registerLastName).trim()
+        : "";
+    const name =
+      [firstName, lastName].filter(Boolean).join(" ") ||
+      String(row.name ?? row.memberName ?? row.studentName ?? row.personName ?? "Aluno sem nome");
+    return {
+      id: String(row.idMember ?? row.memberId ?? row.idPerson ?? row.id ?? index + 1),
+      name,
+      status: row.status ?? null,
+    };
+  });
+}
+
 async function fetchDetail(activity: Activity, activityDate: string, authorization: string) {
   const idConfiguration = activity.idConfiguration;
   const idActivitySession = activity.idActivitySession;
@@ -187,6 +211,7 @@ async function fetchDetail(activity: Activity, activityDate: string, authorizati
       ...activity,
       idActivitySession: detail.idActivitySession ?? activity.idActivitySession,
       enrollmentSummary: enrollmentSummary(detail),
+      enrollments: enrollmentParticipants(detail),
     };
   } catch {
     return activity;

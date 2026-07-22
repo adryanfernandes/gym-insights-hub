@@ -7,18 +7,26 @@ export type StoredActivity = {
   payload: Record<string, unknown>;
 };
 
+export type ActivityParticipant = {
+  id: string;
+  name: string;
+  status: string;
+};
+
 type NormalizedActivity = {
   date: Date;
   instructor: string;
   modality: string;
   area: string;
   startTime: string;
+  endTime: string;
   capacity: number;
   occupied: number;
   present: number;
   absent: number;
   justifiedAbsence: number;
   hasAttendance: boolean;
+  participants: ActivityParticipant[];
 };
 
 function text(value: unknown, fallback: string) {
@@ -30,9 +38,72 @@ function number(value: unknown) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
+function object(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function array(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item) => object(item)).map((item) => item as Record<string, unknown>)
+    : [];
+}
+
 function round(value: number, digits = 1) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
+}
+
+function participantName(row: Record<string, unknown>) {
+  const firstName = text(row.firstName ?? row.registerName, "");
+  const lastName = text(row.lastName ?? row.registerLastName, "");
+  const composed = [firstName, lastName].filter(Boolean).join(" ");
+  return (
+    composed ||
+    text(
+      row.name ??
+        row.memberName ??
+        row.studentName ??
+        row.personName ??
+        row.fullName ??
+        row.nome ??
+        row.aluno,
+      "Aluno sem nome",
+    )
+  );
+}
+
+function participantStatus(value: unknown) {
+  const raw = typeof value === "number" ? value : Number(value);
+  if (raw === 0) return "Presente";
+  if (raw === 1) return "Falta";
+  if (raw === 2) return "Falta justificada";
+  return text(value, "Inscrito");
+}
+
+function activityParticipants(payload: Record<string, unknown>): ActivityParticipant[] {
+  const source =
+    array(payload.enrollments).length > 0
+      ? array(payload.enrollments)
+      : array(payload.participants).length > 0
+        ? array(payload.participants)
+        : array(payload.students).length > 0
+          ? array(payload.students)
+          : array(payload.members);
+
+  return source
+    .filter((row) => row.removed !== true)
+    .map((row, index) => ({
+      id: text(row.idMember ?? row.memberId ?? row.idPerson ?? row.id ?? index + 1, String(index + 1)),
+      name: participantName(row),
+      status: participantStatus(row.status ?? row.attendanceStatus),
+    }));
+}
+
+function timeToMinutes(value: string) {
+  const [hours = "0", minutes = "0"] = value.split(":");
+  return Number(hours) * 60 + Number(minutes);
 }
 
 function normalize(row: StoredActivity): NormalizedActivity | null {
@@ -51,12 +122,14 @@ function normalize(row: StoredActivity): NormalizedActivity | null {
     modality: text(row.payload.name, "Não informada"),
     area: text(row.payload.area, `Unidade ${row.branch_id}`),
     startTime: text(row.payload.startTime, "--:--").slice(0, 5),
+    endTime: text(row.payload.endTime, "").slice(0, 5),
     capacity: number(row.payload.capacity),
     occupied: enrolled ?? number(row.payload.ocupation ?? row.payload.occupation),
     present: finalized && summary ? number(summary.present) : 0,
     absent: finalized && summary ? number(summary.absent) : 0,
     justifiedAbsence: finalized && summary ? number(summary.justified_absence) : 0,
     hasAttendance: finalized && Boolean(summary),
+    participants: activityParticipants(row.payload),
   };
 }
 
@@ -111,12 +184,15 @@ function matchesSelection(value: string, selected: string[] | string, allOption:
 
 export function getActivityDashboardData(source: StoredActivity[], filters: Filters) {
   const now = new Date();
+  const todayKey = format(now, "yyyy-MM-dd");
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   const start = rangeStart(filters.periodo, now);
-  const periodRows = source
+  const normalizedRows = source
     .map(normalize)
     .filter((row): row is NormalizedActivity => Boolean(row))
-    .filter((row) => row.date >= start && row.date <= end && row.capacity > 0);
+    .filter((row) => row.capacity > 0);
+  const periodRows = normalizedRows.filter((row) => row.date >= start && row.date <= end);
   const options = (values: string[]) =>
     Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, "pt-BR"));
   const filterOptions = {
@@ -133,6 +209,31 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
       matchesSelection(row.startTime, filters.horario, "Todos"),
   );
   const totals = metrics(rows);
+  const agendaHoje = normalizedRows
+    .filter(
+      (row) =>
+        format(row.date, "yyyy-MM-dd") === todayKey &&
+        matchesSelection(row.instructor, filters.professor, "Todos") &&
+        matchesSelection(row.modality, filters.modalidade, "Todas") &&
+        matchesSelection(row.area, filters.atividadeUnidade, "Todas") &&
+        matchesSelection(row.startTime, filters.horario, "Todos"),
+    )
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+    .map((row) => {
+      const startMinutes = timeToMinutes(row.startTime);
+      const endMinutes = row.endTime ? timeToMinutes(row.endTime) : startMinutes + 60;
+      return {
+        horario: row.startTime,
+        fim: row.endTime || "--:--",
+        atividade: row.modality,
+        professor: row.instructor,
+        unidade: row.area,
+        capacidade: row.capacity,
+        participantes: row.participants.length || row.occupied,
+        participantesLista: row.participants,
+        acontecendoAgora: nowMinutes >= startMinutes && nowMinutes <= endMinutes,
+      };
+    });
 
   const ranking = Array.from(aggregate(rows, (row) => row.instructor).entries())
     .map(([professor, teacherRows]) => {
@@ -201,6 +302,7 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
     filterOptions,
     overviewOccupancy: totals.occupancy,
     ocupacaoAgenda: porHorario.map(({ horario, ocupacao }) => ({ horario, ocupacao })),
+    agendaHoje,
     professores: {
       kpis: {
         totalProfessores: ranking.length,

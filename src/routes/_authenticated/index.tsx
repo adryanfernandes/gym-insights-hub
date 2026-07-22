@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
+  Clock,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
@@ -81,6 +82,9 @@ function GeralPage() {
   const [salesOpen, setSalesOpen] = useState(false);
   const [cancellationsOpen, setCancellationsOpen] = useState(false);
   const [riskStudentsOpen, setRiskStudentsOpen] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<
+    (typeof data.agendaHoje)[number] | null
+  >(null);
   const [activePage, setActivePage] = useState(1);
   const renewalDeactivation = Number(k.taxaDesativacaoRenovacao).toFixed(2).replace(".", ",");
   const activePages = Math.max(1, Math.ceil(data.alunosAtivosLista.length / ACTIVE_PAGE_SIZE));
@@ -118,6 +122,15 @@ function GeralPage() {
       ],
       EvolucaoAlunos: data.evolucaoAlunos,
       OcupacaoAgenda: data.ocupacaoAgenda,
+      AgendaHoje: data.agendaHoje.map((activity) => ({
+        Horário: `${activity.horario} - ${activity.fim}`,
+        Atividade: activity.atividade,
+        Professor: activity.professor,
+        Unidade: activity.unidade,
+        Participantes: activity.participantes,
+        Capacidade: activity.capacidade,
+        "Em andamento": activity.acontecendoAgora ? "Sim" : "Não",
+      })),
       TaxaRenovacao: data.taxaRenovacao,
       RenovacoesMensais: data.renovacoesMensais,
     });
@@ -203,6 +216,85 @@ function GeralPage() {
           onClick={() => setRiskStudentsOpen(true)}
         />
       </div>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Agenda de hoje</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Atividades do dia atual com professor, lotação e destaque da aula em andamento.
+            </p>
+          </div>
+          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+            {formatNum(data.agendaHoje.length)} atividades
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3">Horário</th>
+                <th className="px-4 py-3">Atividade</th>
+                <th className="px-4 py-3">Professor</th>
+                <th className="px-4 py-3">Unidade</th>
+                <th className="px-4 py-3 text-right">Participantes</th>
+                <th className="px-4 py-3 text-right">Capacidade</th>
+                <th className="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.agendaHoje.map((activity) => (
+                <tr
+                  key={`${activity.horario}-${activity.atividade}-${activity.professor}`}
+                  className={`border-t border-border transition hover:bg-accent/40 ${
+                    activity.acontecendoAgora ? "bg-primary/5" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3 font-mono font-medium">
+                    {activity.horario} - {activity.fim}
+                  </td>
+                  <td className="px-4 py-3 font-medium">{activity.atividade}</td>
+                  <td className="px-4 py-3">{activity.professor}</td>
+                  <td className="px-4 py-3">{activity.unidade}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedActivity(activity)}
+                      className="rounded-md px-2 py-1 font-semibold text-primary transition hover:bg-primary/10"
+                      title="Clique para ver os participantes"
+                    >
+                      {formatNum(activity.participantes)}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-right">{formatNum(activity.capacidade)}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
+                        activity.acontecendoAgora
+                          ? "bg-success/15 text-success"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {activity.acontecendoAgora ? "Acontecendo agora" : "Programada"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {!data.agendaHoje.length && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">
+                    Nenhuma atividade encontrada para hoje com os filtros atuais.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <Dialog
         open={activeStudentsOpen}
@@ -443,6 +535,47 @@ function GeralPage() {
                   <tr>
                     <td colSpan={8} className="px-5 py-10 text-center text-muted-foreground">
                       Nenhum aluno ativo em risco foi encontrado com os filtros selecionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(selectedActivity)} onOpenChange={(open) => !open && setSelectedActivity(null)}>
+        <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5">
+            <DialogTitle>Participantes da atividade</DialogTitle>
+            <DialogDescription>
+              {selectedActivity
+                ? `${selectedActivity.atividade} • ${selectedActivity.professor} • ${selectedActivity.horario} - ${selectedActivity.fim}`
+                : "Lista de participantes"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full min-w-[620px] text-sm">
+              <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3">Nº</th>
+                  <th className="px-5 py-3">Aluno</th>
+                  <th className="px-5 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedActivity?.participantesLista.map((participant) => (
+                  <tr key={`${participant.id}-${participant.name}`} className="border-t border-border">
+                    <td className="px-5 py-3 font-medium">{participant.id}</td>
+                    <td className="px-5 py-3">{participant.name}</td>
+                    <td className="px-5 py-3">{participant.status}</td>
+                  </tr>
+                ))}
+                {selectedActivity && selectedActivity.participantesLista.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
+                      Esta atividade ainda não possui lista nominal salva. A próxima sincronização
+                      da API de atividades passará a guardar os participantes sem dados sensíveis.
                     </td>
                   </tr>
                 )}
