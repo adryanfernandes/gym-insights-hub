@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
@@ -203,6 +203,7 @@ function SortHeader({
 function GeralPage() {
   const { filters } = useApp();
   const { data } = useDashboardData(filters);
+  const navigate = useNavigate();
   const k = data.overviewKpis;
   const [activeStudentsOpen, setActiveStudentsOpen] = useState(false);
   const [salesOpen, setSalesOpen] = useState(false);
@@ -219,6 +220,16 @@ function GeralPage() {
   const [cancellationsSort, setCancellationsSort] = useState<SortState>(null);
   const [riskSort, setRiskSort] = useState<SortState>(null);
   const [participantsSort, setParticipantsSort] = useState<SortState>(null);
+  const openClientPage = (clientId: number | string | null | undefined) => {
+    const parsed = Number(clientId);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    setActiveStudentsOpen(false);
+    setSalesOpen(false);
+    setCancellationsOpen(false);
+    setRiskStudentsOpen(false);
+    setSelectedActivity(null);
+    navigate({ to: "/clientes/$id", params: { id: String(parsed) } });
+  };
   const renewalDeactivation = Number(k.taxaDesativacaoRenovacao).toFixed(2).replace(".", ",");
   const movimentacaoPeriodo = k.movimentacaoPeriodo ?? {
     entradas: 0,
@@ -472,7 +483,12 @@ function GeralPage() {
               </thead>
               <tbody>
                 {activeRows.map((student) => (
-                  <tr key={student.id} className="border-t border-border hover:bg-accent/40">
+                  <tr
+                    key={student.id}
+                    onClick={() => openClientPage(student.id)}
+                    className="cursor-pointer border-t border-border hover:bg-accent/40"
+                    title="Abrir página do cliente"
+                  >
                     <td className="px-5 py-3 font-medium">{student.id}</td>
                     <td className="px-5 py-3 font-medium">{student.nome}</td>
                     <td className="px-5 py-3">{student.contrato}</td>
@@ -536,7 +552,9 @@ function GeralPage() {
                 {sortedSales.map((sale) => (
                   <tr
                     key={`${sale.idVenda}-${sale.idAluno}`}
-                    className="border-t border-border hover:bg-accent/40"
+                    onClick={() => openClientPage(sale.idAluno)}
+                    className="cursor-pointer border-t border-border hover:bg-accent/40"
+                    title="Abrir página do cliente"
                   >
                     <td className="px-5 py-3 font-medium">{sale.idVenda}</td>
                     <td className="px-5 py-3">{sale.aluno}</td>
@@ -586,7 +604,9 @@ function GeralPage() {
                 {sortedCancellations.map((cancellation) => (
                   <tr
                     key={`${cancellation.idContrato}-${cancellation.idAluno}`}
-                    className="border-t border-border hover:bg-accent/40"
+                    onClick={() => openClientPage(cancellation.idAluno)}
+                    className="cursor-pointer border-t border-border hover:bg-accent/40"
+                    title="Abrir página do cliente"
                   >
                     <td className="px-5 py-3 font-medium">{cancellation.idContrato}</td>
                     <td className="px-5 py-3">{cancellation.aluno}</td>
@@ -640,7 +660,12 @@ function GeralPage() {
               </thead>
               <tbody>
                 {sortedRiskStudents.map((student) => (
-                  <tr key={student.id} className="border-t border-border hover:bg-accent/40">
+                  <tr
+                    key={student.id}
+                    onClick={() => openClientPage(student.id)}
+                    className="cursor-pointer border-t border-border hover:bg-accent/40"
+                    title="Abrir página do cliente"
+                  >
                     <td className="px-5 py-3 font-medium">{student.id}</td>
                     <td className="px-5 py-3 font-medium">{student.nome}</td>
                     <td className="px-5 py-3">{student.contrato}</td>
@@ -701,7 +726,12 @@ function GeralPage() {
               </thead>
               <tbody>
                 {sortedParticipants.map((participant) => (
-                  <tr key={`${participant.id}-${participant.name}`} className="border-t border-border">
+                  <tr
+                    key={`${participant.id}-${participant.name}`}
+                    onClick={() => openClientPage(participant.id)}
+                    className="cursor-pointer border-t border-border hover:bg-accent/40"
+                    title="Abrir página do cliente"
+                  >
                     <td className="px-5 py-3 font-medium">{participant.id}</td>
                     <td className="px-5 py-3">{participant.name}</td>
                     <td className="px-5 py-3">{participant.contrato ?? "-"}</td>

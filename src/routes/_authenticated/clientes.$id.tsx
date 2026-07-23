@@ -118,9 +118,12 @@ function ClienteDetalhePage() {
                       <th className="px-5 py-3">Tipo</th>
                       <th className="px-5 py-3">Período</th>
                       <th className="px-5 py-3">Status</th>
+                      <th className="px-5 py-3">Renovação ativa</th>
                       <th className="px-5 py-3">Cancelamento</th>
                       <th className="px-5 py-3 text-right">Valor venda</th>
+                      <th className="px-5 py-3 text-right">Desconto</th>
                       <th className="px-5 py-3 text-right">Valor pago</th>
+                      <th className="px-5 py-3 text-right">Valor a pagar</th>
                       <th className="px-5 py-3 text-right">Parcelas</th>
                     </tr>
                   </thead>
@@ -133,17 +136,20 @@ function ClienteDetalhePage() {
                           {contract.inicio} a {contract.vencimento}
                         </td>
                         <td className="px-5 py-3">{contract.status}</td>
+                        <td className="px-5 py-3">{contract.renovacaoAtiva}</td>
                         <td className="px-5 py-3">{contract.cancelamento}</td>
                         <td className="px-5 py-3 text-right">{formatBRL(contract.valorVenda)}</td>
+                        <td className="px-5 py-3 text-right">{formatBRL(contract.desconto)}</td>
                         <td className="px-5 py-3 text-right font-semibold">
                           {formatBRL(contract.valorPago)}
                         </td>
+                        <td className="px-5 py-3 text-right">{formatBRL(contract.valorAPagar)}</td>
                         <td className="px-5 py-3 text-right">{formatNum(contract.parcelas)}</td>
                       </tr>
                     ))}
                     {!contracts.length && (
                       <tr>
-                        <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                        <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
                           Nenhum contrato foi encontrado para este cliente.
                         </td>
                       </tr>

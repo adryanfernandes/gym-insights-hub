@@ -12,12 +12,14 @@ import type { Filters } from "@/contexts/AppContext";
 export type MembershipRow = {
   id_member_membership: number;
   id_member: number;
+  id_sale?: number | null;
   id_branch: number | null;
   sale_value: number | string;
   membership_name: string | null;
   membership_start: string | null;
   membership_end: string | null;
   cancel_date: string | null;
+  cancellation_reason?: string | null;
   cancellation_fine: number | string;
   remaining_value: number | string;
   sale_date: string | null;
@@ -29,6 +31,8 @@ export type ReceivableRow = {
   id_member_membership: number;
   amount: number | string;
   amount_paid: number | string;
+  current_installment?: number | null;
+  total_installments?: number | null;
   canceled: boolean;
   registration_date: string | null;
   due_date: string | null;

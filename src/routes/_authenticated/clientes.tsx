@@ -11,7 +11,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useApp } from "@/contexts/AppContext";
 import { normalizeClientStatus } from "@/lib/clientDetails";
 import { useDashboardData } from "@/lib/membersDashboardData";
-import { formatBRL, formatNum } from "@/lib/mockData";
+import { formatBRL, formatNum, type ClientRow } from "@/lib/mockData";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
   head: () => ({
@@ -24,6 +24,26 @@ export const Route = createFileRoute("/_authenticated/clientes")({
 });
 
 const PAGE_SIZE = 30;
+type ClientSortKey =
+  | "id"
+  | "nome"
+  | "status"
+  | "contrato"
+  | "bairro"
+  | "vencimento"
+  | "valor"
+  | "contratos";
+type SortState = { key: ClientSortKey; direction: "asc" | "desc" };
+
+function parseClientDate(value: string | null | undefined) {
+  if (!value) return 0;
+  const [day, month, year] = value.split("/").map(Number);
+  if (Number.isFinite(day) && Number.isFinite(month) && Number.isFinite(year)) {
+    return new Date(year, month - 1, day).getTime();
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+}
 
 function ClientesPage() {
   const { filters } = useApp();
@@ -33,6 +53,7 @@ function ClientesPage() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortState>({ key: "nome", direction: "asc" });
 
   const contractsByClient = useMemo(() => {
     const map = new Map<number, { total: number; latest: string }>();
@@ -66,12 +87,52 @@ function ClientesPage() {
         )
       : clients;
 
-    return [...rows].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-  }, [clients, search]);
+    const valueForSort = (client: ClientRow) => {
+      const contracts = contractsByClient.get(client.id);
+      switch (sort.key) {
+        case "id":
+          return client.id;
+        case "nome":
+          return client.nome;
+        case "status":
+          return normalizeClientStatus(client);
+        case "contrato":
+          return contracts?.latest || client.contrato || "";
+        case "bairro":
+          return client.bairro || "";
+        case "vencimento":
+          return parseClientDate(client.vencimento);
+        case "valor":
+          return client.valor;
+        case "contratos":
+          return contracts?.total ?? 0;
+      }
+    };
+
+    return [...rows].sort((a, b) => {
+      const left = valueForSort(a);
+      const right = valueForSort(b);
+      const result =
+        typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right), "pt-BR", {
+              sensitivity: "base",
+              numeric: true,
+            });
+      return sort.direction === "asc" ? result : -result;
+    });
+  }, [clients, contractsByClient, search, sort]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const updateSort = (key: ClientSortKey) => {
+    setSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+    }));
+    setPage(1);
+  };
 
   if (pathname !== "/clientes") return <Outlet />;
 
@@ -139,14 +200,14 @@ function ClientesPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-5 py-3">Número</th>
-                    <th className="px-5 py-3">Cliente</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Contrato atual</th>
-                    <th className="px-5 py-3">Bairro</th>
-                    <th className="px-5 py-3">Vencimento</th>
-                    <th className="px-5 py-3 text-right">Valor</th>
-                    <th className="px-5 py-3 text-right">Contratos</th>
+                    <SortableClientHeader id="id" label="Número" sort={sort} onSort={updateSort} />
+                    <SortableClientHeader id="nome" label="Cliente" sort={sort} onSort={updateSort} />
+                    <SortableClientHeader id="status" label="Status" sort={sort} onSort={updateSort} />
+                    <SortableClientHeader id="contrato" label="Contrato atual" sort={sort} onSort={updateSort} />
+                    <SortableClientHeader id="bairro" label="Bairro" sort={sort} onSort={updateSort} />
+                    <SortableClientHeader id="vencimento" label="Vencimento" sort={sort} onSort={updateSort} />
+                    <SortableClientHeader id="valor" label="Valor" sort={sort} onSort={updateSort} align="right" />
+                    <SortableClientHeader id="contratos" label="Contratos" sort={sort} onSort={updateSort} align="right" />
                   </tr>
                 </thead>
                 <tbody>
@@ -229,3 +290,20 @@ function ClientesPage() {
     </DashboardLayout>
   );
 }
+
+function SortableClientHeader(props: any) {
+  const { id, label, sort, onSort, align = "left" } = props;
+  const active = sort.key === id;
+  const indicator = active ? (sort.direction === "asc" ? " asc" : " desc") : "";
+  const alignClass = align === "right" ? "text-right" : "";
+  const buttonAlignClass = align === "right" ? "justify-end" : "justify-start";
+  return (
+    <th className={["px-5 py-3", alignClass].filter(Boolean).join(" ")}>
+      <button type="button" onClick={function () { onSort(id); }} className={["inline-flex items-center gap-1 hover:text-primary", buttonAlignClass].join(" ")}>
+        <span>{label}</span>
+        <span aria-hidden="true" className="text-[10px] text-muted-foreground">{indicator}</span>
+      </button>
+    </th>
+  );
+}
+
