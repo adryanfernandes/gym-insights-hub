@@ -2,6 +2,7 @@ import { differenceInCalendarDays, format, parseISO, subDays } from "date-fns";
 import {
   createContext,
   createElement,
+  useDeferredValue,
   useContext,
   useEffect,
   useMemo,
@@ -9,7 +10,11 @@ import {
   type ReactNode,
 } from "react";
 import type { Filters } from "@/contexts/AppContext";
-import { getActivityDashboardData, type StoredActivity } from "@/lib/activityDashboardData";
+import {
+  getActivityDashboardDataFromNormalized,
+  normalizeActivities,
+  type StoredActivity,
+} from "@/lib/activityDashboardData";
 import {
   getMembershipDashboardData,
   type MembershipRow,
@@ -137,20 +142,19 @@ function toBRDate(value: unknown) {
   return date ? format(date, "dd/MM/yyyy") : null;
 }
 
+type IndexedContract = {
+  contract: MembershipRow;
+  start: Date | null;
+  end: Date | null;
+};
+
 function contractForMemberAt(
-  contracts: MembershipRow[],
+  contractsByMember: Map<number, IndexedContract[]>,
   memberId: number,
   referenceDate: string,
 ) {
   const activityDate = new Date(`${referenceDate}T12:00:00`);
-  const memberContracts = contracts.filter((contract) => contract.id_member === memberId);
-  const ordered = memberContracts
-    .map((contract) => {
-      const start = toDate(contract.membership_start || contract.sale_date);
-      const end = toDate(contract.membership_end);
-      return { contract, start, end };
-    })
-    .sort((a, b) => (b.start?.getTime() ?? 0) - (a.start?.getTime() ?? 0));
+  const ordered = contractsByMember.get(memberId) ?? [];
   const selected =
     ordered.find(
       (row) =>
@@ -312,6 +316,7 @@ async function fetchMemberships() {
 }
 
 function useDashboardDataState(filters: Filters) {
+  const deferredFilters = useDeferredValue(filters);
   const [members, setMembers] = useState<ClientRow[]>([]);
   const [activities, setActivities] = useState<StoredActivity[]>([]);
   const [memberships, setMemberships] = useState<MembershipRow[]>([]);
@@ -415,19 +420,22 @@ function useDashboardDataState(filters: Filters) {
       return contract ? { ...member, contrato: contract, contratoNome: contract } : member;
     });
   }, [members, memberships]);
+  const normalizedActivities = useMemo(() => normalizeActivities(activities), [activities]);
   const memberData = useMemo(
-    () => getFilteredDashboardDataFromRows(filters, sourceRows),
-    [filters, sourceRows],
+    () => getFilteredDashboardDataFromRows(deferredFilters, sourceRows),
+    [deferredFilters, sourceRows],
   );
   const activityData = useMemo(
-    () => getActivityDashboardData(activities, filters),
-    [activities, filters],
+    () => getActivityDashboardDataFromNormalized(normalizedActivities, deferredFilters),
+    [normalizedActivities, deferredFilters],
   );
   const membershipData = useMemo(() => {
     const activeMemberIds = sourceRows.length
       ? new Set(sourceRows.filter((member) => member.ativo).map((member) => member.id))
       : undefined;
-    const selectedUnidades = Array.isArray(filters.unidade) ? filters.unidade : [filters.unidade];
+    const selectedUnidades = Array.isArray(deferredFilters.unidade)
+      ? deferredFilters.unidade
+      : [deferredFilters.unidade];
     const filteredUnidades = selectedUnidades.filter(
       (unidade) => !["Todas", "Todos"].includes(unidade),
     );
@@ -441,20 +449,33 @@ function useDashboardDataState(filters: Filters) {
     return getMembershipDashboardData(
       memberships,
       receivables,
-      filters,
+      deferredFilters,
       activeMemberIds,
       filteredMemberIds,
     );
-  }, [filters, memberships, receivables, sourceRows]);
+  }, [deferredFilters, memberships, receivables, sourceRows]);
   const data = useMemo(() => {
     const membersById = new Map(sourceRows.map((member) => [member.id, member]));
+    const contractsByMember = new Map<number, IndexedContract[]>();
+    memberships.forEach((contract) => {
+      const list = contractsByMember.get(contract.id_member) ?? [];
+      list.push({
+        contract,
+        start: toDate(contract.membership_start || contract.sale_date),
+        end: toDate(contract.membership_end),
+      });
+      contractsByMember.set(contract.id_member, list);
+    });
+    contractsByMember.forEach((list) => {
+      list.sort((a, b) => (b.start?.getTime() ?? 0) - (a.start?.getTime() ?? 0));
+    });
     const enrichAgenda = (agenda: typeof activityData.agendaHoje) =>
       agenda.map((activity) => ({
         ...activity,
         participantesLista: activity.participantesLista.map((participant) => {
           const memberId = Number(participant.id);
           const contract = Number.isFinite(memberId)
-            ? contractForMemberAt(memberships, memberId, activity.data)
+            ? contractForMemberAt(contractsByMember, memberId, activity.data)
             : null;
           return contract ? { ...participant, ...contract } : participant;
         }),

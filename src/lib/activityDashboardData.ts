@@ -15,7 +15,7 @@ export type ActivityParticipant = {
   vigencia?: string;
 };
 
-type NormalizedActivity = {
+export type NormalizedActivity = {
   date: Date;
   instructor: string;
   modality: string;
@@ -199,14 +199,24 @@ function matchesSelection(value: string, selected: string[] | string, allOption:
 }
 
 export function getActivityDashboardData(source: StoredActivity[], filters: Filters) {
+  return getActivityDashboardDataFromNormalized(normalizeActivities(source), filters);
+}
+
+export function normalizeActivities(source: StoredActivity[]) {
+  return source
+    .map(normalize)
+    .filter((row): row is NormalizedActivity => Boolean(row))
+    .filter((row) => row.capacity > 0);
+}
+
+export function getActivityDashboardDataFromNormalized(
+  normalizedRows: NormalizedActivity[],
+  filters: Filters,
+) {
   const now = new Date();
   const todayKey = format(now, "yyyy-MM-dd");
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const { start, end } = filterDateRange(filters, now);
-  const normalizedRows = source
-    .map(normalize)
-    .filter((row): row is NormalizedActivity => Boolean(row))
-    .filter((row) => row.capacity > 0);
   const periodRows = normalizedRows.filter((row) => row.date >= start && row.date <= end);
   const options = (values: string[]) =>
     Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, "pt-BR"));

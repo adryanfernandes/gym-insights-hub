@@ -717,10 +717,10 @@ function GeralPage() {
       <Dialog open={renewalOpen} onOpenChange={setRenewalOpen}>
         <DialogContent className="flex max-h-[85vh] max-w-6xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border px-6 py-5">
-            <DialogTitle>RenovaÃ§Ã£o automÃ¡tica</DialogTitle>
+            <DialogTitle>Renovação automática</DialogTitle>
             <DialogDescription>
               {formatNum(data.renovacaoAtivaLista.length)} clientes ativos e{" "}
-              {formatNum(data.renovacaoDesativadaLista.length)} clientes desativados no perÃ­odo.
+              {formatNum(data.renovacaoDesativadaLista.length)} clientes desativados no período.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-2 border-b border-border px-6 py-3">
@@ -751,10 +751,10 @@ function GeralPage() {
             <table className="w-full min-w-[820px] text-sm">
               <thead className="sticky top-0 bg-card text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3">NÃºmero</th>
+                  <th className="px-4 py-3">Número</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Contrato</th>
-                  <th className="px-4 py-3">InÃ­cio</th>
+                  <th className="px-4 py-3">Início</th>
                   <th className="px-4 py-3">Vencimento</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Valor</th>
