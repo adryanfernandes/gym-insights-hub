@@ -95,6 +95,25 @@ function periodRange(periodo: string, referenceDate: Date) {
   };
 }
 
+function inputDate(value: string | null | undefined, endOfDay = false) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function filterPeriodRange(filters: Filters, referenceDate: Date) {
+  const fallback = periodRange(filters.periodo, referenceDate);
+  const start = inputDate(filters.dataInicio) ?? fallback.start;
+  const end = inputDate(filters.dataFim, true) ?? fallback.end;
+  const ordered = start <= end ? { start, end } : { start: end, end: start };
+  const days = differenceInCalendarDays(ordered.end, ordered.start) + 1;
+  return {
+    ...ordered,
+    label: "Periodo personalizado",
+    days,
+  };
+}
+
 const isInRange = (date: Date | null, range: { start: Date; end: Date }) =>
   Boolean(date && isWithinInterval(date, { start: range.start, end: range.end }));
 
@@ -216,7 +235,7 @@ export function getFilteredDashboardDataFromRows(filters: Filters, clients: Clie
 
 function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
   const referenceDate = getReferenceDate(clients);
-  const range = periodRange(filters.periodo, referenceDate);
+  const range = filterPeriodRange(filters, referenceDate);
   const baseRows = clients.filter((client) => matchesBaseFilters(client, filters));
   const rows = baseRows.filter((client) => matchesPeriod(client, range));
   const periodRows = rows.length ? rows : baseRows;
@@ -231,6 +250,14 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
   const highRiskRows = riskRows.filter((client) => riskLevel(client, referenceDate) === "alto");
   const activeRows = baseRows.filter((client) => client.ativo);
   const inactiveRows = baseRows.filter((client) => !client.ativo);
+  const renewalActiveRows = activeRows;
+  const renewalInactiveRows = inactiveRows;
+  const renewalInactivePercent = round(
+    (renewalInactiveRows.length /
+      Math.max(renewalActiveRows.length + renewalInactiveRows.length, 1)) *
+      100,
+    2,
+  );
   const positiveValueRows = periodRows.filter((client) => client.valor > 0);
   const ticketMedio = avg(positiveValueRows, (client) => client.valor);
   const faturamento = sum(periodRows, (client) => client.valor);
@@ -470,10 +497,6 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
   const visitantes = Math.round(starts.length * 5.8);
   const aulas = Math.round(starts.length * 2.1);
   const propostas = Math.round(starts.length * 1.35);
-  const taxaRenovacaoBase = periodRows.length
-    ? ((periodRows.length - highRiskRows.length) / periodRows.length) * 100
-    : 0;
-
   return {
     periodLabel: range.label,
     overviewKpis: {
@@ -488,7 +511,8 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
           1,
         ),
       },
-      taxaDesativacaoRenovacao: round(100 - taxaRenovacaoBase, 1),
+      renovacoesAtivas: renewalActiveRows.length,
+      taxaDesativacaoRenovacao: renewalInactivePercent,
       taxaOcupacaoAgenda: round(ocupacao, 1),
       faturamentoMes: Math.round(faturamento),
       faturamentoEstimadoProx: Math.round(sum(activeRows, (client) => client.valor) * 1.04),
@@ -505,6 +529,26 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
       ),
       clientesFiltrados: periodRows.length,
     },
+    renovacaoAtivaLista: renewalActiveRows.map((client) => ({
+      idAluno: client.id,
+      idContrato: client.id,
+      aluno: client.nome,
+      contrato: client.contratoNome || client.contrato,
+      inicio: client.inicio,
+      vencimento: client.vencimento,
+      status: "Ativa",
+      valor: client.valor,
+    })),
+    renovacaoDesativadaLista: renewalInactiveRows.map((client) => ({
+      idAluno: client.id,
+      idContrato: client.id,
+      aluno: client.nome,
+      contrato: client.contratoNome || client.contrato,
+      inicio: client.inicio,
+      vencimento: client.vencimento,
+      status: "Desativada",
+      valor: client.valor,
+    })),
     evolucaoAlunos,
     ocupacaoAgenda: [
       "06:00",

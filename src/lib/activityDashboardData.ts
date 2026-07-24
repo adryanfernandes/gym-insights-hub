@@ -148,6 +148,20 @@ function rangeStart(period: string, now: Date) {
   return subDays(now, 29);
 }
 
+function inputDate(value: string | null | undefined, endOfDay = false) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function filterDateRange(filters: Filters, now: Date) {
+  const fallbackStart = rangeStart(filters.periodo, now);
+  const fallbackEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const start = inputDate(filters.dataInicio) ?? fallbackStart;
+  const end = inputDate(filters.dataFim, true) ?? fallbackEnd;
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
 function aggregate<T extends string>(
   rows: NormalizedActivity[],
   key: (row: NormalizedActivity) => T,
@@ -188,8 +202,7 @@ export function getActivityDashboardData(source: StoredActivity[], filters: Filt
   const now = new Date();
   const todayKey = format(now, "yyyy-MM-dd");
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-  const start = rangeStart(filters.periodo, now);
+  const { start, end } = filterDateRange(filters, now);
   const normalizedRows = source
     .map(normalize)
     .filter((row): row is NormalizedActivity => Boolean(row))

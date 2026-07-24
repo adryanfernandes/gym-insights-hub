@@ -484,6 +484,14 @@ function useDashboardDataState(filters: Filters) {
         ...cancellation,
         aluno: membersById.get(cancellation.idAluno)?.nome ?? `Aluno ${cancellation.idAluno}`,
       })),
+      renovacaoAtivaLista: membershipData.renovacaoAtivaLista.map((row) => ({
+        ...row,
+        aluno: membersById.get(row.idAluno)?.nome ?? `Aluno ${row.idAluno}`,
+      })),
+      renovacaoDesativadaLista: membershipData.renovacaoDesativadaLista.map((row) => ({
+        ...row,
+        aluno: membersById.get(row.idAluno)?.nome ?? `Aluno ${row.idAluno}`,
+      })),
     };
   }, [activityData, memberData, membershipData, memberships, sourceRows]);
   const filterOptions = useMemo(() => getDashboardFilterOptions(sourceRows), [sourceRows]);

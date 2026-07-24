@@ -51,6 +51,12 @@ function date(value: string | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function inputDate(value: string | null | undefined, endOfDay = false) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function periodStart(period: string, now: Date) {
   const normalized = period
     .normalize("NFD")
@@ -62,6 +68,16 @@ function periodStart(period: string, now: Date) {
   if (normalized.includes("90 dias")) return subDays(now, 89);
   if (normalized.includes("ano")) return startOfYear(now);
   return subDays(now, 29);
+}
+
+function filterDateRange(filters: Filters, now: Date) {
+  const fallbackStart = periodStart(filters.periodo, now);
+  const fallbackEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const customStart = inputDate(filters.dataInicio);
+  const customEnd = inputDate(filters.dataFim, true);
+  const start = customStart ?? fallbackStart;
+  const end = customEnd ?? fallbackEnd;
+  return start <= end ? { start, end } : { start: end, end: start };
 }
 
 function monthKey(value: Date) {
@@ -202,8 +218,7 @@ export function getMembershipDashboardData(
 ) {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const start = periodStart(filters.periodo, now);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const { start, end } = filterDateRange(filters, now);
   const branches = selectedValues(filters.unidade, ["Todas", "Todos"])
     .filter((value) => value.match(/^\d+$/))
     .map(Number);
@@ -246,6 +261,18 @@ export function getMembershipDashboardData(
     const value = date(row.cancel_date);
     return value && value >= start && value <= end;
   });
+  const renewalLatestByMember = new Map<number, MembershipRow>();
+  scoped.forEach((row) => {
+    const current = renewalLatestByMember.get(row.id_member);
+    const currentDate = date(current?.membership_start || current?.sale_date)?.getTime() ?? 0;
+    const rowDate = date(row.membership_start || row.sale_date)?.getTime() ?? 0;
+    if (!current || rowDate >= currentDate) renewalLatestByMember.set(row.id_member, row);
+  });
+  const renewalRows = Array.from(renewalLatestByMember.values());
+  const renewalActiveRows = renewalRows.filter((row) => Number(row.status) === 1);
+  const renewalInactiveRows = renewalRows.filter((row) => Number(row.status) !== 1);
+  const renewalInactivePercent =
+    (renewalInactiveRows.length / Math.max(renewalRows.length, 1)) * 100;
   const totalSales = sales.reduce((sum, row) => sum + num(row.sale_value), 0);
   const renovacoesPeriodo = renewalsInPeriod(scoped, start, end);
   const currentMonth = monthKey(now);
@@ -371,7 +398,8 @@ export function getMembershipDashboardData(
         saldo: sales.length - cancellations.length,
         renovacoes: renovacoesPeriodo,
       },
-      taxaDesativacaoRenovacao: (cancellations.length / Math.max(sales.length, 1)) * 100,
+      renovacoesAtivas: renewalActiveRows.length,
+      taxaDesativacaoRenovacao: renewalInactivePercent,
       faturamentoMes: paidCurrentMonth,
       faturamentoEstimadoProx: nextMonthProjection,
       ltvMedio: ltv,
@@ -386,6 +414,24 @@ export function getMembershipDashboardData(
     evolucaoVendas,
     renovacoesMensais,
     tipoContratoData,
+    renovacaoAtivaLista: renewalActiveRows.map((row) => ({
+      idAluno: row.id_member,
+      idContrato: row.id_member_membership,
+      contrato: row.membership_name?.trim() || "NÃ£o informado",
+      inicio: row.membership_start || row.sale_date,
+      vencimento: row.membership_end,
+      status: Number(row.status) === 1 ? "Ativa" : "Desativada",
+      valor: num(row.sale_value),
+    })),
+    renovacaoDesativadaLista: renewalInactiveRows.map((row) => ({
+      idAluno: row.id_member,
+      idContrato: row.id_member_membership,
+      contrato: row.membership_name?.trim() || "NÃ£o informado",
+      inicio: row.membership_start || row.sale_date,
+      vencimento: row.membership_end,
+      status: Number(row.status) === 1 ? "Ativa" : "Desativada",
+      valor: num(row.sale_value),
+    })),
     vendasLista: sales
       .slice()
       .sort((a, b) => (date(b.sale_date)?.getTime() ?? 0) - (date(a.sale_date)?.getTime() ?? 0))

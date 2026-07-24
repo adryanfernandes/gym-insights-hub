@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 export type Filters = {
   periodo: string;
+  dataInicio: string;
+  dataFim: string;
   unidade: string[];
   tipoContrato: string[];
   sexo: string[];
@@ -59,6 +61,19 @@ const ADMIN_USER: AppUser = {
 
 const AppCtx = createContext<Ctx | null>(null);
 
+function inputDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function defaultDateRange() {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29);
+  return {
+    dataInicio: inputDate(start),
+    dataFim: inputDate(today),
+  };
+}
+
 function loadUsers() {
   try {
     const saved = window.localStorage.getItem(USERS_STORAGE_KEY);
@@ -76,8 +91,11 @@ function persistUsers(users: AppUser[]) {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const initialRange = defaultDateRange();
   const [filters, setFiltersState] = useState<Filters>({
     periodo: "Últimos 30 dias",
+    dataInicio: initialRange.dataInicio,
+    dataFim: initialRange.dataFim,
     unidade: ["Todos"],
     tipoContrato: ["Todos"],
     sexo: ["Todos"],

@@ -42,6 +42,30 @@ function Select({
   );
 }
 
+function DateInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex min-w-36 flex-col gap-1">
+      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </label>
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 rounded-md border border-input bg-card px-2 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring"
+      />
+    </div>
+  );
+}
+
 function MultiSelect({
   label,
   value,
@@ -116,11 +140,15 @@ export function FiltersBar({ extra }: { extra?: React.ReactNode }) {
       setFilters({ [k]: value });
   return (
     <div className="relative z-40 flex flex-wrap items-end gap-3 overflow-visible rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
-      <Select
-        label="Período"
-        value={filters.periodo}
-        options={PERIODOS}
-        onChange={(periodo) => setFilters({ periodo })}
+      <DateInput
+        label="Início"
+        value={filters.dataInicio}
+        onChange={(dataInicio) => setFilters({ dataInicio, periodo: "Período personalizado" })}
+      />
+      <DateInput
+        label="Fim"
+        value={filters.dataFim}
+        onChange={(dataFim) => setFilters({ dataFim, periodo: "Período personalizado" })}
       />
       <MultiSelect
         label="Bairro"

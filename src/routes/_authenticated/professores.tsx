@@ -73,6 +73,30 @@ function TeacherSelect({
   );
 }
 
+function TeacherDateInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex min-w-[150px] flex-1 flex-col gap-1 sm:flex-none">
+      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </label>
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 max-w-[240px] rounded-md border border-input bg-card px-2 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring"
+      />
+    </div>
+  );
+}
+
 function TeacherMultiSelect({
   label,
   value,
@@ -207,13 +231,27 @@ function ProfessoresPage() {
       showFilters={false}
     >
       <div className="relative z-40 flex flex-wrap items-end gap-3 overflow-visible rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
-        <TeacherSelect
-          label="Período"
-          value={filters.periodo}
-          options={["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Este ano"]}
-          onChange={(periodo) =>
+        <TeacherDateInput
+          label="Início"
+          value={filters.dataInicio}
+          onChange={(dataInicio) =>
             setFilters({
-              periodo,
+              dataInicio,
+              periodo: "Período personalizado",
+              professor: ["Todos"],
+              modalidade: ["Todas"],
+              atividadeUnidade: ["Todas"],
+              horario: ["Todos"],
+            })
+          }
+        />
+        <TeacherDateInput
+          label="Fim"
+          value={filters.dataFim}
+          onChange={(dataFim) =>
+            setFilters({
+              dataFim,
+              periodo: "Período personalizado",
               professor: ["Todos"],
               modalidade: ["Todas"],
               atividadeUnidade: ["Todas"],

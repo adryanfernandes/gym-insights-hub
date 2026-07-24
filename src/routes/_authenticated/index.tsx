@@ -61,6 +61,7 @@ const tooltipStyle = {
 const ACTIVE_PAGE_SIZE = 25;
 
 function periodKpiLabel(metric: string, period: string) {
+  if (period.toLowerCase().includes("personalizado")) return `${metric} período`;
   if (period.includes("Hoje")) return `${metric} hoje`;
   if (period.includes("7")) return `${metric} 7d`;
   if (period.includes("90")) return `${metric} 90d`;
@@ -220,6 +221,8 @@ function GeralPage() {
   const [cancellationsSort, setCancellationsSort] = useState<SortState>(null);
   const [riskSort, setRiskSort] = useState<SortState>(null);
   const [participantsSort, setParticipantsSort] = useState<SortState>(null);
+  const [renewalOpen, setRenewalOpen] = useState(false);
+  const [renewalTab, setRenewalTab] = useState<"ativas" | "desativadas">("ativas");
   const openClientPage = (clientId: number | string | null | undefined) => {
     const parsed = Number(clientId);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
@@ -227,10 +230,13 @@ function GeralPage() {
     setSalesOpen(false);
     setCancellationsOpen(false);
     setRiskStudentsOpen(false);
+    setRenewalOpen(false);
     setSelectedActivity(null);
     navigate({ to: "/clientes/$id", params: { id: String(parsed) } });
   };
   const renewalDeactivation = Number(k.taxaDesativacaoRenovacao).toFixed(2).replace(".", ",");
+  const renewalRows =
+    renewalTab === "ativas" ? data.renovacaoAtivaLista : data.renovacaoDesativadaLista;
   const movimentacaoPeriodo = k.movimentacaoPeriodo ?? {
     entradas: 0,
     saidas: 0,
@@ -421,10 +427,15 @@ function GeralPage() {
           onClick={() => setCancellationsOpen(true)}
         />
         <KpiCard
-          label="Desat. renovação"
-          value={`${renewalDeactivation}%`}
-          accent="warning"
+          label="Renovações ativas"
+          value={formatNum(k.renovacoesAtivas ?? 0)}
+          hint={`${renewalDeactivation}% desativadas no período`}
+          accent="success"
           icon={<RefreshCw className="h-5 w-5" />}
+          onClick={() => {
+            setRenewalTab("ativas");
+            setRenewalOpen(true);
+          }}
         />
         <KpiCard
           label="Ocupação agenda"
@@ -694,6 +705,81 @@ function GeralPage() {
                   <tr>
                     <td colSpan={8} className="px-5 py-10 text-center text-muted-foreground">
                       Nenhum aluno ativo em risco foi encontrado com os filtros selecionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={renewalOpen} onOpenChange={setRenewalOpen}>
+        <DialogContent className="flex max-h-[85vh] max-w-6xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5">
+            <DialogTitle>RenovaÃ§Ã£o automÃ¡tica</DialogTitle>
+            <DialogDescription>
+              {formatNum(data.renovacaoAtivaLista.length)} clientes ativos e{" "}
+              {formatNum(data.renovacaoDesativadaLista.length)} clientes desativados no perÃ­odo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2 border-b border-border px-6 py-3">
+            <button
+              type="button"
+              onClick={() => setRenewalTab("ativas")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                renewalTab === "ativas"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-foreground hover:bg-accent"
+              }`}
+            >
+              Ativas ({formatNum(data.renovacaoAtivaLista.length)})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRenewalTab("desativadas")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                renewalTab === "desativadas"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-foreground hover:bg-accent"
+              }`}
+            >
+              Desativadas ({formatNum(data.renovacaoDesativadaLista.length)})
+            </button>
+          </div>
+          <div className="overflow-auto">
+            <table className="w-full min-w-[820px] text-sm">
+              <thead className="sticky top-0 bg-card text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3">NÃºmero</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Contrato</th>
+                  <th className="px-4 py-3">InÃ­cio</th>
+                  <th className="px-4 py-3">Vencimento</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {renewalRows.map((row) => (
+                  <tr
+                    key={`${row.status}-${row.idAluno}-${row.idContrato ?? row.contrato}`}
+                    className="cursor-pointer border-t border-border transition hover:bg-accent/60"
+                    onClick={() => openClientPage(row.idAluno)}
+                  >
+                    <td className="px-4 py-3 font-medium">{row.idAluno}</td>
+                    <td className="px-4 py-3 font-medium">{row.aluno}</td>
+                    <td className="px-4 py-3">{row.contrato}</td>
+                    <td className="px-4 py-3">{displayDate(row.inicio)}</td>
+                    <td className="px-4 py-3">{displayDate(row.vencimento)}</td>
+                    <td className="px-4 py-3">{row.status}</td>
+                    <td className="px-4 py-3 text-right">{formatBRL(row.valor)}</td>
+                  </tr>
+                ))}
+                {renewalRows.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-10 text-center text-muted-foreground" colSpan={7}>
+                      Nenhum cliente encontrado para esta aba.
                     </td>
                   </tr>
                 )}
