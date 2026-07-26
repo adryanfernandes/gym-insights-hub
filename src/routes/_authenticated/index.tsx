@@ -229,6 +229,11 @@ function GeralPage() {
   const [selectedRenewalMonthTab, setSelectedRenewalMonthTab] = useState<
     "renovacoes" | "vencimentos"
   >("renovacoes");
+  const openRenewalMonth = (month?: (typeof data.renovacoesMensais)[number]) => {
+    if (!month) return;
+    setSelectedRenewalMonth(month);
+    setSelectedRenewalMonthTab("renovacoes");
+  };
   const openClientPage = (clientId: number | string | null | undefined) => {
     const parsed = Number(clientId);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
@@ -991,9 +996,7 @@ function GeralPage() {
                 const month = event?.activePayload?.[0]?.payload as
                   | (typeof data.renovacoesMensais)[number]
                   | undefined;
-                if (!month) return;
-                setSelectedRenewalMonth(month);
-                setSelectedRenewalMonthTab("renovacoes");
+                openRenewalMonth(month);
               }}
               className="cursor-pointer"
             >
@@ -1010,12 +1013,26 @@ function GeralPage() {
                 name="Renovações"
                 fill="var(--chart-3)"
                 radius={[4, 4, 0, 0]}
+                onClick={(entry) =>
+                  openRenewalMonth(
+                    entry && typeof entry === "object" && "payload" in entry
+                      ? (entry.payload as (typeof data.renovacoesMensais)[number])
+                      : undefined,
+                  )
+                }
               />
               <Bar
                 dataKey="vencimentos"
                 name="Vencimentos"
                 fill="var(--chart-4)"
                 radius={[4, 4, 0, 0]}
+                onClick={(entry) =>
+                  openRenewalMonth(
+                    entry && typeof entry === "object" && "payload" in entry
+                      ? (entry.payload as (typeof data.renovacoesMensais)[number])
+                      : undefined,
+                  )
+                }
               />
             </BarChart>
           </ResponsiveContainer>
