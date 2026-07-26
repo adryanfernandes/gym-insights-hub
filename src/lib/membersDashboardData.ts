@@ -148,6 +148,37 @@ type IndexedContract = {
   end: Date | null;
 };
 
+function isContractActiveToday(contract: MembershipRow, today = new Date()) {
+  const start = toDate(contract.membership_start || contract.sale_date);
+  const end = toDate(contract.membership_end);
+  const cancel = toDate(contract.cancel_date);
+  const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+  return (
+    Number(contract.status) === 1 &&
+    (!start || start <= reference) &&
+    Boolean(end && end >= reference) &&
+    (!cancel || cancel > reference)
+  );
+}
+
+function mostRelevantContract(contracts: MembershipRow[]) {
+  const now = new Date();
+  const active = contracts
+    .filter((contract) => isContractActiveToday(contract, now))
+    .sort((a, b) => {
+      const aEnd = toDate(a.membership_end)?.getTime() ?? 0;
+      const bEnd = toDate(b.membership_end)?.getTime() ?? 0;
+      return bEnd - aEnd;
+    })[0];
+  if (active) return active;
+
+  return [...contracts].sort((a, b) => {
+    const aDate = toDate(a.membership_start || a.sale_date || a.membership_end)?.getTime() ?? 0;
+    const bDate = toDate(b.membership_start || b.sale_date || b.membership_end)?.getTime() ?? 0;
+    return bDate - aDate;
+  })[0];
+}
+
 function contractForMemberAt(
   contractsByMember: Map<number, IndexedContract[]>,
   memberId: number,
@@ -403,21 +434,36 @@ function useDashboardDataState(filters: Filters) {
   }, []);
 
   const sourceRows = useMemo(() => {
-    const contracts = new Map<number, { name: string; timestamp: number }>();
+    const contracts = new Map<number, MembershipRow[]>();
     memberships.forEach((membership) => {
-      const name = membership.membership_name?.trim();
-      if (!name) return;
-      const timestamp = new Date(
-        membership.membership_start || membership.sale_date || 0,
-      ).getTime();
-      const current = contracts.get(membership.id_member);
-      if (!current || timestamp >= current.timestamp) {
-        contracts.set(membership.id_member, { name, timestamp });
-      }
+      const list = contracts.get(membership.id_member) ?? [];
+      list.push(membership);
+      contracts.set(membership.id_member, list);
     });
     return members.map((member) => {
-      const contract = contracts.get(member.id)?.name;
-      return contract ? { ...member, contrato: contract, contratoNome: contract } : member;
+      const memberContracts = contracts.get(member.id) ?? [];
+      const selectedContract = mostRelevantContract(memberContracts);
+      const contractName = selectedContract?.membership_name?.trim();
+      const activeByContract = memberContracts.some((contract) => isContractActiveToday(contract));
+
+      return {
+        ...member,
+        ativo: activeByContract,
+        contrato: contractName || member.contrato,
+        contratoNome: contractName || member.contratoNome,
+        inicio:
+          toBRDate(selectedContract?.membership_start || selectedContract?.sale_date) ??
+          member.inicio,
+        vencimento: toBRDate(selectedContract?.membership_end) ?? member.vencimento,
+        valor:
+          selectedContract?.sale_value !== undefined
+            ? toNumberValue(selectedContract.sale_value, member.valor)
+            : member.valor,
+        valorTotal:
+          selectedContract?.sale_value !== undefined
+            ? toNumberValue(selectedContract.sale_value, member.valorTotal)
+            : member.valorTotal,
+      };
     });
   }, [members, memberships]);
   const normalizedActivities = useMemo(() => normalizeActivities(activities), [activities]);
