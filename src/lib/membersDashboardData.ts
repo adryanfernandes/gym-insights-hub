@@ -83,6 +83,29 @@ const STATUS_FIELDS = [
   "membership_status",
 ];
 const ID_FIELDS = ["idMember", "id", "member_id", "codigo", "code", "uuid"];
+const IMAGE_FIELDS = [
+  "photoUrl",
+  "photo_url",
+  "foto",
+  "fotoUrl",
+  "foto_url",
+  "image",
+  "imageUrl",
+  "image_url",
+  "avatar",
+  "avatarUrl",
+  "avatar_url",
+  "picture",
+  "pictureUrl",
+  "picture_url",
+  "profileImage",
+  "profileImageUrl",
+  "profile_image_url",
+  "urlPhoto",
+  "urlImage",
+  "memberPhoto",
+  "member_photo",
+];
 
 let membersRequest: Promise<MemberRecord[]> | null = null;
 let activitiesRequest: Promise<StoredActivity[]> | null = null;
@@ -274,6 +297,7 @@ function memberToClient(member: MemberRecord, index: number): ClientRow {
     inicio: startDate ? format(startDate, "dd/MM/yyyy") : null,
     vencimento: inferredDue ? format(inferredDue, "dd/MM/yyyy") : null,
     ultimaFrequencia: toBRDate(pick(member, LAST_FREQUENCY_FIELDS)),
+    fotoUrl: toStringValue(pick(member, IMAGE_FIELDS), "") || null,
     valor: value,
     valorTotal: value,
     diasAtivo: startDate

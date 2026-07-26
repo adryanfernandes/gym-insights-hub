@@ -223,15 +223,22 @@ function ClientesPage() {
                       >
                         <td className="px-5 py-3 font-mono text-xs">{client.id}</td>
                         <td className="px-5 py-3">
-                          <Link
-                            to="/clientes/$id"
-                            params={{ id: String(client.id) }}
-                            onClick={(event) => event.stopPropagation()}
-                            className="font-semibold text-primary hover:underline"
-                          >
-                            {client.nome}
-                          </Link>
-                          <p className="text-xs text-muted-foreground">{client.cidade || "-"}</p>
+                          <div className="flex items-center gap-3">
+                            <ClientPhoto client={client} />
+                            <div className="min-w-0">
+                              <Link
+                                to="/clientes/$id"
+                                params={{ id: String(client.id) }}
+                                onClick={(event) => event.stopPropagation()}
+                                className="font-semibold text-primary hover:underline"
+                              >
+                                {client.nome}
+                              </Link>
+                              <p className="text-xs text-muted-foreground">
+                                {client.cidade || "-"}
+                              </p>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-5 py-3">
                           <span
@@ -288,6 +295,35 @@ function ClientesPage() {
         </section>
       </div>
     </DashboardLayout>
+  );
+}
+
+function clientInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function ClientPhoto({ client }: { client: ClientRow }) {
+  if (client.fotoUrl) {
+    return (
+      <img
+        src={client.fotoUrl}
+        alt={client.nome}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="h-9 w-9 shrink-0 rounded-full border border-border object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+      {clientInitials(client.nome) || "?"}
+    </div>
   );
 }
 

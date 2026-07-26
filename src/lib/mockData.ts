@@ -20,6 +20,7 @@ export type ClientRow = {
   inicio: string | null;
   vencimento: string | null;
   ultimaFrequencia: string | null;
+  fotoUrl: string | null;
   valor: number;
   valorTotal: number;
   diasAtivo: number;

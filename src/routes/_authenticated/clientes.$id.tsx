@@ -61,9 +61,7 @@ function ClienteDetalhePage() {
             <section className="grid gap-4 lg:grid-cols-4">
               <div className="rounded-xl border border-border bg-card p-5 shadow-sm lg:col-span-2">
                 <div className="flex items-start gap-4">
-                  <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <UserRound className="h-6 w-6" />
-                  </div>
+                  <ClientProfilePhoto name={client.nome} photoUrl={client.fotoUrl} />
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                       Cliente nº {client.id}
@@ -162,6 +160,38 @@ function ClienteDetalhePage() {
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+function clientInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function ClientProfilePhoto({ name, photoUrl }: { name: string; photoUrl: string | null }) {
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt={name}
+        referrerPolicy="no-referrer"
+        className="h-14 w-14 shrink-0 rounded-xl border border-border object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+      {clientInitials(name) ? (
+        <span className="text-base font-bold">{clientInitials(name)}</span>
+      ) : (
+        <UserRound className="h-6 w-6" />
+      )}
+    </div>
   );
 }
 
