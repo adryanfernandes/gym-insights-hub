@@ -139,6 +139,7 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
     status: string;
   }>>(monthKeys.map((key) => [key, []]));
   const expirationEvents = new Set<string>();
+  const renewedExpirationEvents = new Set<string>();
   const detail = (row: MembershipRow, eventDate: Date | null) => ({
     idAluno: row.id_member,
     idContrato: row.id_member_membership,
@@ -189,12 +190,16 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
       }
     });
     let previousEnd = periods[0]?.end ?? null;
+    let previousMemberExpirationKey = previousEnd
+      ? `${memberId}:${format(previousEnd, "yyyy-MM-dd")}`
+      : null;
 
     periods.slice(1).forEach((period) => {
       const gap = previousEnd
         ? differenceInCalendarDays(period.start, previousEnd)
         : Number.POSITIVE_INFINITY;
       if (gap >= -30 && gap <= 30) {
+        if (previousMemberExpirationKey) renewedExpirationEvents.add(previousMemberExpirationKey);
         const key = monthKey(period.performedAt);
         if (totals.has(key)) {
           totals.set(key, (totals.get(key) ?? 0) + 1);
@@ -202,13 +207,32 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
         }
       }
       previousEnd = period.end;
+      previousMemberExpirationKey = previousEnd
+        ? `${memberId}:${format(previousEnd, "yyyy-MM-dd")}`
+        : null;
     });
   });
 
   const expirations = new Map(monthKeys.map((key) => [key, 0]));
   expirationEvents.forEach((event) => {
+    if (renewedExpirationEvents.has(event)) return;
     const key = event.split(":")[1]?.slice(0, 7) ?? "";
     if (expirations.has(key)) expirations.set(key, (expirations.get(key) ?? 0) + 1);
+  });
+  renewedExpirationEvents.forEach((event) => {
+    const key = event.split(":")[1]?.slice(0, 7) ?? "";
+    const details = expirationDetails.get(key);
+    if (!details) return;
+    const [memberIdText, expirationDate] = event.split(":");
+    const memberId = Number(memberIdText);
+    expirationDetails.set(
+      key,
+      details.filter(
+        (row) =>
+          row.idAluno !== memberId ||
+          format(date(row.vencimento) ?? new Date(0), "yyyy-MM-dd") !== expirationDate,
+      ),
+    );
   });
 
   return monthKeys.map((key) => ({
