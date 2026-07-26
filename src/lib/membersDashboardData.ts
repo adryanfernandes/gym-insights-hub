@@ -17,6 +17,7 @@ import {
 } from "@/lib/activityDashboardData";
 import {
   getMembershipDashboardData,
+  isSingleUseMembership,
   type MembershipRow,
   type ReceivableRow,
 } from "@/lib/membershipDashboardData";
@@ -149,6 +150,7 @@ type IndexedContract = {
 };
 
 function isContractActiveToday(contract: MembershipRow, today = new Date()) {
+  if (isSingleUseMembership(contract)) return false;
   const start = toDate(contract.membership_start || contract.sale_date);
   const end = toDate(contract.membership_end);
   const cancel = toDate(contract.cancel_date);
@@ -163,7 +165,8 @@ function isContractActiveToday(contract: MembershipRow, today = new Date()) {
 
 function mostRelevantContract(contracts: MembershipRow[]) {
   const now = new Date();
-  const active = contracts
+  const recurringContracts = contracts.filter((contract) => !isSingleUseMembership(contract));
+  const active = recurringContracts
     .filter((contract) => isContractActiveToday(contract, now))
     .sort((a, b) => {
       const aEnd = toDate(a.membership_end)?.getTime() ?? 0;
@@ -172,7 +175,7 @@ function mostRelevantContract(contracts: MembershipRow[]) {
     })[0];
   if (active) return active;
 
-  return [...contracts].sort((a, b) => {
+  return [...recurringContracts].sort((a, b) => {
     const aDate = toDate(a.membership_start || a.sale_date || a.membership_end)?.getTime() ?? 0;
     const bDate = toDate(b.membership_start || b.sale_date || b.membership_end)?.getTime() ?? 0;
     return bDate - aDate;
@@ -504,6 +507,7 @@ function useDashboardDataState(filters: Filters) {
     const membersById = new Map(sourceRows.map((member) => [member.id, member]));
     const contractsByMember = new Map<number, IndexedContract[]>();
     memberships.forEach((contract) => {
+      if (isSingleUseMembership(contract)) return;
       const list = contractsByMember.get(contract.id_member) ?? [];
       list.push({
         contract,

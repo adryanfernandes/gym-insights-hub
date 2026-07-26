@@ -51,6 +51,17 @@ function date(value: string | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function normalizedText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+export function isSingleUseMembership(row: Pick<MembershipRow, "membership_name">) {
+  return normalizedText(row.membership_name).includes("avulso");
+}
+
 function inputDate(value: string | null | undefined, endOfDay = false) {
   if (!value) return null;
   const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
@@ -269,11 +280,12 @@ export function getMembershipDashboardData(
   const branches = selectedValues(filters.unidade, ["Todas", "Todos"])
     .filter((value) => value.match(/^\d+$/))
     .map(Number);
+  const recurringMemberships = memberships.filter((row) => !isSingleUseMembership(row));
   const memberScoped = filteredMemberIds
-    ? memberships.filter((row) => filteredMemberIds.has(row.id_member))
+    ? recurringMemberships.filter((row) => filteredMemberIds.has(row.id_member))
     : branches.length
-      ? memberships.filter((row) => row.id_branch != null && branches.includes(row.id_branch))
-      : memberships;
+      ? recurringMemberships.filter((row) => row.id_branch != null && branches.includes(row.id_branch))
+      : recurringMemberships;
   const scoped = memberScoped.filter((row) =>
     matchesSelection(row.membership_name?.trim() || "Não informado", filters.tipoContrato, [
       "Todos",
