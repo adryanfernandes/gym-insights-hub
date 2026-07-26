@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v3/membermembership";
 const PAGE_SIZE = 2;
+const MEMBER_LOOKUP_PAGE_SIZE = 25;
+const MEMBERS_WITHOUT_CONTRACTS_PER_RUN = 10;
 const MAX_PAGES_PER_RUN = 20;
 const MAX_RUN_MS = 75000;
 
@@ -55,11 +57,12 @@ async function settings(base: string, key: string) {
   return ((await response.json())[0] as { next_skip?: number } | undefined)?.next_skip ?? 0;
 }
 
-async function page(auth: string, skip: number) {
+async function page(auth: string, skip: number, options?: { idMember?: number; take?: number }) {
   const url = new URL(ENDPOINT);
   url.searchParams.set("idBranch", process.env.EVO_BRANCH_ID || "1");
-  url.searchParams.set("take", String(PAGE_SIZE));
+  url.searchParams.set("take", String(options?.take ?? PAGE_SIZE));
   url.searchParams.set("skip", String(skip));
+  if (options?.idMember) url.searchParams.set("idMember", String(options.idMember));
   let lastError = "";
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -82,7 +85,8 @@ async function page(auth: string, skip: number) {
       lastError = error instanceof Error ? error.message : "Falha desconhecida";
     }
   }
-  throw new Error(`EVO não respondeu no cursor ${skip}: ${lastError}`);
+  const target = options?.idMember ? `cliente ${options.idMember}` : `cursor ${skip}`;
+  throw new Error(`EVO não respondeu no ${target}: ${lastError}`);
 }
 
 function value(record: Record<string, unknown>, key: string) {
@@ -173,6 +177,56 @@ async function existingIds(base: string, key: string, ids: number[]) {
   );
 }
 
+async function memberIds(base: string, key: string) {
+  const ids = new Set<number>();
+  for (let offset = 0; offset < 10000; offset += 1000) {
+    const response = await fetch(
+      `${base}/rest/v1/members?select=idMember&order=idMember.asc&offset=${offset}&limit=1000`,
+      { headers: { apikey: key }, cache: "no-store" },
+    );
+    if (!response.ok) throw new Error(`Falha ao consultar clientes: ${await response.text()}`);
+    const rows = (await response.json()) as Array<{ idMember?: number | string }>;
+    rows.forEach((row) => {
+      const id = Number(row.idMember);
+      if (Number.isFinite(id)) ids.add(id);
+    });
+    if (rows.length < 1000) break;
+  }
+  return ids;
+}
+
+async function memberIdsWithMemberships(base: string, key: string) {
+  const ids = new Set<number>();
+  for (let offset = 0; offset < 10000; offset += 1000) {
+    const response = await fetch(
+      `${base}/rest/v1/member_memberships?select=id_member&order=id_member.asc&offset=${offset}&limit=1000`,
+      { headers: { apikey: key }, cache: "no-store" },
+    );
+    if (!response.ok)
+      throw new Error(`Falha ao consultar clientes com contratos: ${await response.text()}`);
+    const rows = (await response.json()) as Array<{ id_member?: number | string }>;
+    rows.forEach((row) => {
+      const id = Number(row.id_member);
+      if (Number.isFinite(id)) ids.add(id);
+    });
+    if (rows.length < 1000) break;
+  }
+  return ids;
+}
+
+async function membersWithoutMemberships(base: string, key: string) {
+  const [members, withMemberships] = await Promise.all([
+    memberIds(base, key),
+    memberIdsWithMemberships(base, key),
+  ]);
+  const missing = Array.from(members).filter((id) => !withMemberships.has(id));
+  if (missing.length <= MEMBERS_WITHOUT_CONTRACTS_PER_RUN) return missing;
+  const start = Math.floor(Date.now() / 60000) % missing.length;
+  return Array.from({ length: MEMBERS_WITHOUT_CONTRACTS_PER_RUN }, (_, index) => {
+    return missing[(start + index) % missing.length];
+  });
+}
+
 async function updateCursor(base: string, key: string, nextSkip: number) {
   const response = await fetch(`${base}/rest/v1/membership_sync_settings?id=eq.true`, {
     method: "PATCH",
@@ -209,18 +263,13 @@ export const Route = createFileRoute("/api/sync-memberships")({
         let fetched = 0;
         let newMemberships = 0;
         let receivablesSynced = 0;
+        let membersCheckedWithoutContracts = 0;
         let completed = false;
         try {
           cursor = await settings(base, key);
           const auth = await authorization(base, key);
-          for (let index = 0; index < MAX_PAGES_PER_RUN; index += 1) {
-            if (Date.now() - started > MAX_RUN_MS) break;
-            const records = await page(auth, cursor);
-            if (!records.length) {
-              cursor = 0;
-              completed = true;
-              break;
-            }
+          const saveRecords = async (records: RawRecord[]) => {
+            if (!records.length) return;
             const syncedAt = new Date().toISOString();
             const ids = records.map((record) => record.idMemberMemberShip);
             const existing = await existingIds(base, key, ids);
@@ -235,11 +284,40 @@ export const Route = createFileRoute("/api/sync-memberships")({
             await upsert(base, key, "membership_receivables", "id_receivable", receivables);
             fetched += records.length;
             receivablesSynced += receivables.length;
+          };
+          for (let index = 0; index < MAX_PAGES_PER_RUN; index += 1) {
+            if (Date.now() - started > MAX_RUN_MS) break;
+            const records = await page(auth, cursor);
+            if (!records.length) {
+              cursor = 0;
+              completed = true;
+              break;
+            }
+            await saveRecords(records);
             cursor += records.length;
             if (records.length < PAGE_SIZE) {
               cursor = 0;
               completed = true;
               break;
+            }
+          }
+          if (Date.now() - started < MAX_RUN_MS) {
+            const missingMembers = await membersWithoutMemberships(base, key);
+            for (const idMember of missingMembers) {
+              if (Date.now() - started > MAX_RUN_MS) break;
+              let memberSkip = 0;
+              for (let index = 0; index < 4; index += 1) {
+                if (Date.now() - started > MAX_RUN_MS) break;
+                const records = await page(auth, memberSkip, {
+                  idMember,
+                  take: MEMBER_LOOKUP_PAGE_SIZE,
+                });
+                if (!records.length) break;
+                await saveRecords(records);
+                memberSkip += records.length;
+                if (records.length < MEMBER_LOOKUP_PAGE_SIZE) break;
+              }
+              membersCheckedWithoutContracts += 1;
             }
           }
           await updateCursor(base, key, cursor);
@@ -263,6 +341,7 @@ export const Route = createFileRoute("/api/sync-memberships")({
             receivablesSynced,
             nextSkip: cursor,
             cycleCompleted: completed,
+            membersCheckedWithoutContracts,
             trigger,
             finishedAt,
           });
