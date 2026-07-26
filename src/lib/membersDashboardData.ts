@@ -496,7 +496,17 @@ function useDashboardDataState(filters: Filters) {
       receitaPorPlano: membershipData.receitaPorPlano,
       projecaoFaturamento: membershipData.projecaoFaturamento,
       evolucaoVendas: membershipData.evolucaoVendas,
-      renovacoesMensais: membershipData.renovacoesMensais,
+      renovacoesMensais: membershipData.renovacoesMensais.map((month) => ({
+        ...month,
+        renovacoesLista: month.renovacoesLista.map((row) => ({
+          ...row,
+          aluno: membersById.get(row.idAluno)?.nome ?? `Aluno ${row.idAluno}`,
+        })),
+        vencimentosLista: month.vencimentosLista.map((row) => ({
+          ...row,
+          aluno: membersById.get(row.idAluno)?.nome ?? `Aluno ${row.idAluno}`,
+        })),
+      })),
       vendasLista: membershipData.vendasLista.map((sale) => ({
         ...sale,
         aluno: membersById.get(sale.idAluno)?.nome ?? `Aluno ${sale.idAluno}`,

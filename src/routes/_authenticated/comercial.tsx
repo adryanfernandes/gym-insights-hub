@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ResponsiveContainer,
   LineChart,
@@ -50,8 +50,15 @@ const RISK_LABEL: Record<string, string> = { alto: "Alto", medio: "Médio", baix
 
 function ComercialPage() {
   const { filters } = useApp();
+  const navigate = useNavigate();
   const { data, loadingMemberships, membershipsError } = useDashboardData(filters);
   const k = data.overviewKpis;
+
+  const openClientPage = (clientId: number | string | null | undefined) => {
+    const parsed = Number(clientId);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    navigate({ to: "/clientes/$id", params: { id: String(parsed) } });
+  };
 
   const onExportExcel = () =>
     exportToExcel("comercial", {
@@ -259,7 +266,12 @@ function ComercialPage() {
                 .slice()
                 .sort((a, b) => b.diasSemAtividade - a.diasSemAtividade)
                 .map((a) => (
-                  <tr key={a.id} className="border-t border-border hover:bg-accent/40 transition">
+                  <tr
+                    key={a.id}
+                    className="cursor-pointer border-t border-border transition hover:bg-accent/40"
+                    onClick={() => openClientPage(a.id)}
+                    title="Abrir perfil do cliente"
+                  >
                     <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{a.id}</td>
                     <td className="px-5 py-3 font-medium">{a.nome}</td>
                     <td className="px-5 py-3 text-muted-foreground">{a.ultimoAgendamento}</td>

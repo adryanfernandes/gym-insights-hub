@@ -109,9 +109,39 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
   });
 
   const totals = new Map(monthKeys.map((key) => [key, 0]));
+  const renewalDetails = new Map<string, Array<{
+    idAluno: number;
+    idContrato: number;
+    contrato: string;
+    data: string | null;
+    vencimento: string | null;
+    valor: number;
+    status: string;
+  }>>(monthKeys.map((key) => [key, []]));
+  const expirationDetails = new Map<string, Array<{
+    idAluno: number;
+    idContrato: number;
+    contrato: string;
+    data: string | null;
+    vencimento: string | null;
+    valor: number;
+    status: string;
+  }>>(monthKeys.map((key) => [key, []]));
   const expirationEvents = new Set<string>();
+  const detail = (row: MembershipRow, eventDate: Date | null) => ({
+    idAluno: row.id_member,
+    idContrato: row.id_member_membership,
+    contrato: row.membership_name?.trim() || "NÃ£o informado",
+    data: eventDate ? eventDate.toISOString() : (row.sale_date ?? row.membership_start),
+    vencimento: row.membership_end,
+    valor: num(row.sale_value),
+    status: Number(row.status) === 1 ? "Ativo" : "Inativo",
+  });
   byMember.forEach((memberRows, memberId) => {
-    const periodsByStart = new Map<string, { start: Date; end: Date | null; performedAt: Date }>();
+    const periodsByStart = new Map<
+      string,
+      { start: Date; end: Date | null; performedAt: Date; row: MembershipRow }
+    >();
 
     memberRows.forEach((row) => {
       const start = date(row.membership_start || row.sale_date);
@@ -125,6 +155,10 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
         end: end && (!current?.end || end > current.end) ? end : (current?.end ?? null),
         performedAt:
           current && current.performedAt < performedAt ? current.performedAt : performedAt,
+        row:
+          current && current.performedAt < performedAt
+            ? current.row
+            : row,
       });
     });
 
@@ -133,7 +167,14 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
     );
     periods.forEach((period) => {
       if (period.end) {
-        expirationEvents.add(`${memberId}:${format(period.end, "yyyy-MM-dd")}`);
+        const eventKey = `${memberId}:${format(period.end, "yyyy-MM-dd")}`;
+        if (!expirationEvents.has(eventKey)) {
+          expirationEvents.add(eventKey);
+          const key = monthKey(period.end);
+          if (expirationDetails.has(key)) {
+            expirationDetails.get(key)?.push(detail(period.row, period.end));
+          }
+        }
       }
     });
     let previousEnd = periods[0]?.end ?? null;
@@ -144,7 +185,10 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
         : Number.POSITIVE_INFINITY;
       if (gap >= -30 && gap <= 30) {
         const key = monthKey(period.performedAt);
-        if (totals.has(key)) totals.set(key, (totals.get(key) ?? 0) + 1);
+        if (totals.has(key)) {
+          totals.set(key, (totals.get(key) ?? 0) + 1);
+          renewalDetails.get(key)?.push(detail(period.row, period.performedAt));
+        }
       }
       previousEnd = period.end;
     });
@@ -158,8 +202,11 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
 
   return monthKeys.map((key) => ({
     mes: label(key),
+    mesKey: key,
     renovacoes: totals.get(key) ?? 0,
     vencimentos: expirations.get(key) ?? 0,
+    renovacoesLista: renewalDetails.get(key) ?? [],
+    vencimentosLista: expirationDetails.get(key) ?? [],
   }));
 }
 

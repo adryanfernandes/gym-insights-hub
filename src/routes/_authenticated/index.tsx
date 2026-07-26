@@ -223,6 +223,12 @@ function GeralPage() {
   const [participantsSort, setParticipantsSort] = useState<SortState>(null);
   const [renewalOpen, setRenewalOpen] = useState(false);
   const [renewalTab, setRenewalTab] = useState<"ativas" | "desativadas">("ativas");
+  const [selectedRenewalMonth, setSelectedRenewalMonth] = useState<
+    (typeof data.renovacoesMensais)[number] | null
+  >(null);
+  const [selectedRenewalMonthTab, setSelectedRenewalMonthTab] = useState<
+    "renovacoes" | "vencimentos"
+  >("renovacoes");
   const openClientPage = (clientId: number | string | null | undefined) => {
     const parsed = Number(clientId);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
@@ -231,12 +237,17 @@ function GeralPage() {
     setCancellationsOpen(false);
     setRiskStudentsOpen(false);
     setRenewalOpen(false);
+    setSelectedRenewalMonth(null);
     setSelectedActivity(null);
     navigate({ to: "/clientes/$id", params: { id: String(parsed) } });
   };
   const renewalDeactivation = Number(k.taxaDesativacaoRenovacao).toFixed(2).replace(".", ",");
   const renewalRows =
     renewalTab === "ativas" ? data.renovacaoAtivaLista : data.renovacaoDesativadaLista;
+  const selectedRenewalMonthRows =
+    selectedRenewalMonthTab === "renovacoes"
+      ? (selectedRenewalMonth?.renovacoesLista ?? [])
+      : (selectedRenewalMonth?.vencimentosLista ?? []);
   const movimentacaoPeriodo = k.movimentacaoPeriodo ?? {
     entradas: 0,
     saidas: 0,
@@ -789,6 +800,89 @@ function GeralPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={Boolean(selectedRenewalMonth)}
+        onOpenChange={(open) => !open && setSelectedRenewalMonth(null)}
+      >
+        <DialogContent className="flex max-h-[85vh] max-w-6xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5">
+            <DialogTitle>Renovações e vencimentos - {selectedRenewalMonth?.mes}</DialogTitle>
+            <DialogDescription>
+              {formatNum(selectedRenewalMonth?.renovacoes ?? 0)} renovações e{" "}
+              {formatNum(selectedRenewalMonth?.vencimentos ?? 0)} vencimentos neste mês.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2 border-b border-border px-6 py-3">
+            <button
+              type="button"
+              onClick={() => setSelectedRenewalMonthTab("renovacoes")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                selectedRenewalMonthTab === "renovacoes"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-foreground hover:bg-accent"
+              }`}
+            >
+              Renovações ({formatNum(selectedRenewalMonth?.renovacoes ?? 0)})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedRenewalMonthTab("vencimentos")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                selectedRenewalMonthTab === "vencimentos"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-foreground hover:bg-accent"
+              }`}
+            >
+              Vencimentos ({formatNum(selectedRenewalMonth?.vencimentos ?? 0)})
+            </button>
+          </div>
+          <div className="overflow-auto">
+            <table className="w-full min-w-[820px] text-sm">
+              <thead className="sticky top-0 bg-card text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3">Número</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Contrato</th>
+                  <th className="px-4 py-3">
+                    {selectedRenewalMonthTab === "renovacoes" ? "Data da renovação" : "Vencimento"}
+                  </th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedRenewalMonthRows.map((row) => (
+                  <tr
+                    key={`${selectedRenewalMonthTab}-${row.idAluno}-${row.idContrato}-${row.data}`}
+                    className="cursor-pointer border-t border-border transition hover:bg-accent/60"
+                    onClick={() => openClientPage(row.idAluno)}
+                    title="Abrir perfil do cliente"
+                  >
+                    <td className="px-4 py-3 font-medium">{row.idAluno}</td>
+                    <td className="px-4 py-3 font-medium">{row.aluno}</td>
+                    <td className="px-4 py-3">{row.contrato}</td>
+                    <td className="px-4 py-3">
+                      {displayDate(
+                        selectedRenewalMonthTab === "renovacoes" ? row.data : row.vencimento,
+                      )}
+                    </td>
+                    <td className="px-4 py-3">{row.status}</td>
+                    <td className="px-4 py-3 text-right">{formatBRL(row.valor)}</td>
+                  </tr>
+                ))}
+                {selectedRenewalMonthRows.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-10 text-center text-muted-foreground" colSpan={6}>
+                      Nenhum cliente encontrado nesta lista.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(selectedActivity)} onOpenChange={(open) => !open && setSelectedActivity(null)}>
         <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border px-6 py-5">
@@ -891,7 +985,18 @@ function GeralPage() {
           description="Comparativo dos últimos 12 meses"
         >
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.renovacoesMensais}>
+            <BarChart
+              data={data.renovacoesMensais}
+              onClick={(event) => {
+                const month = event?.activePayload?.[0]?.payload as
+                  | (typeof data.renovacoesMensais)[number]
+                  | undefined;
+                if (!month) return;
+                setSelectedRenewalMonth(month);
+                setSelectedRenewalMonthTab("renovacoes");
+              }}
+              className="cursor-pointer"
+            >
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
               <YAxis
