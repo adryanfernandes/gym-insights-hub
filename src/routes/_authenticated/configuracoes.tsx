@@ -247,7 +247,12 @@ function ClientsApiPanel() {
   }
 
   return (
-    <div className="space-y-4">
+    <Tabs defaultValue="sync" className="space-y-4">
+      <TabsList className="h-auto flex-wrap">
+        <TabsTrigger value="sync">Sincronização</TabsTrigger>
+        <TabsTrigger value="missing">Alunos sem contrato</TabsTrigger>
+      </TabsList>
+      <TabsContent value="sync" className="space-y-4">
       <section className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col gap-5">
           <div className="flex items-center gap-2">
@@ -399,7 +404,11 @@ function ClientsApiPanel() {
           </TableBody>
         </Table>
       </section>
-    </div>
+      </TabsContent>
+      <TabsContent value="missing" className="space-y-4">
+        <MissingMembershipsPanel />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -1031,6 +1040,163 @@ function MembershipsApiPanel() {
               <TableRow>
                 <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                   Nenhuma atualização registrada.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+    </div>
+  );
+}
+
+type MissingMembershipRow = {
+  id: number;
+  nome: string;
+};
+
+type MissingMembershipSummary = {
+  count: number;
+  sample: MissingMembershipRow[];
+};
+
+function MissingMembershipsPanel() {
+  const [summary, setSummary] = useState<MissingMembershipSummary>({ count: 0, sample: [] });
+  const [limit, setLimit] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const loadMissing = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/missing-memberships", { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setSummary({
+        count: Number(result.count) || 0,
+        sample: Array.isArray(result.sample) ? result.sample : [],
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao verificar alunos sem contrato.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMissing().catch(() => undefined);
+  }, [loadMissing]);
+
+  async function syncMissing() {
+    setSyncing(true);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/missing-memberships", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ limit }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setSummary({
+        count: Number(result.missingAfter) || 0,
+        sample: Array.isArray(result.sample) ? result.sample : [],
+      });
+      setMessage(
+        `${result.checkedMembers ?? 0} alunos consultados por ID; ${result.synchronized ?? 0} contratos e ${result.receivablesSynced ?? 0} recebíveis processados; ${result.newMemberships ?? 0} contratos novos. Restam ${result.missingAfter ?? 0} alunos sem contrato cadastrado.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao buscar contratos ausentes.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Alunos sem contratos no Supabase</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Verifica alunos cadastrados que ainda não possuem nenhum contrato salvo e consulta a
+              EVO/W12 pelo ID do aluno para tentar recuperar o histórico de contratos.
+            </p>
+            {message && <p className="mt-2 text-xs text-success">{message}</p>}
+            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Alunos sem contrato</p>
+              <p className="mt-1 text-2xl font-bold">
+                {loading ? "..." : summary.count.toLocaleString("pt-BR")}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Lote por execução</p>
+              <p className="mt-1 text-2xl font-bold">{limit}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Modo de busca</p>
+              <p className="mt-1 text-sm font-semibold">idMember na API de contratos</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-52 space-y-2">
+              <Label htmlFor="missing-membership-limit">Alunos por busca</Label>
+              <Input
+                id="missing-membership-limit"
+                type="number"
+                min={1}
+                max={50}
+                value={limit}
+                onChange={(event) =>
+                  setLimit(Math.max(1, Math.min(50, Number(event.target.value) || 1)))
+                }
+              />
+            </div>
+            <Button variant="outline" onClick={loadMissing} disabled={loading || syncing}>
+              {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              Verificar lista
+            </Button>
+            <Button onClick={syncMissing} disabled={syncing || loading || summary.count === 0}>
+              {syncing ? <Loader2 className="animate-spin" /> : <DatabaseZap />}
+              {syncing ? "Buscando contratos..." : "Buscar contratos por ID"}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-4 text-sm font-semibold">Primeiros alunos sem contrato</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Número</TableHead>
+              <TableHead>Aluno</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {summary.sample.length ? (
+              summary.sample.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-mono text-xs">{row.id}</TableCell>
+                  <TableCell className="font-medium">{row.nome}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={2} className="h-24 text-center text-muted-foreground">
+                  {loading ? "Carregando..." : "Nenhum aluno sem contrato encontrado."}
                 </TableCell>
               </TableRow>
             )}
