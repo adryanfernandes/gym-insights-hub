@@ -62,6 +62,25 @@ export function isSingleUseMembership(row: Pick<MembershipRow, "membership_name"
   return normalizedText(row.membership_name).includes("avulso");
 }
 
+function isMembershipActiveAt(row: MembershipRow, referenceDate = new Date()) {
+  if (isSingleUseMembership(row)) return false;
+  const reference = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate(),
+    12,
+  );
+  const start = date(row.membership_start || row.sale_date);
+  const end = date(row.membership_end);
+  const cancel = date(row.cancel_date);
+  return (
+    Number(row.status) === 1 &&
+    (!start || start <= reference) &&
+    Boolean(end && end >= reference) &&
+    (!cancel || cancel > reference)
+  );
+}
+
 function inputDate(value: string | null | undefined, endOfDay = false) {
   if (!value) return null;
   const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
@@ -147,7 +166,7 @@ function monthlyRenewals(rows: MembershipRow[], monthKeys: string[]) {
     data: eventDate ? eventDate.toISOString() : (row.sale_date ?? row.membership_start),
     vencimento: row.membership_end,
     valor: num(row.sale_value),
-    status: Number(row.status) === 1 ? "Ativo" : "Inativo",
+    status: isMembershipActiveAt(row) ? "Ativo" : "Inativo",
   });
   byMember.forEach((memberRows, memberId) => {
     const periodsByStart = new Map<
@@ -352,8 +371,8 @@ export function getMembershipDashboardData(
     if (!current || rowDate >= currentDate) renewalLatestByMember.set(row.id_member, row);
   });
   const renewalRows = Array.from(renewalLatestByMember.values());
-  const renewalActiveRows = renewalRows.filter((row) => Number(row.status) === 1);
-  const renewalInactiveRows = renewalRows.filter((row) => Number(row.status) !== 1);
+  const renewalActiveRows = renewalRows.filter((row) => isMembershipActiveAt(row));
+  const renewalInactiveRows = renewalRows.filter((row) => !isMembershipActiveAt(row));
   const renewalInactivePercent =
     (renewalInactiveRows.length / Math.max(renewalRows.length, 1)) * 100;
   const totalSales = sales.reduce((sum, row) => sum + num(row.sale_value), 0);
@@ -503,7 +522,7 @@ export function getMembershipDashboardData(
       contrato: row.membership_name?.trim() || "NÃ£o informado",
       inicio: row.membership_start || row.sale_date,
       vencimento: row.membership_end,
-      status: Number(row.status) === 1 ? "Ativa" : "Desativada",
+      status: isMembershipActiveAt(row) ? "Ativa" : "Desativada",
       valor: num(row.sale_value),
     })),
     renovacaoDesativadaLista: renewalInactiveRows.map((row) => ({
@@ -512,7 +531,7 @@ export function getMembershipDashboardData(
       contrato: row.membership_name?.trim() || "NÃ£o informado",
       inicio: row.membership_start || row.sale_date,
       vencimento: row.membership_end,
-      status: Number(row.status) === 1 ? "Ativa" : "Desativada",
+      status: isMembershipActiveAt(row) ? "Ativa" : "Desativada",
       valor: num(row.sale_value),
     })),
     vendasLista: sales

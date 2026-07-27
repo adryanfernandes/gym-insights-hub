@@ -33,19 +33,18 @@ export function normalizeClientStatus(client: ClientRow) {
 }
 
 export function contractStatus(contract: MembershipRow) {
-  if (Number(contract.status) === 1) return "Ativo";
   if (contract.cancel_date) return "Cancelado";
   const end = contract.membership_end ? new Date(contract.membership_end) : null;
   if (end && !Number.isNaN(end.getTime()) && end < new Date()) return "Vencido";
+  if (Number(contract.status) === 1) return "Ativo";
   if (contract.status !== null && contract.status !== undefined) return `Status ${contract.status}`;
   return "Ativo";
 }
 
 function isActiveContract(contract: MembershipRow) {
-  if (Number(contract.status) === 1) return true;
   if (contract.cancel_date) return false;
   const end = contract.membership_end ? new Date(contract.membership_end) : null;
-  return !end || Number.isNaN(end.getTime()) || end >= new Date();
+  return Number(contract.status) === 1 && Boolean(end && !Number.isNaN(end.getTime()) && end >= new Date());
 }
 
 function dateSortValue(label: string) {
