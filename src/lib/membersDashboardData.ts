@@ -404,6 +404,7 @@ function activeStudentsEvolutionFromContracts(
   memberships: MembershipRow[],
   clients: ClientRow[],
   filters: Filters,
+  currentActiveCount: number,
 ) {
   const range = dashboardDateRange(filters, new Date());
   const days = Math.min(
@@ -438,9 +439,10 @@ function activeStudentsEvolutionFromContracts(
     filteredContracts.forEach((contract) => {
       if (isContractActiveAt(contract, current)) activeMemberIds.add(contract.id_member);
     });
+    const isLastPoint = index === days - 1;
     return {
       data: format(current, "dd/MM"),
-      ativos: activeMemberIds.size,
+      ativos: isLastPoint ? currentActiveCount : activeMemberIds.size,
     };
   });
 }
@@ -839,6 +841,7 @@ function useDashboardDataState(filters: Filters) {
       memberships,
       sourceRows,
       deferredFilters,
+      memberData.overviewKpis.alunosAtivos,
     );
     const contractsByMember = new Map<number, IndexedContract[]>();
     memberships.forEach((contract) => {
