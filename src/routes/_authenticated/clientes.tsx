@@ -308,13 +308,16 @@ function clientInitials(name: string) {
 }
 
 function ClientPhoto({ client }: { client: ClientRow }) {
-  if (client.fotoUrl) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (client.fotoUrl && !imageFailed) {
     return (
       <img
         src={client.fotoUrl}
         alt={client.nome}
         loading="lazy"
         referrerPolicy="no-referrer"
+        onError={() => setImageFailed(true)}
         className="h-9 w-9 shrink-0 rounded-full border border-border object-cover"
       />
     );

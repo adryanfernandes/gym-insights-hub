@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, FileText, UserRound } from "lucide-react";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useApp } from "@/contexts/AppContext";
 import {
@@ -173,12 +174,15 @@ function clientInitials(name: string) {
 }
 
 function ClientProfilePhoto({ name, photoUrl }: { name: string; photoUrl: string | null }) {
-  if (photoUrl) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (photoUrl && !imageFailed) {
     return (
       <img
         src={photoUrl}
         alt={name}
         referrerPolicy="no-referrer"
+        onError={() => setImageFailed(true)}
         className="h-14 w-14 shrink-0 rounded-xl border border-border object-cover"
       />
     );

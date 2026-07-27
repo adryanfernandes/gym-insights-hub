@@ -129,6 +129,17 @@ function toStringValue(value: unknown, fallback = "") {
   return fallback;
 }
 
+function toImageUrl(value: unknown) {
+  const raw = toStringValue(value, "");
+  if (!raw) return null;
+
+  if (raw.startsWith("//")) return `https:${raw}`;
+  if (raw.startsWith("www.")) return `https://${raw}`;
+  if (/^https?:\/\//i.test(raw) || /^data:image\//i.test(raw)) return raw;
+
+  return null;
+}
+
 function toNumberValue(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -184,6 +195,120 @@ function isContractActiveToday(contract: MembershipRow, today = new Date()) {
     Boolean(end && end >= reference) &&
     (!cancel || cancel > reference)
   );
+}
+
+function inputFilterDate(value: string | null | undefined, endOfDay = false) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function dashboardPeriodStart(period: string, referenceDate: Date) {
+  const normalized = period
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalized.includes("hoje")) {
+    return new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  }
+  if (normalized.includes("7")) return subDays(referenceDate, 6);
+  if (normalized.includes("90")) return subDays(referenceDate, 89);
+  if (normalized.includes("ano")) return new Date(referenceDate.getFullYear(), 0, 1);
+  return subDays(referenceDate, 29);
+}
+
+function dashboardDateRange(filters: Filters, referenceDate: Date) {
+  const fallbackStart = dashboardPeriodStart(filters.periodo, referenceDate);
+  const fallbackEnd = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
+  const start = inputFilterDate(filters.dataInicio) ?? fallbackStart;
+  const end = inputFilterDate(filters.dataFim, true) ?? fallbackEnd;
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
+function selectedFilterValues(selected: string[] | string, allOptions: string[]) {
+  const list = Array.isArray(selected) ? selected : [selected];
+  return list.filter((item) => !allOptions.includes(item));
+}
+
+function clientAgeRange(idade: number) {
+  if (idade <= 0) return "Nao informada";
+  if (idade <= 25) return "18-25";
+  if (idade <= 35) return "26-35";
+  if (idade <= 45) return "36-45";
+  if (idade <= 55) return "46-55";
+  return "55+";
+}
+
+function matchesFilterList(value: string, selected: string[] | string, allOptions: string[]) {
+  const active = selectedFilterValues(selected, allOptions);
+  return active.length === 0 || active.includes(value);
+}
+
+function isContractActiveAt(contract: MembershipRow, day: Date) {
+  if (isSingleUseMembership(contract)) return false;
+  const reference = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12);
+  const start = toDate(contract.membership_start || contract.sale_date);
+  const end = toDate(contract.membership_end);
+  const cancel = toDate(contract.cancel_date);
+  return (
+    Number(contract.status) === 1 &&
+    (!start || start <= reference) &&
+    Boolean(end && end >= reference) &&
+    (!cancel || cancel > reference)
+  );
+}
+
+function activeStudentsEvolutionFromContracts(
+  memberships: MembershipRow[],
+  clients: ClientRow[],
+  filters: Filters,
+) {
+  const range = dashboardDateRange(filters, new Date());
+  const days = Math.min(
+    90,
+    Math.max(1, differenceInCalendarDays(range.end, range.start) + 1),
+  );
+  const eligibleMembers = new Set(
+    clients
+      .filter(
+        (client) =>
+          matchesFilterList(client.bairro, filters.unidade, ["Todas", "Todos"]) &&
+          matchesFilterList(client.genero, filters.sexo, ["Todos"]) &&
+          matchesFilterList(clientAgeRange(client.idade), filters.faixaEtaria, ["Todas"]) &&
+          (matchesFilterList("Todos", filters.statusAluno, ["Todos"]) ||
+            (client.ativo
+              ? matchesFilterList("Ativos", filters.statusAluno, [])
+              : matchesFilterList("Inativos", filters.statusAluno, []))),
+      )
+      .map((client) => client.id),
+  );
+  const filteredContracts = memberships.filter(
+    (contract) =>
+      eligibleMembers.has(contract.id_member) &&
+      matchesFilterList(contract.membership_name?.trim() || "Nao informado", filters.tipoContrato, [
+        "Todos",
+      ]),
+  );
+
+  return Array.from({ length: days }, (_, index) => {
+    const current = subDays(range.end, days - 1 - index);
+    const activeMemberIds = new Set<number>();
+    filteredContracts.forEach((contract) => {
+      if (isContractActiveAt(contract, current)) activeMemberIds.add(contract.id_member);
+    });
+    return {
+      data: format(current, "dd/MM"),
+      ativos: activeMemberIds.size,
+    };
+  });
 }
 
 function mostRelevantContract(contracts: MembershipRow[]) {
@@ -297,7 +422,7 @@ function memberToClient(member: MemberRecord, index: number): ClientRow {
     inicio: startDate ? format(startDate, "dd/MM/yyyy") : null,
     vencimento: inferredDue ? format(inferredDue, "dd/MM/yyyy") : null,
     ultimaFrequencia: toBRDate(pick(member, LAST_FREQUENCY_FIELDS)),
-    fotoUrl: toStringValue(pick(member, IMAGE_FIELDS), "") || null,
+    fotoUrl: toImageUrl(pick(member, IMAGE_FIELDS)),
     valor: value,
     valorTotal: value,
     diasAtivo: startDate
@@ -529,6 +654,11 @@ function useDashboardDataState(filters: Filters) {
   }, [deferredFilters, memberships, receivables, sourceRows]);
   const data = useMemo(() => {
     const membersById = new Map(sourceRows.map((member) => [member.id, member]));
+    const evolucaoAlunosPorContrato = activeStudentsEvolutionFromContracts(
+      memberships,
+      sourceRows,
+      deferredFilters,
+    );
     const contractsByMember = new Map<number, IndexedContract[]>();
     memberships.forEach((contract) => {
       if (isSingleUseMembership(contract)) return;
@@ -561,6 +691,7 @@ function useDashboardDataState(filters: Filters) {
         ...membershipData.kpis,
         taxaOcupacaoAgenda: activityData.overviewOccupancy,
       },
+      evolucaoAlunos: memberships.length ? evolucaoAlunosPorContrato : memberData.evolucaoAlunos,
       ocupacaoAgenda: activityData.ocupacaoAgenda,
       agendaEventos: enrichAgenda(activityData.agendaEventos),
       agendaHoje: enrichAgenda(activityData.agendaHoje),
@@ -598,7 +729,7 @@ function useDashboardDataState(filters: Filters) {
         aluno: membersById.get(row.idAluno)?.nome ?? `Aluno ${row.idAluno}`,
       })),
     };
-  }, [activityData, memberData, membershipData, memberships, sourceRows]);
+  }, [activityData, deferredFilters, memberData, membershipData, memberships, sourceRows]);
   const filterOptions = useMemo(() => getDashboardFilterOptions(sourceRows), [sourceRows]);
 
   return {
