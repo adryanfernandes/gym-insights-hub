@@ -39,6 +39,14 @@ function hasActiveMembershipStatus(status: MembershipRow["status"]) {
   return status === null || status === undefined || Number(status) === 1;
 }
 
+function isMembershipStatusExplicitlyCancelled(status: MembershipRow["status"]) {
+  const normalized = String(status ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return Number(status) === 2 || normalized.includes("cancel");
+}
+
 export function normalizeClientStatus(client: ClientRow) {
   return client.ativo ? "Ativo" : "Inativo";
 }
@@ -47,7 +55,7 @@ export function contractStatus(contract: MembershipRow) {
   if (contract.cancel_date) return "Cancelado";
   const end = endOfDate(contract.membership_end);
   if (end && end < new Date()) return "Vencido";
-  if (Number(contract.status) === 1) return "Ativo";
+  if (end && end >= new Date() && !isMembershipStatusExplicitlyCancelled(contract.status)) return "Ativo";
   if (contract.status !== null && contract.status !== undefined) return `Status ${contract.status}`;
   return "Ativo";
 }
@@ -55,7 +63,12 @@ export function contractStatus(contract: MembershipRow) {
 function isActiveContract(contract: MembershipRow) {
   if (contract.cancel_date) return false;
   const end = endOfDate(contract.membership_end);
-  return hasActiveMembershipStatus(contract.status) && Boolean(end && end >= new Date());
+  const isCurrentByPeriod = Boolean(end && end >= new Date());
+  return (
+    isCurrentByPeriod &&
+    (hasActiveMembershipStatus(contract.status) ||
+      !isMembershipStatusExplicitlyCancelled(contract.status))
+  );
 }
 
 function dateSortValue(label: string) {

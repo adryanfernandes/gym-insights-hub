@@ -191,6 +191,14 @@ function hasActiveMembershipStatus(status: MembershipRow["status"]) {
   return status === null || status === undefined || Number(status) === 1;
 }
 
+function isMembershipStatusExplicitlyCancelled(status: MembershipRow["status"]) {
+  const normalized = String(status ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return Number(status) === 2 || normalized.includes("cancel");
+}
+
 function toBRDate(value: unknown) {
   const date = toDate(value);
   return date ? format(date, "dd/MM/yyyy") : null;
@@ -289,11 +297,12 @@ function isContractActiveToday(contract: MembershipRow, today = new Date()) {
   const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
   const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+  const isCurrentByPeriod =
+    (!start || start <= reference) && Boolean(end && end >= reference) && (!cancel || cancel > reference);
   return (
-    hasActiveMembershipStatus(contract.status) &&
-    (!start || start <= reference) &&
-    Boolean(end && end >= reference) &&
-    (!cancel || cancel > reference)
+    isCurrentByPeriod &&
+    (hasActiveMembershipStatus(contract.status) ||
+      (!isMembershipStatusExplicitlyCancelled(contract.status) && isCurrentByPeriod))
   );
 }
 
@@ -377,11 +386,12 @@ function isContractActiveAt(contract: MembershipRow, day: Date) {
   const start = toDate(contract.membership_start || contract.sale_date);
   const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
+  const isCurrentByPeriod =
+    (!start || start <= reference) && Boolean(end && end >= reference) && (!cancel || cancel > reference);
   return (
-    hasActiveMembershipStatus(contract.status) &&
-    (!start || start <= reference) &&
-    Boolean(end && end >= reference) &&
-    (!cancel || cancel > reference)
+    isCurrentByPeriod &&
+    (hasActiveMembershipStatus(contract.status) ||
+      (!isMembershipStatusExplicitlyCancelled(contract.status) && isCurrentByPeriod))
   );
 }
 

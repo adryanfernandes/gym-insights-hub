@@ -63,6 +63,14 @@ function hasActiveMembershipStatus(status: MembershipRow["status"]) {
   return status === null || status === undefined || Number(status) === 1;
 }
 
+function isMembershipStatusExplicitlyCancelled(status: MembershipRow["status"]) {
+  const normalized = String(status ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return Number(status) === 2 || normalized.includes("cancel");
+}
+
 function normalizedText(value: string | null | undefined) {
   return (value ?? "")
     .normalize("NFD")
@@ -85,11 +93,12 @@ function isMembershipActiveAt(row: MembershipRow, referenceDate = new Date()) {
   const start = date(row.membership_start || row.sale_date);
   const end = endOfDate(row.membership_end);
   const cancel = date(row.cancel_date);
+  const isCurrentByPeriod =
+    (!start || start <= reference) && Boolean(end && end >= reference) && (!cancel || cancel > reference);
   return (
-    hasActiveMembershipStatus(row.status) &&
-    (!start || start <= reference) &&
-    Boolean(end && end >= reference) &&
-    (!cancel || cancel > reference)
+    isCurrentByPeriod &&
+    (hasActiveMembershipStatus(row.status) ||
+      (!isMembershipStatusExplicitlyCancelled(row.status) && isCurrentByPeriod))
   );
 }
 
