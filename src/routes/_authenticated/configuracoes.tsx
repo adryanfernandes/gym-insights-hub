@@ -461,7 +461,8 @@ function ActivitiesApiPanel() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [enabled, setEnabled] = useState(true);
-  const [intervalMinutes, setIntervalMinutes] = useState(5);
+  const [intervalHours, setIntervalHours] = useState(0);
+  const [intervalMinutesPart, setIntervalMinutesPart] = useState(5);
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
   const [lastAttemptAt, setLastAttemptAt] = useState<number | null>(null);
   const [nextQueryDate, setNextQueryDate] = useState<string | null>(null);
@@ -473,12 +474,14 @@ function ActivitiesApiPanel() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const totalIntervalMinutes = Math.max(1, intervalHours * 60 + intervalMinutesPart);
+
   const nextScheduledAt = useMemo(() => {
     if (!enabled) return null;
     const latestLogAt = history[0] ? new Date(history[0].finished_at).getTime() : 0;
     const anchor = Math.max(latestLogAt, lastAttemptAt ?? 0, scheduleUpdatedAt ?? now);
-    return new Date(anchor + intervalMinutes * 60000);
-  }, [enabled, history, intervalMinutes, lastAttemptAt, now, scheduleUpdatedAt]);
+    return new Date(anchor + totalIntervalMinutes * 60000);
+  }, [enabled, history, lastAttemptAt, now, scheduleUpdatedAt, totalIntervalMinutes]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -489,8 +492,10 @@ function ActivitiesApiPanel() {
     const response = await fetch("/api/activity-sync-settings", { cache: "no-store" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    const savedIntervalMinutes = Math.max(1, Number(result.settings?.interval_minutes ?? 5));
     setEnabled(result.settings?.enabled !== false);
-    setIntervalMinutes(result.settings?.interval_minutes ?? 5);
+    setIntervalHours(Math.floor(savedIntervalMinutes / 60));
+    setIntervalMinutesPart(savedIntervalMinutes % 60);
     setNextQueryDate(result.settings?.next_query_date ?? null);
     setLastAttemptAt(
       result.settings?.last_attempt_at ? new Date(result.settings.last_attempt_at).getTime() : null,
@@ -541,12 +546,14 @@ function ActivitiesApiPanel() {
       const response = await fetch("/api/activity-sync-settings", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: nextEnabled, intervalMinutes }),
+        body: JSON.stringify({ enabled: nextEnabled, intervalMinutes: totalIntervalMinutes }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      const savedIntervalMinutes = Math.max(1, Number(result.settings.interval_minutes ?? 5));
       setEnabled(result.settings.enabled);
-      setIntervalMinutes(result.settings.interval_minutes);
+      setIntervalHours(Math.floor(savedIntervalMinutes / 60));
+      setIntervalMinutesPart(savedIntervalMinutes % 60);
       setScheduleUpdatedAt(new Date(result.settings.schedule_updated_at).getTime());
       setMessage(
         result.settings.enabled
@@ -669,15 +676,30 @@ function ActivitiesApiPanel() {
 
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-52 space-y-2">
-              <Label htmlFor="activity-sync-minutes">Intervalo entre dias (minutos)</Label>
+              <Label htmlFor="activity-sync-hours">Horas</Label>
+              <Input
+                id="activity-sync-hours"
+                type="number"
+                min={0}
+                max={24}
+                value={intervalHours}
+                onChange={(event) =>
+                  setIntervalHours(Math.max(0, Math.min(24, Number(event.target.value) || 0)))
+                }
+              />
+            </div>
+            <div className="w-32 space-y-2">
+              <Label htmlFor="activity-sync-minutes">Minutos</Label>
               <Input
                 id="activity-sync-minutes"
                 type="number"
-                min={1}
-                max={1440}
-                value={intervalMinutes}
+                min={0}
+                max={59}
+                value={intervalMinutesPart}
                 onChange={(event) =>
-                  setIntervalMinutes(Math.max(1, Math.min(1440, Number(event.target.value) || 1)))
+                  setIntervalMinutesPart(
+                    Math.max(0, Math.min(59, Number(event.target.value) || 0)),
+                  )
                 }
               />
             </div>
