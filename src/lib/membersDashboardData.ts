@@ -28,6 +28,15 @@ import {
 } from "@/lib/mockData";
 
 type MemberRecord = Record<string, unknown>;
+type SalesRecord = {
+  source_key: string;
+  id_sale?: number | string | null;
+  id_member?: number | string | null;
+  id_branch?: number | string | null;
+  sale_date?: string | null;
+  sale_value?: number | string | null;
+  payload?: Record<string, unknown> | null;
+};
 
 const NAME_FIELDS = [
   "nome",
@@ -113,6 +122,7 @@ let membershipsRequest: Promise<{
   memberships: MembershipRow[];
   receivables: ReceivableRow[];
 }> | null = null;
+let salesRequest: Promise<SalesRecord[]> | null = null;
 
 function pick(record: MemberRecord, fields: string[]) {
   for (const field of fields) {
@@ -175,6 +185,87 @@ function toDate(value: unknown) {
 function toBRDate(value: unknown) {
   const date = toDate(value);
   return date ? format(date, "dd/MM/yyyy") : null;
+}
+
+function normalizeSearchText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
+  if (Array.isArray(value)) return value.map(normalizeSearchText).join(" ");
+  if (typeof value === "object") return Object.values(value).map(normalizeSearchText).join(" ");
+  return "";
+}
+
+function saleText(sale: SalesRecord) {
+  return normalizeSearchText({
+    id_sale: sale.id_sale,
+    id_member: sale.id_member,
+    sale_value: sale.sale_value,
+    payload: sale.payload,
+  });
+}
+
+function isExperimentalSale(sale: SalesRecord) {
+  const text = saleText(sale);
+  return (
+    text.includes("aula experimental") ||
+    text.includes("experimental") ||
+    text.includes("experiment") ||
+    text.includes("trial")
+  );
+}
+
+function isProposalSale(sale: SalesRecord) {
+  const text = saleText(sale);
+  return (
+    text.includes("proposta") ||
+    text.includes("orcamento") ||
+    text.includes("cotacao") ||
+    text.includes("proposal")
+  );
+}
+
+function isMembershipSale(sale: SalesRecord) {
+  const text = saleText(sale);
+  return !isExperimentalSale(sale) && !isProposalSale(sale) && !text.includes("avulso");
+}
+
+function salesDate(sale: SalesRecord) {
+  const payload = sale.payload ?? {};
+  return (
+    toDate(sale.sale_date) ??
+    toDate(payload.saleDate) ??
+    toDate(payload.date) ??
+    toDate(payload.registerDate) ??
+    toDate(payload.registrationDate) ??
+    toDate(payload.createdAt)
+  );
+}
+
+function salesFunnelFromRows(sales: SalesRecord[], filters: Filters, fallbackMatriculas: number) {
+  if (!sales.length) return null;
+  const range = dashboardDateRange(filters, new Date());
+  const scoped = sales.filter((sale) => {
+    const saleAt = salesDate(sale);
+    return saleAt && saleAt >= range.start && saleAt <= range.end;
+  });
+  if (!scoped.length) return null;
+
+  const aulasExperimentais = scoped.filter(isExperimentalSale).length;
+  const propostas = scoped.filter(isProposalSale).length;
+  const matriculas = scoped.filter(isMembershipSale).length || fallbackMatriculas;
+  const visitantes = Math.max(scoped.length, aulasExperimentais + propostas + matriculas);
+
+  return [
+    { etapa: "Visitantes", valor: visitantes },
+    { etapa: "Aulas Experimentais", valor: aulasExperimentais },
+    { etapa: "Propostas", valor: propostas },
+    { etapa: "Matriculas", valor: matriculas },
+  ];
 }
 
 type IndexedContract = {
@@ -498,12 +589,32 @@ async function fetchMemberships() {
   return membershipsRequest;
 }
 
+async function fetchSales() {
+  if (!salesRequest) {
+    salesRequest = fetch("/api/sales", {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+        const data = (await response.json()) as unknown;
+        return Array.isArray(data) ? (data as SalesRecord[]) : [];
+      })
+      .catch((error) => {
+        salesRequest = null;
+        throw error;
+      });
+  }
+  return salesRequest;
+}
+
 function useDashboardDataState(filters: Filters) {
   const deferredFilters = useDeferredValue(filters);
   const [members, setMembers] = useState<ClientRow[]>([]);
   const [activities, setActivities] = useState<StoredActivity[]>([]);
   const [memberships, setMemberships] = useState<MembershipRow[]>([]);
   const [receivables, setReceivables] = useState<ReceivableRow[]>([]);
+  const [sales, setSales] = useState<SalesRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [loadingMemberships, setLoadingMemberships] = useState(true);
@@ -532,6 +643,22 @@ function useDashboardDataState(filters: Filters) {
 
     loadMembers();
 
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchSales()
+      .then((rows) => {
+        if (!mounted) return;
+        setSales(rows);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setSales([]);
+      });
     return () => {
       mounted = false;
     };
@@ -691,6 +818,12 @@ function useDashboardDataState(filters: Filters) {
         ...membershipData.kpis,
         taxaOcupacaoAgenda: activityData.overviewOccupancy,
       },
+      funilComercial:
+        salesFunnelFromRows(
+          sales,
+          deferredFilters,
+          membershipData.kpis.movimentacaoPeriodo?.entradas ?? 0,
+        ) ?? memberData.funilComercial,
       evolucaoAlunos: memberships.length ? evolucaoAlunosPorContrato : memberData.evolucaoAlunos,
       ocupacaoAgenda: activityData.ocupacaoAgenda,
       agendaEventos: enrichAgenda(activityData.agendaEventos),
@@ -729,7 +862,7 @@ function useDashboardDataState(filters: Filters) {
         aluno: membersById.get(row.idAluno)?.nome ?? `Aluno ${row.idAluno}`,
       })),
     };
-  }, [activityData, deferredFilters, memberData, membershipData, memberships, sourceRows]);
+  }, [activityData, deferredFilters, memberData, membershipData, memberships, sales, sourceRows]);
   const filterOptions = useMemo(() => getDashboardFilterOptions(sourceRows), [sourceRows]);
 
   return {
