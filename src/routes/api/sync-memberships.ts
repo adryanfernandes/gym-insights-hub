@@ -252,6 +252,22 @@ async function history(base: string, key: string, row: Record<string, unknown>) 
   if (!response.ok) throw new Error(`Falha ao salvar histórico: ${await response.text()}`);
 }
 
+async function targetMemberIds(request: Request) {
+  try {
+    const body = (await request.json()) as { ids?: unknown };
+    if (!Array.isArray(body.ids)) return [];
+    return Array.from(
+      new Set(
+        body.ids
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    );
+  } catch {
+    return [];
+  }
+}
+
 export const Route = createFileRoute("/api/sync-memberships")({
   server: {
     handlers: {
@@ -274,9 +290,13 @@ export const Route = createFileRoute("/api/sync-memberships")({
         let membersChecked = 0;
         let completed = false;
         try {
-          const savedSettings = await settings(base, key);
-          cursor = savedSettings.nextSkip;
-          memberOffset = savedSettings.nextMemberOffset;
+          const targetIds = await targetMemberIds(request);
+          const targeted = targetIds.length > 0;
+          if (!targeted) {
+            const savedSettings = await settings(base, key);
+            cursor = savedSettings.nextSkip;
+            memberOffset = savedSettings.nextMemberOffset;
+          }
           const auth = await authorization(base, key);
           const saveRecords = async (records: RawRecord[]) => {
             if (!records.length) return;
@@ -295,8 +315,8 @@ export const Route = createFileRoute("/api/sync-memberships")({
             fetched += records.length;
             receivablesSynced += receivables.length;
           };
-          let ids = await prioritizedMemberIds(base, key, memberOffset);
-          if (!ids.length && memberOffset > 0) {
+          let ids = targeted ? targetIds : await prioritizedMemberIds(base, key, memberOffset);
+          if (!targeted && !ids.length && memberOffset > 0) {
             memberOffset = 0;
             ids = await prioritizedMemberIds(base, key, memberOffset);
             completed = true;
@@ -322,15 +342,17 @@ export const Route = createFileRoute("/api/sync-memberships")({
             }
             if (!memberFinished) break;
             cursor = 0;
-            memberOffset += 1;
+            if (!targeted) memberOffset += 1;
             membersChecked += 1;
           }
 
-          if (ids.length < MEMBER_BATCH_SIZE && cursor === 0) {
+          if (targeted) {
+            completed = membersChecked === ids.length;
+          } else if (ids.length < MEMBER_BATCH_SIZE && cursor === 0) {
             memberOffset = 0;
             completed = true;
           }
-          await updateCursor(base, key, cursor, memberOffset);
+          if (!targeted) await updateCursor(base, key, cursor, memberOffset);
           const finishedAt = new Date().toISOString();
           await history(base, key, {
             started_at: startedAt,
@@ -354,6 +376,8 @@ export const Route = createFileRoute("/api/sync-memberships")({
             nextMemberOffset: memberOffset,
             cycleCompleted: completed,
             membersChecked,
+            targeted,
+            requestedMembers: targetIds,
             trigger,
             finishedAt,
           });
