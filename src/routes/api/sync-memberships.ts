@@ -253,6 +253,18 @@ async function history(base: string, key: string, row: Record<string, unknown>) 
 }
 
 async function targetMemberIds(request: Request) {
+  const queryIds = new URL(request.url).searchParams.get("ids");
+  if (queryIds) {
+    return Array.from(
+      new Set(
+        queryIds
+          .split(",")
+          .map((id) => Number(id.trim()))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    );
+  }
+
   try {
     const body = (await request.json()) as { ids?: unknown };
     if (!Array.isArray(body.ids)) return [];
