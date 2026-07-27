@@ -17,7 +17,7 @@ import { Cake, Users, FileText, UserRoundCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp, type Filters } from "@/contexts/AppContext";
-import { formatNum } from "@/lib/mockData";
+import { formatNum, getFilteredDashboardDataFromRows } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
 
@@ -58,7 +58,11 @@ function PerfilPage() {
     }),
     [filters],
   );
-  const { data } = useDashboardData(profileFilters);
+  const { clients } = useDashboardData(filters);
+  const data = useMemo(
+    () => getFilteredDashboardDataFromRows(profileFilters, clients),
+    [clients, profileFilters],
+  );
   const k = data.overviewKpis;
   const totalSexo = data.sexoData.reduce((s, d) => s + d.qtd, 0);
   const masc = data.sexoData.find((s) => s.sexo === "Masculino")?.qtd ?? 0;
@@ -98,9 +102,9 @@ function PerfilPage() {
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Clientes filtrados"
+          label="Clientes cadastrados"
           value={formatNum(k.clientesFiltrados)}
-          hint="Ignora apenas o filtro de data"
+          hint="Base completa sem filtro de data"
           icon={<UserRoundCheck className="h-5 w-5" />}
         />
         <KpiCard

@@ -239,8 +239,11 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
   const riskReferenceDate = new Date();
   riskReferenceDate.setHours(0, 0, 0, 0);
   const range = filterPeriodRange(filters, referenceDate);
+  const useCompleteBase =
+    filters.periodo === "Base completa" ||
+    (filters.dataInicio === "1900-01-01" && filters.dataFim === "2999-12-31");
   const baseRows = clients.filter((client) => matchesBaseFilters(client, filters));
-  const rows = baseRows.filter((client) => matchesPeriod(client, range));
+  const rows = useCompleteBase ? baseRows : baseRows.filter((client) => matchesPeriod(client, range));
   const periodRows = rows.length ? rows : baseRows;
 
   const starts = periodRows.filter((client) => isInRange(parseBRDate(client.inicio), range));
