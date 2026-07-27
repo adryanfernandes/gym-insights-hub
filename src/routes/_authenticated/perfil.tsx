@@ -16,7 +16,7 @@ import {
 import { Cake, Users, FileText, UserRoundCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
-import { type Filters } from "@/contexts/AppContext";
+import { useApp, type Filters } from "@/contexts/AppContext";
 import { formatNum } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
@@ -48,22 +48,15 @@ const PIE_COLORS = [
 ];
 
 function PerfilPage() {
+  const { filters } = useApp();
   const profileFilters = useMemo<Filters>(
     () => ({
+      ...filters,
       periodo: "Período personalizado",
       dataInicio: "1900-01-01",
       dataFim: "2999-12-31",
-      unidade: ["Todos"],
-      tipoContrato: ["Todos"],
-      sexo: ["Todos"],
-      faixaEtaria: ["Todas"],
-      professor: ["Todos"],
-      modalidade: ["Todas"],
-      atividadeUnidade: ["Todas"],
-      horario: ["Todos"],
-      statusAluno: ["Todos"],
     }),
-    [],
+    [filters],
   );
   const { data } = useDashboardData(profileFilters);
   const k = data.overviewKpis;
@@ -102,13 +95,12 @@ function PerfilPage() {
       subtitle="Visão demográfica e contratual da base completa"
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
-      showFilters={false}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Clientes na base"
+          label="Clientes filtrados"
           value={formatNum(k.clientesFiltrados)}
-          hint="Todos os clientes cadastrados"
+          hint="Ignora apenas o filtro de data"
           icon={<UserRoundCheck className="h-5 w-5" />}
         />
         <KpiCard

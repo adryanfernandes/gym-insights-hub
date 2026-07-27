@@ -135,21 +135,26 @@ export function FiltersBar({ extra }: { extra?: React.ReactNode }) {
   const { filters, setFilters } = useApp();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { filterOptions } = useDashboardData(filters);
+  const hideDateFilters = pathname === "/perfil";
   const updMulti =
     (k: "unidade" | "tipoContrato" | "sexo" | "faixaEtaria" | "statusAluno") => (value: string[]) =>
       setFilters({ [k]: value });
   return (
     <div className="relative z-40 flex flex-wrap items-end gap-3 overflow-visible rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
-      <DateInput
-        label="Início"
-        value={filters.dataInicio}
-        onChange={(dataInicio) => setFilters({ dataInicio, periodo: "Período personalizado" })}
-      />
-      <DateInput
-        label="Fim"
-        value={filters.dataFim}
-        onChange={(dataFim) => setFilters({ dataFim, periodo: "Período personalizado" })}
-      />
+      {!hideDateFilters && (
+        <>
+          <DateInput
+            label="Início"
+            value={filters.dataInicio}
+            onChange={(dataInicio) => setFilters({ dataInicio, periodo: "Período personalizado" })}
+          />
+          <DateInput
+            label="Fim"
+            value={filters.dataFim}
+            onChange={(dataFim) => setFilters({ dataFim, periodo: "Período personalizado" })}
+          />
+        </>
+      )}
       <MultiSelect
         label="Bairro"
         value={filters.unidade}
