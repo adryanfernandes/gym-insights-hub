@@ -288,6 +288,25 @@ function isContractActiveToday(contract: MembershipRow, today = new Date()) {
   );
 }
 
+function isSingleUseActiveToday(contract: MembershipRow, today = new Date()) {
+  if (!isSingleUseMembership(contract)) return false;
+  const start = toDate(contract.membership_start || contract.sale_date);
+  const end = toDate(contract.membership_end);
+  const cancel = toDate(contract.cancel_date);
+  const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+  const startsToday =
+    start &&
+    start.getFullYear() === reference.getFullYear() &&
+    start.getMonth() === reference.getMonth() &&
+    start.getDate() === reference.getDate();
+
+  return (
+    Number(contract.status) === 1 &&
+    (!cancel || cancel > reference) &&
+    ((Boolean(start && end && start <= reference && end >= reference)) || Boolean(startsToday))
+  );
+}
+
 function inputFilterDate(value: string | null | undefined, endOfDay = false) {
   if (!value) return null;
   const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
@@ -413,6 +432,15 @@ function mostRelevantContract(contracts: MembershipRow[]) {
       return bEnd - aEnd;
     })[0];
   if (active) return active;
+
+  const activeSingleUse = contracts
+    .filter((contract) => isSingleUseActiveToday(contract, now))
+    .sort((a, b) => {
+      const aDate = toDate(a.membership_start || a.sale_date)?.getTime() ?? 0;
+      const bDate = toDate(b.membership_start || b.sale_date)?.getTime() ?? 0;
+      return bDate - aDate;
+    })[0];
+  if (activeSingleUse) return activeSingleUse;
 
   return [...recurringContracts].sort((a, b) => {
     const aDate = toDate(a.membership_start || a.sale_date || a.membership_end)?.getTime() ?? 0;
@@ -723,7 +751,9 @@ function useDashboardDataState(filters: Filters) {
       const memberContracts = contracts.get(member.id) ?? [];
       const selectedContract = mostRelevantContract(memberContracts);
       const contractName = selectedContract?.membership_name?.trim();
-      const activeByContract = memberContracts.some((contract) => isContractActiveToday(contract));
+      const activeByContract = memberContracts.some(
+        (contract) => isContractActiveToday(contract) || isSingleUseActiveToday(contract),
+      );
 
       return {
         ...member,

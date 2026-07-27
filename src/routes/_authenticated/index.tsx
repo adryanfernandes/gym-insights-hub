@@ -216,6 +216,7 @@ function GeralPage() {
   >(null);
   const [selectedAgendaDate, setSelectedAgendaDate] = useState(todayInputDate);
   const currentActivityRef = useRef<HTMLTableRowElement | null>(null);
+  const [activeContractFilter, setActiveContractFilter] = useState("Todos");
   const [activePage, setActivePage] = useState(1);
   const [inactivePage, setInactivePage] = useState(1);
   const [activeSort, setActiveSort] = useState<SortState>(null);
@@ -274,9 +275,28 @@ function GeralPage() {
     saldo: 0,
     renovacoes: 0,
   };
+  const activeContractOptions = useMemo(() => {
+    const options = Array.from(
+      new Set(
+        data.alunosAtivosLista
+          .map((student) => student.contrato?.trim() || "NÃ£o informado")
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return ["Todos", ...options];
+  }, [data.alunosAtivosLista]);
+  const filteredActiveStudents = useMemo(
+    () =>
+      activeContractFilter === "Todos"
+        ? data.alunosAtivosLista
+        : data.alunosAtivosLista.filter(
+            (student) => (student.contrato?.trim() || "NÃ£o informado") === activeContractFilter,
+          ),
+    [activeContractFilter, data.alunosAtivosLista],
+  );
   const sortedActiveStudents = useMemo(
     () =>
-      sortedRows(data.alunosAtivosLista, activeSort, {
+      sortedRows(filteredActiveStudents, activeSort, {
         id: (row) => row.id,
         nome: (row) => row.nome,
         contrato: (row) => row.contrato,
@@ -285,7 +305,7 @@ function GeralPage() {
         vencimento: (row) => row.vencimento,
         ultimaFrequencia: (row) => row.ultimaFrequencia,
       }),
-    [activeSort, data.alunosAtivosLista],
+    [activeSort, filteredActiveStudents],
   );
   const sortedInactiveStudents = useMemo(
     () =>
@@ -368,9 +388,13 @@ function GeralPage() {
     currentActivityRef.current?.scrollIntoView({ block: "center" });
   }, [selectedAgendaDate, data.agendaEventos.length]);
 
+  useEffect(() => {
+    setActivePage(1);
+  }, [activeContractFilter]);
+
   const exportActiveStudents = () =>
     exportToExcel("alunos-ativos", {
-      "Alunos ativos": data.alunosAtivosLista.map((student) => ({
+      "Alunos ativos": sortedActiveStudents.map((student) => ({
         Número: student.id,
         Aluno: student.nome,
         Contrato: student.contrato,
@@ -537,7 +561,10 @@ function GeralPage() {
         open={activeStudentsOpen}
         onOpenChange={(open) => {
           setActiveStudentsOpen(open);
-          if (open) setActivePage(1);
+          if (open) {
+            setActivePage(1);
+            setActiveContractFilter("Todos");
+          }
         }}
       >
         <DialogContent className="flex max-h-[85vh] max-w-6xl flex-col gap-0 overflow-hidden p-0">
@@ -546,6 +573,7 @@ function GeralPage() {
               <div>
                 <DialogTitle>Alunos ativos</DialogTitle>
                 <DialogDescription>
+                  {formatNum(sortedActiveStudents.length)} de{" "}
                   {formatNum(data.alunosAtivosLista.length)} alunos conforme os filtros
                   selecionados.
                 </DialogDescription>
@@ -646,6 +674,22 @@ function GeralPage() {
               </button>
             </div>
           </DialogHeader>
+          <div className="flex flex-wrap items-end gap-3 border-b border-border px-6 py-4">
+            <label className="flex min-w-[260px] flex-col gap-1 text-xs font-medium text-muted-foreground">
+              Contrato
+              <select
+                value={activeContractFilter}
+                onChange={(event) => setActiveContractFilter(event.target.value)}
+                className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary"
+              >
+                {activeContractOptions.map((contract) => (
+                  <option key={contract} value={contract}>
+                    {contract}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[980px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
