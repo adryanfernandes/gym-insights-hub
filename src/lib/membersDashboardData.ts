@@ -187,6 +187,10 @@ function endOfDate(date: Date | null) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
 }
 
+function hasActiveMembershipStatus(status: MembershipRow["status"]) {
+  return status === null || status === undefined || Number(status) === 1;
+}
+
 function toBRDate(value: unknown) {
   const date = toDate(value);
   return date ? format(date, "dd/MM/yyyy") : null;
@@ -286,7 +290,7 @@ function isContractActiveToday(contract: MembershipRow, today = new Date()) {
   const cancel = toDate(contract.cancel_date);
   const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
   return (
-    Number(contract.status) === 1 &&
+    hasActiveMembershipStatus(contract.status) &&
     (!start || start <= reference) &&
     Boolean(end && end >= reference) &&
     (!cancel || cancel > reference)
@@ -306,7 +310,7 @@ function isSingleUseActiveToday(contract: MembershipRow, today = new Date()) {
     start.getDate() === reference.getDate();
 
   return (
-    Number(contract.status) === 1 &&
+    hasActiveMembershipStatus(contract.status) &&
     (!cancel || cancel > reference) &&
     ((Boolean(start && end && start <= reference && end >= reference)) || Boolean(startsToday))
   );
@@ -374,7 +378,7 @@ function isContractActiveAt(contract: MembershipRow, day: Date) {
   const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
   return (
-    Number(contract.status) === 1 &&
+    hasActiveMembershipStatus(contract.status) &&
     (!start || start <= reference) &&
     Boolean(end && end >= reference) &&
     (!cancel || cancel > reference)

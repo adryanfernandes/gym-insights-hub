@@ -35,6 +35,10 @@ function endOfDate(value: string | null | undefined) {
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
 }
 
+function hasActiveMembershipStatus(status: MembershipRow["status"]) {
+  return status === null || status === undefined || Number(status) === 1;
+}
+
 export function normalizeClientStatus(client: ClientRow) {
   return client.ativo ? "Ativo" : "Inativo";
 }
@@ -51,7 +55,7 @@ export function contractStatus(contract: MembershipRow) {
 function isActiveContract(contract: MembershipRow) {
   if (contract.cancel_date) return false;
   const end = endOfDate(contract.membership_end);
-  return Number(contract.status) === 1 && Boolean(end && end >= new Date());
+  return hasActiveMembershipStatus(contract.status) && Boolean(end && end >= new Date());
 }
 
 function dateSortValue(label: string) {

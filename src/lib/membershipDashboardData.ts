@@ -59,6 +59,10 @@ function endOfDate(value: string | null | undefined) {
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
 }
 
+function hasActiveMembershipStatus(status: MembershipRow["status"]) {
+  return status === null || status === undefined || Number(status) === 1;
+}
+
 function normalizedText(value: string | null | undefined) {
   return (value ?? "")
     .normalize("NFD")
@@ -82,7 +86,7 @@ function isMembershipActiveAt(row: MembershipRow, referenceDate = new Date()) {
   const end = endOfDate(row.membership_end);
   const cancel = date(row.cancel_date);
   return (
-    Number(row.status) === 1 &&
+    hasActiveMembershipStatus(row.status) &&
     (!start || start <= reference) &&
     Boolean(end && end >= reference) &&
     (!cancel || cancel > reference)
