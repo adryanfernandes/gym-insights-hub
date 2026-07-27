@@ -87,6 +87,10 @@ function ConfiguracoesPage() {
             <CreditCard className="h-4 w-4" />
             API de contratos
           </TabsTrigger>
+          <TabsTrigger value="sales-api" className="gap-2">
+            <DatabaseZap className="h-4 w-4" />
+            API vendas
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="clients-api" className="space-y-4">
           <ClientsApiPanel />
@@ -99,6 +103,9 @@ function ConfiguracoesPage() {
         </TabsContent>
         <TabsContent value="memberships-api" className="space-y-4">
           <MembershipsApiPanel />
+        </TabsContent>
+        <TabsContent value="sales-api" className="space-y-4">
+          <SalesApiPanel />
         </TabsContent>
       </Tabs>
     </DashboardLayout>
@@ -1034,6 +1041,305 @@ function MembershipsApiPanel() {
                   <TableCell>
                     {row.cycle_completed ? "Concluído" : `Cursor ${row.next_skip}`}
                   </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  Nenhuma atualização registrada.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+    </div>
+  );
+}
+
+type SalesSyncLog = {
+  id: string;
+  finished_at: string;
+  trigger_type: "manual" | "scheduled";
+  status: "success" | "error";
+  total_fetched: number;
+  new_sales: number;
+  next_skip: number;
+  cycle_completed: boolean;
+  duration_ms: number;
+};
+
+function SalesApiPanel() {
+  const [enabled, setEnabled] = useState(true);
+  const [intervalHours, setIntervalHours] = useState(24);
+  const [intervalMinutesPart, setIntervalMinutesPart] = useState(0);
+  const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
+  const [nextSkip, setNextSkip] = useState(0);
+  const [history, setHistory] = useState<SalesSyncLog[]>([]);
+  const [credential, setCredential] = useState("");
+  const [hasCredential, setHasCredential] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const totalIntervalMinutes = Math.max(1, intervalHours * 60 + intervalMinutesPart);
+
+  const nextScheduledAt = useMemo(() => {
+    if (!enabled) return null;
+    const success = history.find((row) => row.status === "success");
+    const lastSuccess = success ? new Date(success.finished_at).getTime() : 0;
+    return new Date(Math.max(lastSuccess, scheduleUpdatedAt ?? now) + totalIntervalMinutes * 60000);
+  }, [enabled, history, now, scheduleUpdatedAt, totalIntervalMinutes]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const load = useCallback(async () => {
+    const response = await fetch("/api/sales-sync-settings", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    const savedIntervalMinutes = Math.max(
+      1,
+      Number(result.settings?.interval_minutes ?? (result.settings?.interval_hours ?? 24) * 60),
+    );
+    setEnabled(result.settings?.enabled !== false);
+    setIntervalHours(Math.floor(savedIntervalMinutes / 60));
+    setIntervalMinutesPart(savedIntervalMinutes % 60);
+    setScheduleUpdatedAt(
+      new Date(
+        result.settings?.schedule_updated_at || result.settings?.updated_at || Date.now(),
+      ).getTime(),
+    );
+    setNextSkip(result.settings?.next_skip ?? 0);
+    setHasCredential(result.settings?.has_api_credential === true);
+    setHistory(Array.isArray(result.history) ? result.history : []);
+  }, []);
+
+  useEffect(() => {
+    load().catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Falha ao carregar vendas."),
+    );
+    const timer = window.setInterval(() => load().catch(() => undefined), 30000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  async function patchSettings(body: Record<string, unknown>) {
+    const response = await fetch("/api/sales-sync-settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    return result.settings;
+  }
+
+  async function saveSchedule(nextEnabled = enabled) {
+    setSaving(true);
+    setError("");
+    try {
+      const intervalMinutes = Math.max(1, intervalHours * 60 + intervalMinutesPart);
+      const settings = await patchSettings({ enabled: nextEnabled, intervalMinutes });
+      const savedIntervalMinutes = Math.max(
+        1,
+        Number(settings.interval_minutes ?? (settings.interval_hours ?? 24) * 60),
+      );
+      setEnabled(settings.enabled);
+      setIntervalHours(Math.floor(savedIntervalMinutes / 60));
+      setIntervalMinutesPart(savedIntervalMinutes % 60);
+      setScheduleUpdatedAt(new Date(settings.schedule_updated_at).getTime());
+      setMessage(
+        settings.enabled
+          ? `Atualização a cada ${formatIntervalMinutes(savedIntervalMinutes)}.`
+          : "Agendamento pausado.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao salvar vendas.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveCredential() {
+    if (!credential.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const settings = await patchSettings({ apiCredential: credential });
+      setHasCredential(settings.has_api_credential === true);
+      setCredential("");
+      setMessage("Chave salva com sucesso.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao salvar chave.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function sync() {
+    setSyncing(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/sync-sales", { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setMessage(
+        `${result.synchronized ?? 0} vendas processadas; ${result.newSales ?? 0} vendas novas.${result.cycleCompleted ? " Ciclo concluído." : " A próxima execução continuará do cursor salvo."}`,
+      );
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao sincronizar vendas.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <DatabaseZap className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">API vendas</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Consulta /api/v2/sales com paginação por skip/take e guarda o retorno original na
+              tabela sales do Supabase.
+            </p>
+            {message && <p className="mt-2 text-xs text-success">{message}</p>}
+            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <p className="text-sm font-semibold">Chave da API EVO</p>
+              <Badge variant={hasCredential ? "outline" : "destructive"} className="ml-auto">
+                {hasCredential ? "Configurada" : "Pendente"}
+              </Badge>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="password"
+                value={credential}
+                onChange={(event) => setCredential(event.target.value)}
+                placeholder="Basic ... ou token Base64"
+                autoComplete="off"
+              />
+              <Button
+                variant="outline"
+                onClick={saveCredential}
+                disabled={saving || !credential.trim()}
+              >
+                <KeyRound /> Salvar chave
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <Clock className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Próxima atualização</p>
+              {nextScheduledAt ? (
+                <>
+                  <p className="text-sm font-semibold">{nextScheduledAt.toLocaleString("pt-BR")}</p>
+                  <p className="font-mono text-lg font-bold text-primary">
+                    {formatCountdown(nextScheduledAt.getTime() - now)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm font-semibold text-muted-foreground">Agendamento pausado</p>
+              )}
+            </div>
+            <Badge variant="outline" className="ml-auto">
+              Cursor: {nextSkip}
+            </Badge>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-52 space-y-2">
+              <Label htmlFor="sales-sync-hours">Horas</Label>
+              <Input
+                id="sales-sync-hours"
+                type="number"
+                min={0}
+                max={720}
+                value={intervalHours}
+                onChange={(event) =>
+                  setIntervalHours(Math.max(0, Math.min(720, Number(event.target.value) || 0)))
+                }
+              />
+            </div>
+            <div className="w-32 space-y-2">
+              <Label htmlFor="sales-sync-minutes">Minutos</Label>
+              <Input
+                id="sales-sync-minutes"
+                type="number"
+                min={0}
+                max={59}
+                value={intervalMinutesPart}
+                onChange={(event) =>
+                  setIntervalMinutesPart(
+                    Math.max(0, Math.min(59, Number(event.target.value) || 0)),
+                  )
+                }
+              />
+            </div>
+            <Button variant="outline" onClick={() => saveSchedule()} disabled={saving}>
+              Salvar intervalo
+            </Button>
+            <Button
+              variant={enabled ? "outline" : "default"}
+              onClick={() => saveSchedule(!enabled)}
+              disabled={saving}
+            >
+              {enabled ? <Square /> : <Play />} {enabled ? "Pausar" : "Iniciar"}
+            </Button>
+            <Button onClick={sync} disabled={syncing}>
+              {syncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {syncing ? "Processando lote..." : "Atualizar agora"}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-4 text-sm font-semibold">Histórico de vendas</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Horário</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Vendas</TableHead>
+              <TableHead className="text-right">Novas</TableHead>
+              <TableHead className="text-right">Tempo</TableHead>
+              <TableHead>Ciclo</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {history.length ? (
+              history.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{new Date(row.finished_at).toLocaleString("pt-BR")}</TableCell>
+                  <TableCell>{row.trigger_type === "scheduled" ? "Agendada" : "Manual"}</TableCell>
+                  <TableCell>
+                    <Badge variant={row.status === "success" ? "outline" : "destructive"}>
+                      {row.status === "success" ? "Sucesso" : "Erro"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{row.total_fetched}</TableCell>
+                  <TableCell className="text-right font-semibold">{row.new_sales}</TableCell>
+                  <TableCell className="text-right">
+                    {Math.round(row.duration_ms / 1000)}s
+                  </TableCell>
+                  <TableCell>{row.cycle_completed ? "Concluído" : `Cursor ${row.next_skip}`}</TableCell>
                 </TableRow>
               ))
             ) : (

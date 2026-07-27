@@ -12,11 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as ApiSyncSalesRouteImport } from './routes/api/sync-sales'
 import { Route as ApiSyncMembershipsRouteImport } from './routes/api/sync-memberships'
 import { Route as ApiSyncMembersRouteImport } from './routes/api/sync-members'
 import { Route as ApiSyncActivitiesRouteImport } from './routes/api/sync-activities'
 import { Route as ApiStatusSnapshotRouteImport } from './routes/api/status-snapshot'
 import { Route as ApiStatusHistoryRouteImport } from './routes/api/status-history'
+import { Route as ApiSalesSyncSettingsRouteImport } from './routes/api/sales-sync-settings'
+import { Route as ApiSalesSyncSchedulerRouteImport } from './routes/api/sales-sync-scheduler'
 import { Route as ApiMissingMembershipsRouteImport } from './routes/api/missing-memberships'
 import { Route as ApiMembershipsRouteImport } from './routes/api/memberships'
 import { Route as ApiMembershipSyncSettingsRouteImport } from './routes/api/membership-sync-settings'
@@ -51,6 +54,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiSyncSalesRoute = ApiSyncSalesRouteImport.update({
+  id: '/api/sync-sales',
+  path: '/api/sync-sales',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSyncMembershipsRoute = ApiSyncMembershipsRouteImport.update({
   id: '/api/sync-memberships',
   path: '/api/sync-memberships',
@@ -74,6 +82,16 @@ const ApiStatusSnapshotRoute = ApiStatusSnapshotRouteImport.update({
 const ApiStatusHistoryRoute = ApiStatusHistoryRouteImport.update({
   id: '/api/status-history',
   path: '/api/status-history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSalesSyncSettingsRoute = ApiSalesSyncSettingsRouteImport.update({
+  id: '/api/sales-sync-settings',
+  path: '/api/sales-sync-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSalesSyncSchedulerRoute = ApiSalesSyncSchedulerRouteImport.update({
+  id: '/api/sales-sync-scheduler',
+  path: '/api/sales-sync-scheduler',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMissingMembershipsRoute = ApiMissingMembershipsRouteImport.update({
@@ -198,11 +216,14 @@ export interface FileRoutesByFullPath {
   '/api/membership-sync-settings': typeof ApiMembershipSyncSettingsRoute
   '/api/memberships': typeof ApiMembershipsRoute
   '/api/missing-memberships': typeof ApiMissingMembershipsRoute
+  '/api/sales-sync-scheduler': typeof ApiSalesSyncSchedulerRoute
+  '/api/sales-sync-settings': typeof ApiSalesSyncSettingsRoute
   '/api/status-history': typeof ApiStatusHistoryRoute
   '/api/status-snapshot': typeof ApiStatusSnapshotRoute
   '/api/sync-activities': typeof ApiSyncActivitiesRoute
   '/api/sync-members': typeof ApiSyncMembersRoute
   '/api/sync-memberships': typeof ApiSyncMembershipsRoute
+  '/api/sync-sales': typeof ApiSyncSalesRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
 }
@@ -225,11 +246,14 @@ export interface FileRoutesByTo {
   '/api/membership-sync-settings': typeof ApiMembershipSyncSettingsRoute
   '/api/memberships': typeof ApiMembershipsRoute
   '/api/missing-memberships': typeof ApiMissingMembershipsRoute
+  '/api/sales-sync-scheduler': typeof ApiSalesSyncSchedulerRoute
+  '/api/sales-sync-settings': typeof ApiSalesSyncSettingsRoute
   '/api/status-history': typeof ApiStatusHistoryRoute
   '/api/status-snapshot': typeof ApiStatusSnapshotRoute
   '/api/sync-activities': typeof ApiSyncActivitiesRoute
   '/api/sync-members': typeof ApiSyncMembersRoute
   '/api/sync-memberships': typeof ApiSyncMembershipsRoute
+  '/api/sync-sales': typeof ApiSyncSalesRoute
   '/': typeof AuthenticatedIndexRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
@@ -255,11 +279,14 @@ export interface FileRoutesById {
   '/api/membership-sync-settings': typeof ApiMembershipSyncSettingsRoute
   '/api/memberships': typeof ApiMembershipsRoute
   '/api/missing-memberships': typeof ApiMissingMembershipsRoute
+  '/api/sales-sync-scheduler': typeof ApiSalesSyncSchedulerRoute
+  '/api/sales-sync-settings': typeof ApiSalesSyncSettingsRoute
   '/api/status-history': typeof ApiStatusHistoryRoute
   '/api/status-snapshot': typeof ApiStatusSnapshotRoute
   '/api/sync-activities': typeof ApiSyncActivitiesRoute
   '/api/sync-members': typeof ApiSyncMembersRoute
   '/api/sync-memberships': typeof ApiSyncMembershipsRoute
+  '/api/sync-sales': typeof ApiSyncSalesRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/_authenticated/clientes/$id': typeof AuthenticatedClientesIdRoute
@@ -286,11 +313,14 @@ export interface FileRouteTypes {
     | '/api/membership-sync-settings'
     | '/api/memberships'
     | '/api/missing-memberships'
+    | '/api/sales-sync-scheduler'
+    | '/api/sales-sync-settings'
     | '/api/status-history'
     | '/api/status-snapshot'
     | '/api/sync-activities'
     | '/api/sync-members'
     | '/api/sync-memberships'
+    | '/api/sync-sales'
     | '/admin/usuarios'
     | '/clientes/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -313,11 +343,14 @@ export interface FileRouteTypes {
     | '/api/membership-sync-settings'
     | '/api/memberships'
     | '/api/missing-memberships'
+    | '/api/sales-sync-scheduler'
+    | '/api/sales-sync-settings'
     | '/api/status-history'
     | '/api/status-snapshot'
     | '/api/sync-activities'
     | '/api/sync-members'
     | '/api/sync-memberships'
+    | '/api/sync-sales'
     | '/'
     | '/admin/usuarios'
     | '/clientes/$id'
@@ -342,11 +375,14 @@ export interface FileRouteTypes {
     | '/api/membership-sync-settings'
     | '/api/memberships'
     | '/api/missing-memberships'
+    | '/api/sales-sync-scheduler'
+    | '/api/sales-sync-settings'
     | '/api/status-history'
     | '/api/status-snapshot'
     | '/api/sync-activities'
     | '/api/sync-members'
     | '/api/sync-memberships'
+    | '/api/sync-sales'
     | '/_authenticated/'
     | '/_authenticated/admin/usuarios'
     | '/_authenticated/clientes/$id'
@@ -366,11 +402,14 @@ export interface RootRouteChildren {
   ApiMembershipSyncSettingsRoute: typeof ApiMembershipSyncSettingsRoute
   ApiMembershipsRoute: typeof ApiMembershipsRoute
   ApiMissingMembershipsRoute: typeof ApiMissingMembershipsRoute
+  ApiSalesSyncSchedulerRoute: typeof ApiSalesSyncSchedulerRoute
+  ApiSalesSyncSettingsRoute: typeof ApiSalesSyncSettingsRoute
   ApiStatusHistoryRoute: typeof ApiStatusHistoryRoute
   ApiStatusSnapshotRoute: typeof ApiStatusSnapshotRoute
   ApiSyncActivitiesRoute: typeof ApiSyncActivitiesRoute
   ApiSyncMembersRoute: typeof ApiSyncMembersRoute
   ApiSyncMembershipsRoute: typeof ApiSyncMembershipsRoute
+  ApiSyncSalesRoute: typeof ApiSyncSalesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -395,6 +434,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/sync-sales': {
+      id: '/api/sync-sales'
+      path: '/api/sync-sales'
+      fullPath: '/api/sync-sales'
+      preLoaderRoute: typeof ApiSyncSalesRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/sync-memberships': {
       id: '/api/sync-memberships'
@@ -429,6 +475,20 @@ declare module '@tanstack/react-router' {
       path: '/api/status-history'
       fullPath: '/api/status-history'
       preLoaderRoute: typeof ApiStatusHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sales-sync-settings': {
+      id: '/api/sales-sync-settings'
+      path: '/api/sales-sync-settings'
+      fullPath: '/api/sales-sync-settings'
+      preLoaderRoute: typeof ApiSalesSyncSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sales-sync-scheduler': {
+      id: '/api/sales-sync-scheduler'
+      path: '/api/sales-sync-scheduler'
+      fullPath: '/api/sales-sync-scheduler'
+      preLoaderRoute: typeof ApiSalesSyncSchedulerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/missing-memberships': {
@@ -619,11 +679,14 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMembershipSyncSettingsRoute: ApiMembershipSyncSettingsRoute,
   ApiMembershipsRoute: ApiMembershipsRoute,
   ApiMissingMembershipsRoute: ApiMissingMembershipsRoute,
+  ApiSalesSyncSchedulerRoute: ApiSalesSyncSchedulerRoute,
+  ApiSalesSyncSettingsRoute: ApiSalesSyncSettingsRoute,
   ApiStatusHistoryRoute: ApiStatusHistoryRoute,
   ApiStatusSnapshotRoute: ApiStatusSnapshotRoute,
   ApiSyncActivitiesRoute: ApiSyncActivitiesRoute,
   ApiSyncMembersRoute: ApiSyncMembersRoute,
   ApiSyncMembershipsRoute: ApiSyncMembershipsRoute,
+  ApiSyncSalesRoute: ApiSyncSalesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
