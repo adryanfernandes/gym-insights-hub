@@ -24,6 +24,8 @@ export type MembershipRow = {
   remaining_value: number | string;
   sale_date: string | null;
   status: number | null;
+  transferred?: boolean | null;
+  membership_swapped?: boolean | null;
 };
 
 export type ReceivableRow = {
@@ -310,6 +312,25 @@ function renewalsInPeriod(rows: MembershipRow[], start: Date, end: Date) {
   return total;
 }
 
+function newEnrollmentsInPeriod(rows: MembershipRow[], start: Date, end: Date) {
+  const firstContractByMember = new Map<number, { row: MembershipRow; startedAt: Date }>();
+
+  rows.forEach((row) => {
+    if (isSingleUseMembership(row)) return;
+    if (row.transferred || row.membership_swapped) return;
+    const startedAt = date(row.sale_date || row.membership_start);
+    if (!startedAt) return;
+    const current = firstContractByMember.get(row.id_member);
+    if (!current || startedAt < current.startedAt) {
+      firstContractByMember.set(row.id_member, { row, startedAt });
+    }
+  });
+
+  return Array.from(firstContractByMember.values()).filter(
+    ({ startedAt }) => startedAt >= start && startedAt <= end,
+  );
+}
+
 export function getMembershipDashboardData(
   memberships: MembershipRow[],
   receivables: ReceivableRow[],
@@ -377,6 +398,7 @@ export function getMembershipDashboardData(
     (renewalInactiveRows.length / Math.max(renewalRows.length, 1)) * 100;
   const totalSales = sales.reduce((sum, row) => sum + num(row.sale_value), 0);
   const renovacoesPeriodo = renewalsInPeriod(scoped, start, end);
+  const novasMatriculasPeriodo = newEnrollmentsInPeriod(scoped, start, end);
   const currentMonth = monthKey(now);
   const paidCurrentMonth = scopedReceivables.reduce((sum, row) => {
     const reference = date(row.receiving_date || row.registration_date);
@@ -495,9 +517,9 @@ export function getMembershipDashboardData(
         valor: cancellations.reduce((sum, row) => sum + num(row.sale_value), 0),
       },
       movimentacaoPeriodo: {
-        entradas: sales.length,
+        entradas: novasMatriculasPeriodo.length,
         saidas: cancellations.length,
-        saldo: sales.length - cancellations.length,
+        saldo: novasMatriculasPeriodo.length - cancellations.length,
         renovacoes: renovacoesPeriodo,
       },
       renovacoesAtivas: renewalActiveRows.length,

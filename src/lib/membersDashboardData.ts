@@ -257,7 +257,7 @@ function salesFunnelFromRows(sales: SalesRecord[], filters: Filters, fallbackMat
 
   const aulasExperimentais = scoped.filter(isExperimentalSale).length;
   const propostas = scoped.filter(isProposalSale).length;
-  const matriculas = scoped.filter(isMembershipSale).length || fallbackMatriculas;
+  const matriculas = fallbackMatriculas;
   const visitantes = Math.max(scoped.length, aulasExperimentais + propostas + matriculas);
 
   return [
