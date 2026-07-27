@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useMemo } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -16,7 +16,7 @@ import {
 import { Cake, Users, FileText, UserRoundCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
-import { useApp } from "@/contexts/AppContext";
+import { type Filters } from "@/contexts/AppContext";
 import { formatNum } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
@@ -47,16 +47,25 @@ const PIE_COLORS = [
   "var(--chart-5)",
 ];
 
-function selectionLabel(values: string[], allOption: string) {
-  const active = values.includes(allOption) ? [] : values;
-  if (!active.length) return allOption.toLowerCase();
-  if (active.length === 1) return active[0].toLowerCase();
-  return `${active.length} selecionados`;
-}
-
 function PerfilPage() {
-  const { filters, setFilters } = useApp();
-  const { data } = useDashboardData(filters);
+  const profileFilters = useMemo<Filters>(
+    () => ({
+      periodo: "Período personalizado",
+      dataInicio: "1900-01-01",
+      dataFim: "2999-12-31",
+      unidade: ["Todos"],
+      tipoContrato: ["Todos"],
+      sexo: ["Todos"],
+      faixaEtaria: ["Todas"],
+      professor: ["Todos"],
+      modalidade: ["Todas"],
+      atividadeUnidade: ["Todas"],
+      horario: ["Todos"],
+      statusAluno: ["Todos"],
+    }),
+    [],
+  );
+  const { data } = useDashboardData(profileFilters);
   const k = data.overviewKpis;
   const totalSexo = data.sexoData.reduce((s, d) => s + d.qtd, 0);
   const masc = data.sexoData.find((s) => s.sexo === "Masculino")?.qtd ?? 0;
@@ -67,16 +76,6 @@ function PerfilPage() {
   const contratoTotal = data.tipoContratoData.reduce((s, d) => s + d.qtd, 0);
   const contratoPct =
     contratoDominante && contratoTotal ? (contratoDominante.qtd / contratoTotal) * 100 : 0;
-  const setFiltersRef = useRef(setFilters);
-
-  useEffect(() => {
-    setFiltersRef.current = setFilters;
-  }, [setFilters]);
-
-  useEffect(() => {
-    return () => setFiltersRef.current({ statusAluno: ["Todos"] });
-  }, []);
-
   const onExportExcel = () =>
     exportToExcel("perfil-clientes", {
       KPIs: [
@@ -100,15 +99,16 @@ function PerfilPage() {
   return (
     <DashboardLayout
       title="Perfil dos Clientes"
-      subtitle="Visao demografica e contratual"
+      subtitle="Visão demográfica e contratual da base completa"
       onExportPdf={onExportPdf}
       onExportExcel={onExportExcel}
+      showFilters={false}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Alunos no recorte"
+          label="Clientes na base"
           value={formatNum(k.clientesFiltrados)}
-          hint={`Status: ${selectionLabel(filters.statusAluno, "Todos")}`}
+          hint="Todos os clientes cadastrados"
           icon={<UserRoundCheck className="h-5 w-5" />}
         />
         <KpiCard
@@ -126,14 +126,14 @@ function PerfilPage() {
         <KpiCard
           label="Tipo de contrato dominante"
           value={`${contratoDominante?.tipo ?? "-"} (${contratoPct.toFixed(1)}%)`}
-          hint={`${formatNum(contratoDominante?.qtd ?? 0)} alunos no recorte`}
+          hint={`${formatNum(contratoDominante?.qtd ?? 0)} alunos na base`}
           icon={<FileText className="h-5 w-5" />}
           accent="warning"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard title="Distribuicao por faixa etaria" description="Total da base ativa">
+        <ChartCard title="Distribuição por faixa etária" description="Total da base cadastrada">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.faixaEtariaData}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -145,7 +145,7 @@ function PerfilPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Distribuicao por sexo">
+        <ChartCard title="Distribuição por sexo">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -168,7 +168,7 @@ function PerfilPage() {
 
         <ChartCard
           title="Tipo de contrato"
-          description="Alunos únicos por contrato mais recente no recorte"
+          description="Alunos únicos por contrato mais recente na base"
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.tipoContratoData} layout="vertical">
@@ -187,8 +187,8 @@ function PerfilPage() {
         </ChartCard>
 
         <ChartCard
-          title="Tempo medio de permanencia por perfil"
-          description="Média em meses por faixa etária e status selecionado"
+          title="Tempo médio de permanência por perfil"
+          description="Média em meses por faixa etária na base completa"
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.permanenciaPerfil}>

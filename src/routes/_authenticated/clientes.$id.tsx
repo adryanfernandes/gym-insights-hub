@@ -3,10 +3,7 @@ import { ArrowLeft, FileText, UserRound } from "lucide-react";
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useApp } from "@/contexts/AppContext";
-import {
-  contractsForClient,
-  normalizeClientStatus,
-} from "@/lib/clientDetails";
+import { contractsForClient, normalizeClientStatus } from "@/lib/clientDetails";
 import { useDashboardData, type SalesRecord } from "@/lib/membersDashboardData";
 import { formatBRL, formatNum } from "@/lib/mockData";
 
@@ -32,6 +29,7 @@ function ClienteDetalhePage() {
   const totalPago = contracts.reduce((total, contract) => total + contract.valorPago, 0);
   const totalVendido = contracts.reduce((total, contract) => total + contract.valorVenda, 0);
   const totalVendasApi = clientSales.reduce((total, sale) => total + sale.valor, 0);
+  const [historyTab, setHistoryTab] = useState<"contratos" | "vendas">("contratos");
 
   return (
     <DashboardLayout
@@ -111,110 +109,126 @@ function ClienteDetalhePage() {
             </section>
 
             <section className="rounded-xl border border-border bg-card shadow-sm">
-              <div className="flex items-center gap-3 border-b border-border p-5">
-                <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
-                  <FileText className="h-5 w-5" />
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">Históricos</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Contratos e vendas vinculados a este cliente.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold">Histórico de contratos</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Número do contrato, período, status e valores pagos.
-                  </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryTab("contratos")}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      historyTab === "contratos"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-accent"
+                    }`}
+                  >
+                    Contratos ({formatNum(contracts.length)})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryTab("vendas")}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      historyTab === "vendas"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-accent"
+                    }`}
+                  >
+                    Vendas ({formatNum(clientSales.length)})
+                  </button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3">Contrato nº</th>
-                      <th className="px-5 py-3">Tipo</th>
-                      <th className="px-5 py-3">Período</th>
-                      <th className="px-5 py-3">Status</th>
-                      <th className="px-5 py-3">Renovação ativa</th>
-                      <th className="px-5 py-3">Cancelamento</th>
-                      <th className="px-5 py-3 text-right">Valor venda</th>
-                      <th className="px-5 py-3 text-right">Desconto</th>
-                      <th className="px-5 py-3 text-right">Valor pago</th>
-                      <th className="px-5 py-3 text-right">Valor a pagar</th>
-                      <th className="px-5 py-3 text-right">Parcelas</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contracts.map((contract) => (
-                      <tr key={contract.idContrato} className="border-t border-border">
-                        <td className="px-5 py-3 font-mono text-xs">{contract.idContrato}</td>
-                        <td className="px-5 py-3 font-medium">{contract.contrato}</td>
-                        <td className="px-5 py-3">
-                          {contract.inicio} a {contract.vencimento}
-                        </td>
-                        <td className="px-5 py-3">{contract.status}</td>
-                        <td className="px-5 py-3">{contract.renovacaoAtiva}</td>
-                        <td className="px-5 py-3">{contract.cancelamento}</td>
-                        <td className="px-5 py-3 text-right">{formatBRL(contract.valorVenda)}</td>
-                        <td className="px-5 py-3 text-right">{formatBRL(contract.desconto)}</td>
-                        <td className="px-5 py-3 text-right font-semibold">
-                          {formatBRL(contract.valorPago)}
-                        </td>
-                        <td className="px-5 py-3 text-right">{formatBRL(contract.valorAPagar)}</td>
-                        <td className="px-5 py-3 text-right">{formatNum(contract.parcelas)}</td>
-                      </tr>
-                    ))}
-                    {!contracts.length && (
-                      <tr>
-                        <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
-                          Nenhum contrato foi encontrado para este cliente.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
 
-            <section className="rounded-xl border border-border bg-card shadow-sm">
-              <div className="flex items-center gap-3 border-b border-border p-5">
-                <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
-                  <FileText className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">Histórico de vendas</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Vendas consultadas na API /api/v2/sales pelo número do cliente.
-                  </p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3">Venda</th>
-                      <th className="px-5 py-3">Data</th>
-                      <th className="px-5 py-3">Item vendido</th>
-                      <th className="px-5 py-3">Origem</th>
-                      <th className="px-5 py-3 text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clientSales.map((sale) => (
-                      <tr key={sale.sourceKey} className="border-t border-border">
-                        <td className="px-5 py-3 font-mono text-xs">{sale.idVenda}</td>
-                        <td className="px-5 py-3">{sale.data}</td>
-                        <td className="px-5 py-3 font-medium">{sale.item}</td>
-                        <td className="px-5 py-3">{sale.origem}</td>
-                        <td className="px-5 py-3 text-right">{formatBRL(sale.valor)}</td>
-                      </tr>
-                    ))}
-                    {!clientSales.length && (
+              {historyTab === "contratos" ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                       <tr>
-                        <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
-                          Nenhuma venda foi encontrada para este cliente. A próxima sincronização da
-                          API de vendas passará a consultar por ID do aluno.
-                        </td>
+                        <th className="px-5 py-3">Contrato nº</th>
+                        <th className="px-5 py-3">Tipo</th>
+                        <th className="px-5 py-3">Período</th>
+                        <th className="px-5 py-3">Status</th>
+                        <th className="px-5 py-3">Renovação ativa</th>
+                        <th className="px-5 py-3">Cancelamento</th>
+                        <th className="px-5 py-3 text-right">Valor venda</th>
+                        <th className="px-5 py-3 text-right">Desconto</th>
+                        <th className="px-5 py-3 text-right">Valor pago</th>
+                        <th className="px-5 py-3 text-right">Valor a pagar</th>
+                        <th className="px-5 py-3 text-right">Parcelas</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {contracts.map((contract) => (
+                        <tr key={contract.idContrato} className="border-t border-border">
+                          <td className="px-5 py-3 font-mono text-xs">{contract.idContrato}</td>
+                          <td className="px-5 py-3 font-medium">{contract.contrato}</td>
+                          <td className="px-5 py-3">
+                            {contract.inicio} a {contract.vencimento}
+                          </td>
+                          <td className="px-5 py-3">{contract.status}</td>
+                          <td className="px-5 py-3">{contract.renovacaoAtiva}</td>
+                          <td className="px-5 py-3">{contract.cancelamento}</td>
+                          <td className="px-5 py-3 text-right">{formatBRL(contract.valorVenda)}</td>
+                          <td className="px-5 py-3 text-right">{formatBRL(contract.desconto)}</td>
+                          <td className="px-5 py-3 text-right font-semibold">
+                            {formatBRL(contract.valorPago)}
+                          </td>
+                          <td className="px-5 py-3 text-right">{formatBRL(contract.valorAPagar)}</td>
+                          <td className="px-5 py-3 text-right">{formatNum(contract.parcelas)}</td>
+                        </tr>
+                      ))}
+                      {!contracts.length && (
+                        <tr>
+                          <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
+                            Nenhum contrato foi encontrado para este cliente.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="px-5 py-3">Venda</th>
+                        <th className="px-5 py-3">Data</th>
+                        <th className="px-5 py-3">Item vendido</th>
+                        <th className="px-5 py-3">Origem</th>
+                        <th className="px-5 py-3 text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientSales.map((sale) => (
+                        <tr key={sale.sourceKey} className="border-t border-border">
+                          <td className="px-5 py-3 font-mono text-xs">{sale.idVenda}</td>
+                          <td className="px-5 py-3">{sale.data}</td>
+                          <td className="px-5 py-3 font-medium">{sale.item}</td>
+                          <td className="px-5 py-3">{sale.origem}</td>
+                          <td className="px-5 py-3 text-right">{formatBRL(sale.valor)}</td>
+                        </tr>
+                      ))}
+                      {!clientSales.length && (
+                        <tr>
+                          <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                            Nenhuma venda foi encontrada para este cliente. A próxima sincronização da
+                            API de vendas passará a consultar por ID do aluno.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           </>
         )}
@@ -304,7 +318,11 @@ function salesForClient(clientId: number, sales: SalesRecord[]) {
         timestamp: typeof date === "string" ? new Date(date).getTime() : 0,
       };
     })
-    .sort((a, b) => (Number.isFinite(b.timestamp) ? b.timestamp : 0) - (Number.isFinite(a.timestamp) ? a.timestamp : 0));
+    .sort(
+      (a, b) =>
+        (Number.isFinite(b.timestamp) ? b.timestamp : 0) -
+        (Number.isFinite(a.timestamp) ? a.timestamp : 0),
+    );
 }
 
 function clientInitials(name: string) {
