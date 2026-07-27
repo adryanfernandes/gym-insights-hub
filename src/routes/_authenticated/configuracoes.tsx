@@ -591,6 +591,13 @@ function ActivitiesApiPanel() {
   }
 
   return (
+    <Tabs defaultValue="sync" className="space-y-4">
+      <TabsList className="h-auto flex-wrap">
+        <TabsTrigger value="sync">Sincronizacao</TabsTrigger>
+        <TabsTrigger value="missing">Alunos sem contrato</TabsTrigger>
+        <TabsTrigger value="manual-list">Lista manual</TabsTrigger>
+      </TabsList>
+      <TabsContent value="sync" className="space-y-4">
     <div className="space-y-4">
       <section className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col gap-5">
@@ -776,6 +783,14 @@ function ActivitiesApiPanel() {
         </Table>
       </section>
     </div>
+      </TabsContent>
+      <TabsContent value="missing" className="space-y-4">
+        <MissingMembershipsPanel />
+      </TabsContent>
+      <TabsContent value="manual-list" className="space-y-4">
+        <ManualMembershipLookupPanel />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -926,6 +941,13 @@ function MembershipsApiPanel() {
   }
 
   return (
+    <Tabs defaultValue="sync" className="space-y-4">
+      <TabsList className="h-auto flex-wrap">
+        <TabsTrigger value="sync">Sincronizacao</TabsTrigger>
+        <TabsTrigger value="missing">Alunos sem contrato</TabsTrigger>
+        <TabsTrigger value="manual-list">Lista manual</TabsTrigger>
+      </TabsList>
+      <TabsContent value="sync" className="space-y-4">
     <div className="space-y-4">
       <section className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col gap-5">
@@ -1081,6 +1103,14 @@ function MembershipsApiPanel() {
         </Table>
       </section>
     </div>
+      </TabsContent>
+      <TabsContent value="missing" className="space-y-4">
+        <MissingMembershipsPanel />
+      </TabsContent>
+      <TabsContent value="manual-list" className="space-y-4">
+        <ManualMembershipLookupPanel />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -1535,6 +1565,190 @@ function MissingMembershipsPanel() {
               <TableRow>
                 <TableCell colSpan={2} className="h-24 text-center text-muted-foreground">
                   {loading ? "Carregando..." : "Nenhum aluno sem contrato encontrado."}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+    </div>
+  );
+}
+
+type ManualMembershipResult = {
+  checkedMembers: number;
+  requestedMembers?: number;
+  synchronized: number;
+  newMemberships: number;
+  receivablesSynced: number;
+  durationMs: number;
+  checkedSample: MissingMembershipRow[];
+};
+
+function parseManualMemberIds(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/[\s,;]+/)
+        .map((item) => Number(item.trim()))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ),
+  );
+}
+
+function ManualMembershipLookupPanel() {
+  const [memberIdsText, setMemberIdsText] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<ManualMembershipResult | null>(null);
+  const parsedIds = useMemo(() => parseManualMemberIds(memberIdsText), [memberIdsText]);
+
+  async function syncManualList() {
+    if (!parsedIds.length) {
+      setError("Informe ao menos um número de cliente válido.");
+      return;
+    }
+    setSyncing(true);
+    setMessage("");
+    setError("");
+    setResult(null);
+    try {
+      const response = await fetch("/api/missing-memberships", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ memberIds: parsedIds }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      setResult({
+        checkedMembers: Number(data.checkedMembers) || 0,
+        requestedMembers: Number(data.requestedMembers) || parsedIds.length,
+        synchronized: Number(data.synchronized) || 0,
+        newMemberships: Number(data.newMemberships) || 0,
+        receivablesSynced: Number(data.receivablesSynced) || 0,
+        durationMs: Number(data.durationMs) || 0,
+        checkedSample: Array.isArray(data.checkedSample) ? data.checkedSample : [],
+      });
+      setMessage(
+        `${data.checkedMembers ?? 0} clientes consultados; ${data.synchronized ?? 0} contratos e ${data.receivablesSynced ?? 0} recebíveis processados; ${data.newMemberships ?? 0} contratos novos.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao consultar lista informada.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <DatabaseZap className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Consultar contratos por lista de clientes</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Cole os números dos clientes separados por linha, vírgula, ponto e vírgula ou espaço.
+              A consulta usa o parâmetro idMember da API de contratos e atualiza o Supabase.
+            </p>
+            {message && <p className="mt-2 text-xs text-success">{message}</p>}
+            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">IDs válidos na lista</p>
+              <p className="mt-1 text-2xl font-bold">{parsedIds.length.toLocaleString("pt-BR")}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Limite por execução</p>
+              <p className="mt-1 text-2xl font-bold">50</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Modo de busca</p>
+              <p className="mt-1 text-sm font-semibold">idMember informado pelo usuário</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="manual-membership-ids">Lista de clientes</Label>
+            <textarea
+              id="manual-membership-ids"
+              value={memberIdsText}
+              onChange={(event) => setMemberIdsText(event.target.value)}
+              placeholder={"18086\n21170\n16815"}
+              className="min-h-40 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-primary"
+            />
+            <p className="text-xs text-muted-foreground">
+              Se a lista tiver mais de 50 IDs, serão consultados os primeiros 50 nesta execução.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={syncManualList} disabled={syncing || parsedIds.length === 0}>
+              {syncing ? <Loader2 className="animate-spin" /> : <DatabaseZap />}
+              {syncing ? "Consultando contratos..." : "Consultar lista"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={syncing || !memberIdsText.trim()}
+              onClick={() => {
+                setMemberIdsText("");
+                setResult(null);
+                setMessage("");
+                setError("");
+              }}
+            >
+              Limpar
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-4 text-sm font-semibold">Resultado da última consulta manual</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Indicador</TableHead>
+              <TableHead className="text-right">Valor</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {result ? (
+              <>
+                <TableRow>
+                  <TableCell>Clientes solicitados</TableCell>
+                  <TableCell className="text-right">{result.requestedMembers ?? parsedIds.length}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Clientes consultados</TableCell>
+                  <TableCell className="text-right">{result.checkedMembers}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Contratos processados</TableCell>
+                  <TableCell className="text-right font-semibold">{result.synchronized}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Contratos novos</TableCell>
+                  <TableCell className="text-right font-semibold">{result.newMemberships}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Recebíveis processados</TableCell>
+                  <TableCell className="text-right">{result.receivablesSynced}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Duração</TableCell>
+                  <TableCell className="text-right">{Math.round(result.durationMs / 1000)}s</TableCell>
+                </TableRow>
+              </>
+            ) : (
+              <TableRow>
+                <TableCell colSpan={2} className="h-24 text-center text-muted-foreground">
+                  Nenhuma consulta manual realizada nesta sessão.
                 </TableCell>
               </TableRow>
             )}

@@ -15,6 +15,11 @@ type RawRecord = Record<string, unknown> & {
   receivables?: Array<Record<string, unknown>>;
 };
 
+type MembershipLookupMember = {
+  id: number;
+  nome: string;
+};
+
 function env(name: string) {
   const value = process.env[name];
   if (!value) throw new Error(`Missing ${name}`);
@@ -107,6 +112,34 @@ async function missingMembers(base: string, key: string) {
     .filter((row): row is { id: number; nome: string } => row.id !== null)
     .filter((row) => !withMemberships.has(row.id))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true }));
+}
+
+function parseMemberIds(value: unknown) {
+  const source = Array.isArray(value) ? value.join("\n") : String(value ?? "");
+  return Array.from(
+    new Set(
+      source
+        .split(/[\s,;]+/)
+        .map((item) => Number(item.trim()))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ),
+  );
+}
+
+async function membersByIds(base: string, key: string, ids: number[]): Promise<MembershipLookupMember[]> {
+  if (!ids.length) return [];
+  const response = await fetch(
+    `${base}/rest/v1/members?select=*&idMember=in.(${ids.join(",")})&order=idMember.asc`,
+    { headers: { apikey: key }, cache: "no-store" },
+  );
+  if (!response.ok) throw new Error(`Falha ao consultar clientes informados: ${await response.text()}`);
+  const rows = (await response.json()) as MemberRecord[];
+  const names = new Map<number, string>();
+  rows.forEach((row) => {
+    const id = memberId(row);
+    if (id !== null) names.set(id, memberName(row));
+  });
+  return ids.map((id) => ({ id, nome: names.get(id) ?? `Cliente ${id}` }));
 }
 
 async function page(auth: string, skip: number, idMember: number) {
@@ -246,7 +279,11 @@ export const Route = createFileRoute("/api/missing-memberships")({
         }
         try {
           const started = Date.now();
-          const body = (await request.json().catch(() => ({}))) as { limit?: number };
+          const body = (await request.json().catch(() => ({}))) as {
+            limit?: number;
+            memberIds?: unknown;
+          };
+          const manualIds = parseMemberIds(body.memberIds);
           const limit = Math.max(
             1,
             Math.min(MAX_MEMBERS_PER_RUN, Number(body.limit) || DEFAULT_MEMBERS_PER_RUN),
@@ -254,8 +291,10 @@ export const Route = createFileRoute("/api/missing-memberships")({
           const base = env("SUPABASE_URL").replace(/\/$/, "");
           const key = env("SUPABASE_SECRET_KEY");
           const auth = await authorization(base, key);
-          const missingBefore = await missingMembers(base, key);
-          const targetMembers = missingBefore.slice(0, limit);
+          const missingBefore = manualIds.length ? [] : await missingMembers(base, key);
+          const targetMembers = manualIds.length
+            ? await membersByIds(base, key, manualIds.slice(0, MAX_MEMBERS_PER_RUN))
+            : missingBefore.slice(0, limit);
           let synchronized = 0;
           let newMemberships = 0;
           let receivablesSynced = 0;
@@ -286,15 +325,18 @@ export const Route = createFileRoute("/api/missing-memberships")({
             }
           }
 
-          const missingAfter = await missingMembers(base, key);
+          const missingAfter = manualIds.length ? [] : await missingMembers(base, key);
           return Response.json({
             ok: true,
+            mode: manualIds.length ? "manual" : "missing",
+            requestedMembers: manualIds.length ? manualIds.length : undefined,
             checkedMembers: targetMembers.length,
             missingBefore: missingBefore.length,
             missingAfter: missingAfter.length,
             synchronized,
             newMemberships,
             receivablesSynced,
+            checkedSample: targetMembers.slice(0, 50),
             sample: missingAfter.slice(0, 50),
             durationMs: Date.now() - started,
           });
