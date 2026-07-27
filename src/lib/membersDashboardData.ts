@@ -187,6 +187,11 @@ function endOfDate(date: Date | null) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
 }
 
+function startOfDate(date: Date | null) {
+  if (!date) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 function hasActiveMembershipStatus(status: MembershipRow["status"]) {
   return status === null || status === undefined || Number(status) === 1;
 }
@@ -293,7 +298,7 @@ type IndexedContract = {
 
 function isContractActiveToday(contract: MembershipRow, today = new Date()) {
   if (isSingleUseMembership(contract)) return false;
-  const start = toDate(contract.membership_start || contract.sale_date);
+  const start = startOfDate(toDate(contract.membership_start || contract.sale_date));
   const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
   const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
@@ -308,7 +313,7 @@ function isContractActiveToday(contract: MembershipRow, today = new Date()) {
 
 function isSingleUseActiveToday(contract: MembershipRow, today = new Date()) {
   if (!isSingleUseMembership(contract)) return false;
-  const start = toDate(contract.membership_start || contract.sale_date);
+  const start = startOfDate(toDate(contract.membership_start || contract.sale_date));
   const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
   const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
@@ -383,7 +388,7 @@ function matchesFilterList(value: string, selected: string[] | string, allOption
 function isContractActiveAt(contract: MembershipRow, day: Date) {
   if (isSingleUseMembership(contract)) return false;
   const reference = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12);
-  const start = toDate(contract.membership_start || contract.sale_date);
+  const start = startOfDate(toDate(contract.membership_start || contract.sale_date));
   const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
   const isCurrentByPeriod =
@@ -841,7 +846,7 @@ function useDashboardDataState(filters: Filters) {
       const list = contractsByMember.get(contract.id_member) ?? [];
       list.push({
         contract,
-        start: toDate(contract.membership_start || contract.sale_date),
+        start: startOfDate(toDate(contract.membership_start || contract.sale_date)),
         end: endOfDate(toDate(contract.membership_end)),
       });
       contractsByMember.set(contract.id_member, list);

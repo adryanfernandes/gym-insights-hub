@@ -59,6 +59,12 @@ function endOfDate(value: string | null | undefined) {
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
 }
 
+function startOfDate(value: string | null | undefined) {
+  const parsed = date(value);
+  if (!parsed) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+}
+
 function hasActiveMembershipStatus(status: MembershipRow["status"]) {
   return status === null || status === undefined || Number(status) === 1;
 }
@@ -90,7 +96,7 @@ function isMembershipActiveAt(row: MembershipRow, referenceDate = new Date()) {
     referenceDate.getDate(),
     12,
   );
-  const start = date(row.membership_start || row.sale_date);
+  const start = startOfDate(row.membership_start || row.sale_date);
   const end = endOfDate(row.membership_end);
   const cancel = date(row.cancel_date);
   const isCurrentByPeriod =
