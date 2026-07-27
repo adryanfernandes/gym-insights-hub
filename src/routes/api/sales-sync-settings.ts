@@ -7,6 +7,7 @@ type SettingsRow = {
   interval_minutes?: number;
   evo_api_authorization?: string | null;
   next_skip?: number;
+  next_member_offset?: number;
   updated_at?: string;
   schedule_updated_at?: string;
 };
@@ -64,6 +65,7 @@ function safe(settings: SettingsRow | undefined, credential: string) {
     updated_at: settings?.updated_at ?? null,
     schedule_updated_at: settings?.schedule_updated_at ?? settings?.updated_at ?? null,
     next_skip: settings?.next_skip ?? 0,
+    next_member_offset: settings?.next_member_offset ?? 0,
     has_api_credential: Boolean(settings?.evo_api_authorization?.trim() || credential),
   };
 }
@@ -130,7 +132,10 @@ export const Route = createFileRoute("/api/sales-sync-settings")({
           }
           const credential = normalizeCredential(body.apiCredential);
           if (credential) update.evo_api_authorization = credential;
-          if (body.restartCycle === true) update.next_skip = 0;
+          if (body.restartCycle === true) {
+            update.next_skip = 0;
+            update.next_member_offset = 0;
+          }
 
           const response = await fetch(`${base}/rest/v1/sales_sync_settings?id=eq.true`, {
             method: "PATCH",

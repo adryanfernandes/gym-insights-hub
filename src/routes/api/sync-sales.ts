@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v2/sales";
-const PAGE_SIZE = 1000;
-const MAX_PAGES_PER_RUN = 3;
+const MEMBER_BATCH_SIZE = 20;
+const SALES_PAGE_SIZE = 1000;
 const MAX_RUN_MS = 75000;
 
 type RawSale = Record<string, unknown>;
@@ -45,18 +45,25 @@ async function authorization(base: string, key: string) {
 
 async function settings(base: string, key: string) {
   const response = await fetch(
-    `${base}/rest/v1/sales_sync_settings?select=next_skip&id=eq.true&limit=1`,
+    `${base}/rest/v1/sales_sync_settings?select=next_skip,next_member_offset&id=eq.true&limit=1`,
     { headers: { apikey: key }, cache: "no-store" },
   );
   if (!response.ok) throw new Error(`Falha ao carregar cursor: ${await response.text()}`);
-  return ((await response.json())[0] as { next_skip?: number } | undefined)?.next_skip ?? 0;
+  const row = (await response.json())[0] as
+    | { next_skip?: number; next_member_offset?: number }
+    | undefined;
+  return {
+    nextSkip: row?.next_skip ?? 0,
+    nextMemberOffset: row?.next_member_offset ?? 0,
+  };
 }
 
-async function page(auth: string, skip: number) {
+async function page(auth: string, idMember: number, skip: number) {
   const url = new URL(ENDPOINT);
   url.searchParams.set("search", "");
+  url.searchParams.set("idMember", String(idMember));
   url.searchParams.set("idBranch", process.env.EVO_BRANCH_ID || "1");
-  url.searchParams.set("take", String(PAGE_SIZE));
+  url.searchParams.set("take", String(SALES_PAGE_SIZE));
   url.searchParams.set("skip", String(skip));
   let lastError = "";
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -74,7 +81,7 @@ async function page(auth: string, skip: number) {
       lastError = error instanceof Error ? error.message : "Falha desconhecida";
     }
   }
-  throw new Error(`EVO vendas não respondeu no cursor ${skip}: ${lastError}`);
+  throw new Error(`EVO vendas não respondeu para o cliente ${idMember} no cursor ${skip}: ${lastError}`);
 }
 
 function value(record: RawSale, keys: string[]) {
@@ -116,11 +123,11 @@ function sourceKey(record: RawSale, index: number) {
   return `hash:${stableHash(record)}:${index}`;
 }
 
-function salesRow(record: RawSale, index: number, syncedAt: string) {
+function salesRow(record: RawSale, index: number, syncedAt: string, fallbackMemberId?: number) {
   const idSale = numberValue(value(record, ["idSale", "id_sale", "saleId", "idVenda", "id"]));
   const idMember = numberValue(
     value(record, ["idMember", "id_member", "memberId", "idCliente", "idClient"]),
-  );
+  ) ?? fallbackMemberId;
   const idBranch = numberValue(value(record, ["idBranch", "id_branch", "branchId"]));
   const saleDate = dateValue(
     value(record, ["saleDate", "date", "registerDate", "registrationDate", "createdAt"]),
@@ -165,11 +172,26 @@ async function upsertSales(base: string, key: string, rows: ReturnType<typeof sa
   if (!response.ok) throw new Error(`sales: ${await response.text()}`);
 }
 
-async function updateCursor(base: string, key: string, nextSkip: number) {
+async function memberIds(base: string, key: string, offset: number) {
+  const response = await fetch(
+    `${base}/rest/v1/members?select=idMember&order=idMember.asc&offset=${offset}&limit=${MEMBER_BATCH_SIZE}`,
+    { headers: { apikey: key }, cache: "no-store" },
+  );
+  if (!response.ok) throw new Error(`Falha ao carregar alunos para vendas: ${await response.text()}`);
+  return ((await response.json()) as Array<{ idMember?: number | string }>)
+    .map((row) => Number(row.idMember))
+    .filter((id) => Number.isFinite(id));
+}
+
+async function updateCursor(base: string, key: string, nextSkip: number, nextMemberOffset: number) {
   const response = await fetch(`${base}/rest/v1/sales_sync_settings?id=eq.true`, {
     method: "PATCH",
     headers: { apikey: key, "content-type": "application/json", prefer: "return=minimal" },
-    body: JSON.stringify({ next_skip: nextSkip, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({
+      next_skip: nextSkip,
+      next_member_offset: nextMemberOffset,
+      updated_at: new Date().toISOString(),
+    }),
   });
   if (!response.ok) throw new Error(`Falha ao salvar cursor: ${await response.text()}`);
 }
@@ -198,34 +220,57 @@ export const Route = createFileRoute("/api/sync-sales")({
         const base = env("SUPABASE_URL").replace(/\/$/, "");
         const key = env("SUPABASE_SECRET_KEY");
         let cursor = 0;
+        let memberOffset = 0;
         let fetched = 0;
         let newSales = 0;
+        let membersChecked = 0;
         let completed = false;
         try {
-          cursor = await settings(base, key);
+          const savedSettings = await settings(base, key);
+          cursor = savedSettings.nextSkip;
+          memberOffset = savedSettings.nextMemberOffset;
           const auth = await authorization(base, key);
-          for (let index = 0; index < MAX_PAGES_PER_RUN; index += 1) {
-            if (Date.now() - started > MAX_RUN_MS) break;
-            const records = await page(auth, cursor);
-            if (!records.length) {
-              cursor = 0;
-              completed = true;
-              break;
-            }
-            const syncedAt = new Date().toISOString();
-            const rows = records.map((record, rowIndex) => salesRow(record, cursor + rowIndex, syncedAt));
-            const existing = await existingKeys(base, key, rows.map((row) => row.source_key));
-            newSales += rows.filter((row) => !existing.has(row.source_key)).length;
-            await upsertSales(base, key, rows);
-            fetched += records.length;
-            cursor += records.length;
-            if (records.length < PAGE_SIZE) {
-              cursor = 0;
-              completed = true;
-              break;
-            }
+
+          let ids = await memberIds(base, key, memberOffset);
+          if (!ids.length && memberOffset > 0) {
+            memberOffset = 0;
+            ids = await memberIds(base, key, memberOffset);
+            completed = true;
           }
-          await updateCursor(base, key, cursor);
+
+          for (const idMember of ids) {
+            if (Date.now() - started > MAX_RUN_MS) break;
+            let memberFinished = false;
+            while (!memberFinished && Date.now() - started <= MAX_RUN_MS) {
+              const records = await page(auth, idMember, cursor);
+              if (!records.length) {
+                memberFinished = true;
+                break;
+              }
+              const syncedAt = new Date().toISOString();
+              const rows = records.map((record, rowIndex) =>
+                salesRow(record, cursor + rowIndex, syncedAt, idMember),
+              );
+              const existing = await existingKeys(base, key, rows.map((row) => row.source_key));
+              newSales += rows.filter((row) => !existing.has(row.source_key)).length;
+              await upsertSales(base, key, rows);
+              fetched += records.length;
+              cursor += records.length;
+              if (records.length < SALES_PAGE_SIZE) {
+                memberFinished = true;
+              }
+            }
+            if (!memberFinished) break;
+            cursor = 0;
+            memberOffset += 1;
+            membersChecked += 1;
+          }
+
+          if (ids.length < MEMBER_BATCH_SIZE && cursor === 0) {
+            memberOffset = 0;
+            completed = true;
+          }
+          await updateCursor(base, key, cursor, memberOffset);
           const finishedAt = new Date().toISOString();
           await history(base, key, {
             started_at: startedAt,
@@ -235,6 +280,7 @@ export const Route = createFileRoute("/api/sync-sales")({
             total_fetched: fetched,
             new_sales: newSales,
             next_skip: cursor,
+            members_checked: membersChecked,
             cycle_completed: completed,
             duration_ms: Date.now() - started,
           });
@@ -243,6 +289,8 @@ export const Route = createFileRoute("/api/sync-sales")({
             synchronized: fetched,
             newSales,
             nextSkip: cursor,
+            nextMemberOffset: memberOffset,
+            membersChecked,
             cycleCompleted: completed,
             trigger,
             finishedAt,
@@ -258,6 +306,7 @@ export const Route = createFileRoute("/api/sync-sales")({
               total_fetched: fetched,
               new_sales: newSales,
               next_skip: cursor,
+              members_checked: membersChecked,
               cycle_completed: false,
               duration_ms: Date.now() - started,
               error_message: message.slice(0, 1000),

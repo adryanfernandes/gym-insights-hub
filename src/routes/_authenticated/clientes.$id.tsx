@@ -7,7 +7,7 @@ import {
   contractsForClient,
   normalizeClientStatus,
 } from "@/lib/clientDetails";
-import { useDashboardData } from "@/lib/membersDashboardData";
+import { useDashboardData, type SalesRecord } from "@/lib/membersDashboardData";
 import { formatBRL, formatNum } from "@/lib/mockData";
 
 export const Route = createFileRoute("/_authenticated/clientes/$id")({
@@ -24,12 +24,14 @@ function ClienteDetalhePage() {
   const { id } = Route.useParams();
   const clientId = Number(id);
   const { filters } = useApp();
-  const { clients, memberships, receivables, loadingMembers, loadingMemberships } =
+  const { clients, memberships, receivables, sales, loadingMembers, loadingMemberships } =
     useDashboardData(filters);
   const client = clients.find((row) => row.id === clientId);
   const contracts = contractsForClient(clientId, memberships, receivables);
+  const clientSales = salesForClient(clientId, sales);
   const totalPago = contracts.reduce((total, contract) => total + contract.valorPago, 0);
   const totalVendido = contracts.reduce((total, contract) => total + contract.valorVenda, 0);
+  const totalVendasApi = clientSales.reduce((total, sale) => total + sale.valor, 0);
 
   return (
     <DashboardLayout
@@ -97,6 +99,17 @@ function ClienteDetalhePage() {
               </div>
             </section>
 
+            <section className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                <p className="text-xs text-muted-foreground">Vendas na API</p>
+                <p className="mt-1 text-2xl font-bold">{formatNum(clientSales.length)}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-5 shadow-sm md:col-span-2">
+                <p className="text-xs text-muted-foreground">Total vendido na API de vendas</p>
+                <p className="mt-1 text-2xl font-bold">{formatBRL(totalVendasApi)}</p>
+              </div>
+            </section>
+
             <section className="rounded-xl border border-border bg-card shadow-sm">
               <div className="flex items-center gap-3 border-b border-border p-5">
                 <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
@@ -157,11 +170,141 @@ function ClienteDetalhePage() {
                 </table>
               </div>
             </section>
+
+            <section className="rounded-xl border border-border bg-card shadow-sm">
+              <div className="flex items-center gap-3 border-b border-border p-5">
+                <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Histórico de vendas</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Vendas consultadas na API /api/v2/sales pelo número do cliente.
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-5 py-3">Venda</th>
+                      <th className="px-5 py-3">Data</th>
+                      <th className="px-5 py-3">Item vendido</th>
+                      <th className="px-5 py-3">Origem</th>
+                      <th className="px-5 py-3 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientSales.map((sale) => (
+                      <tr key={sale.sourceKey} className="border-t border-border">
+                        <td className="px-5 py-3 font-mono text-xs">{sale.idVenda}</td>
+                        <td className="px-5 py-3">{sale.data}</td>
+                        <td className="px-5 py-3 font-medium">{sale.item}</td>
+                        <td className="px-5 py-3">{sale.origem}</td>
+                        <td className="px-5 py-3 text-right">{formatBRL(sale.valor)}</td>
+                      </tr>
+                    ))}
+                    {!clientSales.length && (
+                      <tr>
+                        <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                          Nenhuma venda foi encontrada para este cliente. A próxima sincronização da
+                          API de vendas passará a consultar por ID do aluno.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </>
         )}
       </div>
     </DashboardLayout>
   );
+}
+
+function numberValue(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function dateLabel(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return "-";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString("pt-BR");
+}
+
+function payloadValue(payload: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = payload[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return null;
+}
+
+function findTextInPayload(value: unknown, keys: string[]): string | null {
+  if (!value || typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findTextInPayload(item, keys);
+      if (found) return found;
+    }
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const direct = payloadValue(record, keys);
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  if (typeof direct === "number") return String(direct);
+  for (const item of Object.values(record)) {
+    const found = findTextInPayload(item, keys);
+    if (found) return found;
+  }
+  return null;
+}
+
+function salesForClient(clientId: number, sales: SalesRecord[]) {
+  return sales
+    .filter((sale) => Number(sale.id_member) === clientId)
+    .map((sale) => {
+      const payload = sale.payload ?? {};
+      const item =
+        findTextInPayload(payload, [
+          "description",
+          "name",
+          "item",
+          "product",
+          "productName",
+          "membershipName",
+          "nameMembership",
+          "service",
+          "saleItem",
+        ]) ?? "Item não informado";
+      const origin =
+        findTextInPayload(payload, ["type", "saleType", "category", "status", "paymentType"]) ??
+        "Venda";
+      const date =
+        sale.sale_date ??
+        (payloadValue(payload, ["saleDate", "date", "registerDate", "registrationDate"]) as
+          | string
+          | null);
+      const value =
+        numberValue(sale.sale_value) ||
+        numberValue(payloadValue(payload, ["saleValue", "value", "amount", "total", "totalValue"]));
+      return {
+        sourceKey: sale.source_key,
+        idVenda: sale.id_sale ?? sale.source_key,
+        data: dateLabel(date),
+        item,
+        origem: origin,
+        valor: value,
+        timestamp: typeof date === "string" ? new Date(date).getTime() : 0,
+      };
+    })
+    .sort((a, b) => (Number.isFinite(b.timestamp) ? b.timestamp : 0) - (Number.isFinite(a.timestamp) ? a.timestamp : 0));
 }
 
 function clientInitials(name: string) {

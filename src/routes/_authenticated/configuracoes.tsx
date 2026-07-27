@@ -1065,6 +1065,7 @@ type SalesSyncLog = {
   total_fetched: number;
   new_sales: number;
   next_skip: number;
+  members_checked?: number;
   cycle_completed: boolean;
   duration_ms: number;
 };
@@ -1075,6 +1076,7 @@ function SalesApiPanel() {
   const [intervalMinutesPart, setIntervalMinutesPart] = useState(0);
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
   const [nextSkip, setNextSkip] = useState(0);
+  const [nextMemberOffset, setNextMemberOffset] = useState(0);
   const [history, setHistory] = useState<SalesSyncLog[]>([]);
   const [credential, setCredential] = useState("");
   const [hasCredential, setHasCredential] = useState(false);
@@ -1115,6 +1117,7 @@ function SalesApiPanel() {
       ).getTime(),
     );
     setNextSkip(result.settings?.next_skip ?? 0);
+    setNextMemberOffset(result.settings?.next_member_offset ?? 0);
     setHasCredential(result.settings?.has_api_credential === true);
     setHistory(Array.isArray(result.history) ? result.history : []);
   }, []);
@@ -1258,7 +1261,7 @@ function SalesApiPanel() {
               )}
             </div>
             <Badge variant="outline" className="ml-auto">
-              Cursor: {nextSkip}
+              Cliente: {nextMemberOffset} | Cursor: {nextSkip}
             </Badge>
           </div>
 
@@ -1319,6 +1322,7 @@ function SalesApiPanel() {
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Vendas</TableHead>
               <TableHead className="text-right">Novas</TableHead>
+              <TableHead className="text-right">Clientes</TableHead>
               <TableHead className="text-right">Tempo</TableHead>
               <TableHead>Ciclo</TableHead>
             </TableRow>
@@ -1336,6 +1340,7 @@ function SalesApiPanel() {
                   </TableCell>
                   <TableCell className="text-right">{row.total_fetched}</TableCell>
                   <TableCell className="text-right font-semibold">{row.new_sales}</TableCell>
+                  <TableCell className="text-right">{row.members_checked ?? 0}</TableCell>
                   <TableCell className="text-right">
                     {Math.round(row.duration_ms / 1000)}s
                   </TableCell>
@@ -1344,7 +1349,7 @@ function SalesApiPanel() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   Nenhuma atualização registrada.
                 </TableCell>
               </TableRow>

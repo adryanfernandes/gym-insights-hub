@@ -28,7 +28,7 @@ import {
 } from "@/lib/mockData";
 
 type MemberRecord = Record<string, unknown>;
-type SalesRecord = {
+export type SalesRecord = {
   source_key: string;
   id_sale?: number | string | null;
   id_member?: number | string | null;
@@ -869,6 +869,7 @@ function useDashboardDataState(filters: Filters) {
     data,
     filterOptions,
     clients: sourceRows,
+    sales,
     memberships,
     receivables,
     loadingMembers: loading,

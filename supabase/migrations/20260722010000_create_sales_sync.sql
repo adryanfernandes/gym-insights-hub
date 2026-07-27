@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS public.sales_sync_settings (
   interval_minutes INTEGER NOT NULL DEFAULT 1440 CHECK (interval_minutes BETWEEN 1 AND 43200),
   evo_api_authorization TEXT,
   next_skip INTEGER NOT NULL DEFAULT 0 CHECK (next_skip >= 0),
+  next_member_offset INTEGER NOT NULL DEFAULT 0 CHECK (next_member_offset >= 0),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   schedule_updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS public.sales_sync_history (
   total_fetched INTEGER NOT NULL DEFAULT 0,
   new_sales INTEGER NOT NULL DEFAULT 0,
   next_skip INTEGER NOT NULL DEFAULT 0,
+  members_checked INTEGER NOT NULL DEFAULT 0,
   cycle_completed BOOLEAN NOT NULL DEFAULT FALSE,
   duration_ms INTEGER NOT NULL DEFAULT 0,
   error_message TEXT
