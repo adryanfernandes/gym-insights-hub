@@ -28,14 +28,21 @@ export function toCurrencyNumber(value: number | string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function endOfDate(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
+}
+
 export function normalizeClientStatus(client: ClientRow) {
   return client.ativo ? "Ativo" : "Inativo";
 }
 
 export function contractStatus(contract: MembershipRow) {
   if (contract.cancel_date) return "Cancelado";
-  const end = contract.membership_end ? new Date(contract.membership_end) : null;
-  if (end && !Number.isNaN(end.getTime()) && end < new Date()) return "Vencido";
+  const end = endOfDate(contract.membership_end);
+  if (end && end < new Date()) return "Vencido";
   if (Number(contract.status) === 1) return "Ativo";
   if (contract.status !== null && contract.status !== undefined) return `Status ${contract.status}`;
   return "Ativo";
@@ -43,8 +50,8 @@ export function contractStatus(contract: MembershipRow) {
 
 function isActiveContract(contract: MembershipRow) {
   if (contract.cancel_date) return false;
-  const end = contract.membership_end ? new Date(contract.membership_end) : null;
-  return Number(contract.status) === 1 && Boolean(end && !Number.isNaN(end.getTime()) && end >= new Date());
+  const end = endOfDate(contract.membership_end);
+  return Number(contract.status) === 1 && Boolean(end && end >= new Date());
 }
 
 function dateSortValue(label: string) {

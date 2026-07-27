@@ -53,6 +53,12 @@ function date(value: string | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function endOfDate(value: string | null | undefined) {
+  const parsed = date(value);
+  if (!parsed) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
+}
+
 function normalizedText(value: string | null | undefined) {
   return (value ?? "")
     .normalize("NFD")
@@ -73,7 +79,7 @@ function isMembershipActiveAt(row: MembershipRow, referenceDate = new Date()) {
     12,
   );
   const start = date(row.membership_start || row.sale_date);
-  const end = date(row.membership_end);
+  const end = endOfDate(row.membership_end);
   const cancel = date(row.cancel_date);
   return (
     Number(row.status) === 1 &&
@@ -486,7 +492,7 @@ export function getMembershipDashboardData(
       const contract = byId.get(row.id_member_membership);
       if (!contract) return;
       const contractStart = date(contract.membership_start || contract.sale_date);
-      const contractEnd = date(contract.membership_end);
+      const contractEnd = endOfDate(contract.membership_end);
       const canceledAt = date(contract.cancel_date);
       const outstanding = Math.max(num(row.amount) - num(row.amount_paid), 0);
       const canceled = row.canceled || Boolean(canceledAt && canceledAt <= monthEnd);

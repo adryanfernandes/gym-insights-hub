@@ -182,6 +182,11 @@ function toDate(value: unknown) {
   return null;
 }
 
+function endOfDate(date: Date | null) {
+  if (!date) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
 function toBRDate(value: unknown) {
   const date = toDate(value);
   return date ? format(date, "dd/MM/yyyy") : null;
@@ -277,7 +282,7 @@ type IndexedContract = {
 function isContractActiveToday(contract: MembershipRow, today = new Date()) {
   if (isSingleUseMembership(contract)) return false;
   const start = toDate(contract.membership_start || contract.sale_date);
-  const end = toDate(contract.membership_end);
+  const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
   const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
   return (
@@ -291,7 +296,7 @@ function isContractActiveToday(contract: MembershipRow, today = new Date()) {
 function isSingleUseActiveToday(contract: MembershipRow, today = new Date()) {
   if (!isSingleUseMembership(contract)) return false;
   const start = toDate(contract.membership_start || contract.sale_date);
-  const end = toDate(contract.membership_end);
+  const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
   const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
   const startsToday =
@@ -366,7 +371,7 @@ function isContractActiveAt(contract: MembershipRow, day: Date) {
   if (isSingleUseMembership(contract)) return false;
   const reference = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12);
   const start = toDate(contract.membership_start || contract.sale_date);
-  const end = toDate(contract.membership_end);
+  const end = endOfDate(toDate(contract.membership_end));
   const cancel = toDate(contract.cancel_date);
   return (
     Number(contract.status) === 1 &&
@@ -823,7 +828,7 @@ function useDashboardDataState(filters: Filters) {
       list.push({
         contract,
         start: toDate(contract.membership_start || contract.sale_date),
-        end: toDate(contract.membership_end),
+        end: endOfDate(toDate(contract.membership_end)),
       });
       contractsByMember.set(contract.id_member, list);
     });
