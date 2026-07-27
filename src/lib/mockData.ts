@@ -129,7 +129,7 @@ function ageRange(idade: number) {
 
 function daysSinceLastFrequency(client: ClientRow, referenceDate: Date) {
   const last = parseBRDate(client.ultimaFrequencia);
-  return last ? differenceInCalendarDays(referenceDate, last) : 999;
+  return last ? Math.max(0, differenceInCalendarDays(referenceDate, last)) : 999;
 }
 
 function riskLevel(client: ClientRow, referenceDate: Date): "baixo" | "medio" | "alto" {
@@ -236,6 +236,8 @@ export function getFilteredDashboardDataFromRows(filters: Filters, clients: Clie
 
 function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
   const referenceDate = getReferenceDate(clients);
+  const riskReferenceDate = new Date();
+  riskReferenceDate.setHours(0, 0, 0, 0);
   const range = filterPeriodRange(filters, referenceDate);
   const baseRows = clients.filter((client) => matchesBaseFilters(client, filters));
   const rows = baseRows.filter((client) => matchesPeriod(client, range));
@@ -246,9 +248,9 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     isInRange(parseBRDate(client.vencimento), range),
   );
   const riskRows = periodRows.filter(
-    (client) => client.ativo && daysSinceLastFrequency(client, referenceDate) > 10,
+    (client) => client.ativo && daysSinceLastFrequency(client, riskReferenceDate) > 10,
   );
-  const highRiskRows = riskRows.filter((client) => riskLevel(client, referenceDate) === "alto");
+  const highRiskRows = riskRows.filter((client) => riskLevel(client, riskReferenceDate) === "alto");
   const activeRows = baseRows.filter((client) => client.ativo);
   const inactiveRows = baseRows.filter((client) => !client.ativo);
   const renewalActiveRows = activeRows;
@@ -265,7 +267,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
   const cancelamentosValor = sum(highRiskRows, (client) => client.valor);
   const ocupacao = clamp(
     35 +
-      (periodRows.filter((client) => daysSinceLastFrequency(client, referenceDate) <= 7).length /
+      (periodRows.filter((client) => daysSinceLastFrequency(client, riskReferenceDate) <= 7).length /
         Math.max(periodRows.length, 1)) *
         60,
     0,
@@ -280,7 +282,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     });
     const monthDueRisk = periodRows.filter((client) => {
       const due = parseBRDate(client.vencimento);
-      return due && monthKey(due) === key && riskLevel(client, referenceDate) === "alto";
+      return due && monthKey(due) === key && riskLevel(client, riskReferenceDate) === "alto";
     });
     return {
       mes: monthLabel(key),
@@ -309,7 +311,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
       return (
         due &&
         format(due, "yyyy-MM-dd") === format(date, "yyyy-MM-dd") &&
-        riskLevel(client, referenceDate) === "alto"
+        riskLevel(client, riskReferenceDate) === "alto"
       );
     }).length;
     return { data: format(date, "dd/MM"), vendas, cancelamentos };
@@ -339,7 +341,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     .map((row) => {
       const group = periodRows.filter((client) => client.bairro === row.key);
       const retained = group.filter(
-        (client) => daysSinceLastFrequency(client, referenceDate) <= 15,
+        (client) => daysSinceLastFrequency(client, riskReferenceDate) <= 15,
       ).length;
       return {
         unidade: row.key,
@@ -351,16 +353,18 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
   const alunosRisco = riskRows
     .slice()
     .sort(
-      (a, b) => daysSinceLastFrequency(b, referenceDate) - daysSinceLastFrequency(a, referenceDate),
+      (a, b) =>
+        daysSinceLastFrequency(b, riskReferenceDate) -
+        daysSinceLastFrequency(a, riskReferenceDate),
     )
     .slice(0, 12)
     .map((client) => ({
       id: client.id,
       nome: client.nome,
       ultimoAgendamento: client.ultimaFrequencia ?? "-",
-      diasSemAtividade: daysSinceLastFrequency(client, referenceDate),
+      diasSemAtividade: daysSinceLastFrequency(client, riskReferenceDate),
       valorContrato: client.valor,
-      nivelRisco: riskLevel(client, referenceDate),
+      nivelRisco: riskLevel(client, riskReferenceDate),
     }));
 
   const unidadesPeriodo = countBy(periodRows, (client) => client.bairro)
@@ -581,7 +585,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
         return due && monthKey(due) === key;
       });
       const retained = monthRows.filter(
-        (client) => riskLevel(client, referenceDate) !== "alto",
+        (client) => riskLevel(client, riskReferenceDate) !== "alto",
       ).length;
       return {
         mes: monthLabel(key),
@@ -608,7 +612,8 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
       .slice()
       .sort(
         (a, b) =>
-          daysSinceLastFrequency(b, referenceDate) - daysSinceLastFrequency(a, referenceDate),
+          daysSinceLastFrequency(b, riskReferenceDate) -
+          daysSinceLastFrequency(a, riskReferenceDate),
       )
       .map((client) => ({
         id: client.id,
@@ -616,11 +621,23 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
         contrato: client.contrato,
         bairro: client.bairro,
         ultimaFrequencia: client.ultimaFrequencia,
-        diasSemAtividade: daysSinceLastFrequency(client, referenceDate),
+        diasSemAtividade: daysSinceLastFrequency(client, riskReferenceDate),
         vencimento: client.vencimento,
-        nivelRisco: riskLevel(client, referenceDate),
+        nivelRisco: riskLevel(client, riskReferenceDate),
       })),
     alunosAtivosLista: activeRows
+      .slice()
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+      .map((client) => ({
+        id: client.id,
+        nome: client.nome,
+        contrato: client.contrato,
+        bairro: client.bairro,
+        inicio: client.inicio,
+        vencimento: client.vencimento,
+        ultimaFrequencia: client.ultimaFrequencia,
+      })),
+    alunosInativosLista: inactiveRows
       .slice()
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
       .map((client) => ({

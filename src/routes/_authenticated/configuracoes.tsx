@@ -766,6 +766,7 @@ type MembershipSyncLog = {
   new_memberships: number;
   receivables_synced: number;
   next_skip: number;
+  members_checked?: number;
   cycle_completed: boolean;
   duration_ms: number;
 };
@@ -776,6 +777,7 @@ function MembershipsApiPanel() {
   const [intervalMinutesPart, setIntervalMinutesPart] = useState(0);
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
   const [nextSkip, setNextSkip] = useState(0);
+  const [nextMemberOffset, setNextMemberOffset] = useState(0);
   const [history, setHistory] = useState<MembershipSyncLog[]>([]);
   const [credential, setCredential] = useState("");
   const [hasCredential, setHasCredential] = useState(false);
@@ -816,6 +818,7 @@ function MembershipsApiPanel() {
       ).getTime(),
     );
     setNextSkip(result.settings?.next_skip ?? 0);
+    setNextMemberOffset(result.settings?.next_member_offset ?? 0);
     setHasCredential(result.settings?.has_api_credential === true);
     setHistory(Array.isArray(result.history) ? result.history : []);
   }, []);
@@ -959,7 +962,7 @@ function MembershipsApiPanel() {
               )}
             </div>
             <Badge variant="outline" className="ml-auto">
-              Cursor: {nextSkip}
+              Cliente: {nextMemberOffset} | Cursor: {nextSkip}
             </Badge>
           </div>
 
@@ -1021,6 +1024,7 @@ function MembershipsApiPanel() {
               <TableHead className="text-right">Contratos</TableHead>
               <TableHead className="text-right">Novos</TableHead>
               <TableHead className="text-right">Recebíveis</TableHead>
+              <TableHead className="text-right">Clientes</TableHead>
               <TableHead>Ciclo</TableHead>
             </TableRow>
           </TableHeader>
@@ -1038,6 +1042,7 @@ function MembershipsApiPanel() {
                   <TableCell className="text-right">{row.total_fetched}</TableCell>
                   <TableCell className="text-right font-semibold">{row.new_memberships}</TableCell>
                   <TableCell className="text-right">{row.receivables_synced}</TableCell>
+                  <TableCell className="text-right">{row.members_checked ?? 0}</TableCell>
                   <TableCell>
                     {row.cycle_completed ? "Concluído" : `Cursor ${row.next_skip}`}
                   </TableCell>
@@ -1045,7 +1050,7 @@ function MembershipsApiPanel() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   Nenhuma atualização registrada.
                 </TableCell>
               </TableRow>

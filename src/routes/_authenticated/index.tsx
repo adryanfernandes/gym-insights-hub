@@ -207,6 +207,7 @@ function GeralPage() {
   const navigate = useNavigate();
   const k = data.overviewKpis;
   const [activeStudentsOpen, setActiveStudentsOpen] = useState(false);
+  const [inactiveStudentsOpen, setInactiveStudentsOpen] = useState(false);
   const [salesOpen, setSalesOpen] = useState(false);
   const [cancellationsOpen, setCancellationsOpen] = useState(false);
   const [riskStudentsOpen, setRiskStudentsOpen] = useState(false);
@@ -216,7 +217,9 @@ function GeralPage() {
   const [selectedAgendaDate, setSelectedAgendaDate] = useState(todayInputDate);
   const currentActivityRef = useRef<HTMLTableRowElement | null>(null);
   const [activePage, setActivePage] = useState(1);
+  const [inactivePage, setInactivePage] = useState(1);
   const [activeSort, setActiveSort] = useState<SortState>(null);
+  const [inactiveSort, setInactiveSort] = useState<SortState>(null);
   const [salesSort, setSalesSort] = useState<SortState>(null);
   const [cancellationsSort, setCancellationsSort] = useState<SortState>(null);
   const [riskSort, setRiskSort] = useState<SortState>(null);
@@ -238,6 +241,7 @@ function GeralPage() {
     const parsed = Number(clientId);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
     setActiveStudentsOpen(false);
+    setInactiveStudentsOpen(false);
     setSalesOpen(false);
     setCancellationsOpen(false);
     setRiskStudentsOpen(false);
@@ -249,6 +253,17 @@ function GeralPage() {
   const renewalDeactivation = Number(k.taxaDesativacaoRenovacao).toFixed(2).replace(".", ",");
   const renewalRows =
     renewalTab === "ativas" ? data.renovacaoAtivaLista : data.renovacaoDesativadaLista;
+  const renewalContractSummary = useMemo(() => {
+    const totals = new Map<string, { contrato: string; clientes: number; valor: number }>();
+    renewalRows.forEach((row) => {
+      const contrato = row.contrato?.trim() || "Não informado";
+      const current = totals.get(contrato) ?? { contrato, clientes: 0, valor: 0 };
+      current.clientes += 1;
+      current.valor += Number(row.valor) || 0;
+      totals.set(contrato, current);
+    });
+    return Array.from(totals.values()).sort((a, b) => b.clientes - a.clientes);
+  }, [renewalRows]);
   const selectedRenewalMonthRows =
     selectedRenewalMonthTab === "renovacoes"
       ? (selectedRenewalMonth?.renovacoesLista ?? [])
@@ -272,10 +287,28 @@ function GeralPage() {
       }),
     [activeSort, data.alunosAtivosLista],
   );
+  const sortedInactiveStudents = useMemo(
+    () =>
+      sortedRows(data.alunosInativosLista, inactiveSort, {
+        id: (row) => row.id,
+        nome: (row) => row.nome,
+        contrato: (row) => row.contrato,
+        bairro: (row) => row.bairro,
+        inicio: (row) => row.inicio,
+        vencimento: (row) => row.vencimento,
+        ultimaFrequencia: (row) => row.ultimaFrequencia,
+      }),
+    [inactiveSort, data.alunosInativosLista],
+  );
   const activePages = Math.max(1, Math.ceil(sortedActiveStudents.length / ACTIVE_PAGE_SIZE));
   const activeRows = sortedActiveStudents.slice(
     (activePage - 1) * ACTIVE_PAGE_SIZE,
     activePage * ACTIVE_PAGE_SIZE,
+  );
+  const inactivePages = Math.max(1, Math.ceil(sortedInactiveStudents.length / ACTIVE_PAGE_SIZE));
+  const inactiveRows = sortedInactiveStudents.slice(
+    (inactivePage - 1) * ACTIVE_PAGE_SIZE,
+    inactivePage * ACTIVE_PAGE_SIZE,
   );
   const sortedSales = useMemo(
     () =>
@@ -348,11 +381,42 @@ function GeralPage() {
       })),
     });
 
+  const exportInactiveStudents = () =>
+    exportToExcel("alunos-inativos", {
+      "Alunos inativos": sortedInactiveStudents.map((student) => ({
+        Número: student.id,
+        Aluno: student.nome,
+        Contrato: student.contrato,
+        Bairro: student.bairro,
+        Início: student.inicio ?? "-",
+        Vencimento: student.vencimento ?? "-",
+        "Última frequência": student.ultimaFrequencia ?? "-",
+      })),
+    });
+
+  const exportRenewals = () =>
+    exportToExcel(renewalTab === "ativas" ? "renovacoes-ativas" : "renovacoes-desativadas", {
+      Consolidado: renewalContractSummary.map((row) => ({
+        Contrato: row.contrato,
+        Clientes: row.clientes,
+        Valor: row.valor,
+      })),
+      Clientes: renewalRows.map((row) => ({
+        Número: row.idAluno,
+        Cliente: row.aluno,
+        Contrato: row.contrato,
+        Início: displayDate(row.inicio),
+        Vencimento: displayDate(row.vencimento),
+        Status: row.status,
+        Valor: row.valor,
+      })),
+    });
+
   const onExportExcel = () =>
     exportToExcel("geral", {
       KPIs: [
         { metrica: "Alunos ativos", valor: k.alunosAtivos },
-        { metrica: "Alunos não ativos", valor: k.alunosNaoAtivos },
+        { metrica: "Alunos inativos", valor: k.alunosNaoAtivos },
         { metrica: "Ticket médio", valor: k.ticketMedio },
         { metrica: "Cancelamentos 30d (qtd)", valor: k.cancelamentos30d.qtd },
         { metrica: "Cancelamentos 30d (R$)", valor: k.cancelamentos30d.valor },
@@ -381,7 +445,7 @@ function GeralPage() {
   const onExportPdf = () =>
     exportToPdf("Geral - KPIs", [
       { Métrica: "Alunos ativos", Valor: formatNum(k.alunosAtivos) },
-      { Métrica: "Alunos não ativos", Valor: formatNum(k.alunosNaoAtivos) },
+      { Métrica: "Alunos inativos", Valor: formatNum(k.alunosNaoAtivos) },
       { Métrica: "Ticket médio", Valor: formatBRL(k.ticketMedio) },
       { Métrica: "Vendas 30d", Valor: `${k.vendas30d.qtd} (${formatBRL(k.vendas30d.valor)})` },
       {
@@ -413,12 +477,13 @@ function GeralPage() {
           onClick={() => setActiveStudentsOpen(true)}
         />
         <KpiCard
-          label="Alunos não ativos"
+          label="Alunos inativos"
           value={formatNum(k.alunosNaoAtivos)}
           hint="Contratos vencidos"
           delta={-1.6}
           accent="warning"
           icon={<UserX className="h-5 w-5" />}
+          onClick={() => setInactiveStudentsOpen(true)}
         />
         <KpiCard
           label="Ticket médio"
@@ -545,6 +610,99 @@ function GeralPage() {
                 type="button"
                 disabled={activePage === activePages}
                 onClick={() => setActivePage((page) => Math.min(activePages, page + 1))}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-3 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Próxima <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={inactiveStudentsOpen}
+        onOpenChange={(open) => {
+          setInactiveStudentsOpen(open);
+          if (open) setInactivePage(1);
+        }}
+      >
+        <DialogContent className="flex max-h-[85vh] max-w-6xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5 pr-14">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <DialogTitle>Alunos inativos</DialogTitle>
+                <DialogDescription>
+                  {formatNum(data.alunosInativosLista.length)} alunos inativos conforme os filtros
+                  selecionados.
+                </DialogDescription>
+              </div>
+              <button
+                type="button"
+                onClick={exportInactiveStudents}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-xs font-medium transition hover:bg-accent"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Baixar XLSX
+              </button>
+            </div>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
+                <tr>
+                  <SortHeader id="id" label="Número" sort={inactiveSort} onSort={(key) => setInactiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="nome" label="Aluno" sort={inactiveSort} onSort={(key) => setInactiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="contrato" label="Contrato" sort={inactiveSort} onSort={(key) => setInactiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="bairro" label="Bairro" sort={inactiveSort} onSort={(key) => setInactiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="inicio" label="Início" sort={inactiveSort} onSort={(key) => setInactiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="vencimento" label="Vencimento" sort={inactiveSort} onSort={(key) => setInactiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="ultimaFrequencia" label="Última frequência" sort={inactiveSort} onSort={(key) => setInactiveSort((sort) => nextSort(sort, key))} />
+                </tr>
+              </thead>
+              <tbody>
+                {inactiveRows.map((student) => (
+                  <tr
+                    key={student.id}
+                    onClick={() => openClientPage(student.id)}
+                    className="cursor-pointer border-t border-border hover:bg-accent/40"
+                    title="Abrir página do cliente"
+                  >
+                    <td className="px-5 py-3 font-medium">{student.id}</td>
+                    <td className="px-5 py-3 font-medium">{student.nome}</td>
+                    <td className="px-5 py-3">{student.contrato}</td>
+                    <td className="px-5 py-3">{student.bairro}</td>
+                    <td className="px-5 py-3">{student.inicio ?? "-"}</td>
+                    <td className="px-5 py-3">{student.vencimento ?? "-"}</td>
+                    <td className="px-5 py-3">{student.ultimaFrequencia ?? "-"}</td>
+                  </tr>
+                ))}
+                {!inactiveRows.length && (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">
+                      Nenhum aluno inativo encontrado com os filtros selecionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground">
+            <span>
+              Página {inactivePage} de {inactivePages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={inactivePage === 1}
+                onClick={() => setInactivePage((page) => Math.max(1, page - 1))}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-3 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" /> Anterior
+              </button>
+              <button
+                type="button"
+                disabled={inactivePage === inactivePages}
+                onClick={() => setInactivePage((page) => Math.min(inactivePages, page + 1))}
                 className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-3 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Próxima <ChevronRight className="h-4 w-4" />
@@ -732,12 +890,24 @@ function GeralPage() {
 
       <Dialog open={renewalOpen} onOpenChange={setRenewalOpen}>
         <DialogContent className="flex max-h-[85vh] max-w-6xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-border px-6 py-5">
-            <DialogTitle>Renovação automática</DialogTitle>
-            <DialogDescription>
-              {formatNum(data.renovacaoAtivaLista.length)} clientes ativos e{" "}
-              {formatNum(data.renovacaoDesativadaLista.length)} clientes desativados no período.
-            </DialogDescription>
+          <DialogHeader className="border-b border-border px-6 py-5 pr-14">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <DialogTitle>Renovação automática</DialogTitle>
+                <DialogDescription>
+                  {formatNum(data.renovacaoAtivaLista.length)} clientes ativos e{" "}
+                  {formatNum(data.renovacaoDesativadaLista.length)} clientes desativados no período.
+                </DialogDescription>
+              </div>
+              <button
+                type="button"
+                onClick={exportRenewals}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-xs font-medium transition hover:bg-accent"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Baixar XLSX
+              </button>
+            </div>
           </DialogHeader>
           <div className="flex flex-wrap gap-2 border-b border-border px-6 py-3">
             <button
@@ -764,6 +934,30 @@ function GeralPage() {
             </button>
           </div>
           <div className="overflow-auto">
+            <div className="border-b border-border px-6 py-4">
+              <h3 className="text-sm font-semibold text-foreground">
+                Consolidado por tipo de contrato
+              </h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {renewalContractSummary.map((row) => (
+                  <div key={row.contrato} className="rounded-lg border border-border bg-card p-3">
+                    <p
+                      className="truncate text-xs font-medium text-muted-foreground"
+                      title={row.contrato}
+                    >
+                      {row.contrato}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold">{formatNum(row.clientes)}</p>
+                    <p className="text-xs text-muted-foreground">{formatBRL(row.valor)}</p>
+                  </div>
+                ))}
+                {!renewalContractSummary.length && (
+                  <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
+                    Nenhum contrato encontrado nesta categoria.
+                  </div>
+                )}
+              </div>
+            </div>
             <table className="w-full min-w-[820px] text-sm">
               <thead className="sticky top-0 bg-card text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>

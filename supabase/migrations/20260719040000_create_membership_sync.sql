@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS public.membership_sync_settings (
   interval_hours INTEGER NOT NULL DEFAULT 24 CHECK (interval_hours BETWEEN 1 AND 720),
   evo_api_authorization TEXT,
   next_skip INTEGER NOT NULL DEFAULT 0 CHECK (next_skip >= 0),
+  next_member_offset INTEGER NOT NULL DEFAULT 0 CHECK (next_member_offset >= 0),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   schedule_updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS public.membership_sync_history (
   new_memberships INTEGER NOT NULL DEFAULT 0,
   receivables_synced INTEGER NOT NULL DEFAULT 0,
   next_skip INTEGER NOT NULL DEFAULT 0,
+  members_checked INTEGER NOT NULL DEFAULT 0,
   cycle_completed BOOLEAN NOT NULL DEFAULT FALSE,
   duration_ms INTEGER NOT NULL DEFAULT 0,
   error_message TEXT

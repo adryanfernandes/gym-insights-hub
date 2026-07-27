@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v3/membermembership";
-const PAGE_SIZE = 2;
+const MEMBER_BATCH_SIZE = 10;
 const MEMBER_LOOKUP_PAGE_SIZE = 25;
-const MEMBERS_WITHOUT_CONTRACTS_PER_RUN = 10;
-const MAX_PAGES_PER_RUN = 20;
 const MAX_RUN_MS = 75000;
 
 type RawRecord = Record<string, unknown> & {
@@ -50,17 +48,23 @@ async function authorization(base: string, key: string) {
 
 async function settings(base: string, key: string) {
   const response = await fetch(
-    `${base}/rest/v1/membership_sync_settings?select=next_skip&id=eq.true&limit=1`,
+    `${base}/rest/v1/membership_sync_settings?select=next_skip,next_member_offset&id=eq.true&limit=1`,
     { headers: { apikey: key }, cache: "no-store" },
   );
   if (!response.ok) throw new Error(`Falha ao carregar cursor: ${await response.text()}`);
-  return ((await response.json())[0] as { next_skip?: number } | undefined)?.next_skip ?? 0;
+  const row = (await response.json())[0] as
+    | { next_skip?: number; next_member_offset?: number }
+    | undefined;
+  return {
+    nextSkip: row?.next_skip ?? 0,
+    nextMemberOffset: row?.next_member_offset ?? 0,
+  };
 }
 
 async function page(auth: string, skip: number, options?: { idMember?: number; take?: number }) {
   const url = new URL(ENDPOINT);
   url.searchParams.set("idBranch", process.env.EVO_BRANCH_ID || "1");
-  url.searchParams.set("take", String(options?.take ?? PAGE_SIZE));
+  url.searchParams.set("take", String(options?.take ?? MEMBER_LOOKUP_PAGE_SIZE));
   url.searchParams.set("skip", String(skip));
   if (options?.idMember) url.searchParams.set("idMember", String(options.idMember));
   let lastError = "";
@@ -195,15 +199,17 @@ async function memberIds(base: string, key: string) {
   return ids;
 }
 
-async function memberIdsWithMemberships(base: string, key: string) {
+async function activeMemberIds(base: string, key: string) {
   const ids = new Set<number>();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   for (let offset = 0; offset < 10000; offset += 1000) {
     const response = await fetch(
-      `${base}/rest/v1/member_memberships?select=id_member&order=id_member.asc&offset=${offset}&limit=1000`,
+      `${base}/rest/v1/member_memberships?select=id_member&status=eq.1&membership_end=gte.${today.toISOString()}&cancel_date=is.null&order=id_member.asc&offset=${offset}&limit=1000`,
       { headers: { apikey: key }, cache: "no-store" },
     );
     if (!response.ok)
-      throw new Error(`Falha ao consultar clientes com contratos: ${await response.text()}`);
+      throw new Error(`Falha ao consultar clientes ativos com contratos: ${await response.text()}`);
     const rows = (await response.json()) as Array<{ id_member?: number | string }>;
     rows.forEach((row) => {
       const id = Number(row.id_member);
@@ -214,24 +220,25 @@ async function memberIdsWithMemberships(base: string, key: string) {
   return ids;
 }
 
-async function membersWithoutMemberships(base: string, key: string) {
-  const [members, withMemberships] = await Promise.all([
+async function prioritizedMemberIds(base: string, key: string, offset: number) {
+  const [members, active] = await Promise.all([
     memberIds(base, key),
-    memberIdsWithMemberships(base, key),
+    activeMemberIds(base, key),
   ]);
-  const missing = Array.from(members).filter((id) => !withMemberships.has(id));
-  if (missing.length <= MEMBERS_WITHOUT_CONTRACTS_PER_RUN) return missing;
-  const start = Math.floor(Date.now() / 60000) % missing.length;
-  return Array.from({ length: MEMBERS_WITHOUT_CONTRACTS_PER_RUN }, (_, index) => {
-    return missing[(start + index) % missing.length];
-  });
+  const activeFirst = Array.from(active).filter((id) => members.has(id));
+  const remaining = Array.from(members).filter((id) => !active.has(id));
+  return [...activeFirst, ...remaining].slice(offset, offset + MEMBER_BATCH_SIZE);
 }
 
-async function updateCursor(base: string, key: string, nextSkip: number) {
+async function updateCursor(base: string, key: string, nextSkip: number, nextMemberOffset: number) {
   const response = await fetch(`${base}/rest/v1/membership_sync_settings?id=eq.true`, {
     method: "PATCH",
     headers: { apikey: key, "content-type": "application/json", prefer: "return=minimal" },
-    body: JSON.stringify({ next_skip: nextSkip, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({
+      next_skip: nextSkip,
+      next_member_offset: nextMemberOffset,
+      updated_at: new Date().toISOString(),
+    }),
   });
   if (!response.ok) throw new Error(`Falha ao salvar cursor: ${await response.text()}`);
 }
@@ -260,13 +267,16 @@ export const Route = createFileRoute("/api/sync-memberships")({
         const base = env("SUPABASE_URL").replace(/\/$/, "");
         const key = env("SUPABASE_SECRET_KEY");
         let cursor = 0;
+        let memberOffset = 0;
         let fetched = 0;
         let newMemberships = 0;
         let receivablesSynced = 0;
-        let membersCheckedWithoutContracts = 0;
+        let membersChecked = 0;
         let completed = false;
         try {
-          cursor = await settings(base, key);
+          const savedSettings = await settings(base, key);
+          cursor = savedSettings.nextSkip;
+          memberOffset = savedSettings.nextMemberOffset;
           const auth = await authorization(base, key);
           const saveRecords = async (records: RawRecord[]) => {
             if (!records.length) return;
@@ -285,42 +295,42 @@ export const Route = createFileRoute("/api/sync-memberships")({
             fetched += records.length;
             receivablesSynced += receivables.length;
           };
-          for (let index = 0; index < MAX_PAGES_PER_RUN; index += 1) {
+          let ids = await prioritizedMemberIds(base, key, memberOffset);
+          if (!ids.length && memberOffset > 0) {
+            memberOffset = 0;
+            ids = await prioritizedMemberIds(base, key, memberOffset);
+            completed = true;
+          }
+
+          for (const idMember of ids) {
             if (Date.now() - started > MAX_RUN_MS) break;
-            const records = await page(auth, cursor);
-            if (!records.length) {
-              cursor = 0;
-              completed = true;
-              break;
-            }
-            await saveRecords(records);
-            cursor += records.length;
-            if (records.length < PAGE_SIZE) {
-              cursor = 0;
-              completed = true;
-              break;
-            }
-          }
-          if (Date.now() - started < MAX_RUN_MS) {
-            const missingMembers = await membersWithoutMemberships(base, key);
-            for (const idMember of missingMembers) {
-              if (Date.now() - started > MAX_RUN_MS) break;
-              let memberSkip = 0;
-              for (let index = 0; index < 4; index += 1) {
-                if (Date.now() - started > MAX_RUN_MS) break;
-                const records = await page(auth, memberSkip, {
-                  idMember,
-                  take: MEMBER_LOOKUP_PAGE_SIZE,
-                });
-                if (!records.length) break;
-                await saveRecords(records);
-                memberSkip += records.length;
-                if (records.length < MEMBER_LOOKUP_PAGE_SIZE) break;
+            let memberFinished = false;
+            while (!memberFinished && Date.now() - started <= MAX_RUN_MS) {
+              const records = await page(auth, cursor, {
+                idMember,
+                take: MEMBER_LOOKUP_PAGE_SIZE,
+              });
+              if (!records.length) {
+                memberFinished = true;
+                break;
               }
-              membersCheckedWithoutContracts += 1;
+              await saveRecords(records);
+              cursor += records.length;
+              if (records.length < MEMBER_LOOKUP_PAGE_SIZE) {
+                memberFinished = true;
+              }
             }
+            if (!memberFinished) break;
+            cursor = 0;
+            memberOffset += 1;
+            membersChecked += 1;
           }
-          await updateCursor(base, key, cursor);
+
+          if (ids.length < MEMBER_BATCH_SIZE && cursor === 0) {
+            memberOffset = 0;
+            completed = true;
+          }
+          await updateCursor(base, key, cursor, memberOffset);
           const finishedAt = new Date().toISOString();
           await history(base, key, {
             started_at: startedAt,
@@ -331,6 +341,7 @@ export const Route = createFileRoute("/api/sync-memberships")({
             new_memberships: newMemberships,
             receivables_synced: receivablesSynced,
             next_skip: cursor,
+            members_checked: membersChecked,
             cycle_completed: completed,
             duration_ms: Date.now() - started,
           });
@@ -340,8 +351,9 @@ export const Route = createFileRoute("/api/sync-memberships")({
             newMemberships,
             receivablesSynced,
             nextSkip: cursor,
+            nextMemberOffset: memberOffset,
             cycleCompleted: completed,
-            membersCheckedWithoutContracts,
+            membersChecked,
             trigger,
             finishedAt,
           });
@@ -357,6 +369,7 @@ export const Route = createFileRoute("/api/sync-memberships")({
               new_memberships: newMemberships,
               receivables_synced: receivablesSynced,
               next_skip: cursor,
+              members_checked: membersChecked,
               cycle_completed: false,
               duration_ms: Date.now() - started,
               error_message: message.slice(0, 1000),

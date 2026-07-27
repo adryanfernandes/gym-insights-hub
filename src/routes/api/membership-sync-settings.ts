@@ -21,6 +21,7 @@ function safe(settings?: Record<string, unknown>, inheritedCredential = false) {
         updated_at: settings.updated_at,
         schedule_updated_at: settings.schedule_updated_at,
         next_skip: settings.next_skip,
+        next_member_offset: settings.next_member_offset ?? 0,
         has_api_credential: Boolean(settings.evo_api_authorization) || inheritedCredential,
       }
     : null;
@@ -122,7 +123,10 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
             scheduleChanged = true;
           }
           if (scheduleChanged) updates.schedule_updated_at = changedAt;
-          if (input.restartCycle) updates.next_skip = 0;
+          if (input.restartCycle) {
+            updates.next_skip = 0;
+            updates.next_member_offset = 0;
+          }
           if (typeof input.apiCredential === "string" && input.apiCredential.trim()) {
             const credential = input.apiCredential.trim();
             updates.evo_api_authorization = credential.startsWith("Basic ")
