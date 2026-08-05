@@ -63,51 +63,85 @@ type StoredSettings = {
 };
 
 function ConfiguracoesPage() {
+  const configSections = [
+    {
+      value: "clients-api",
+      title: "API de clientes",
+      description: "Cadastro de alunos e sincronização incremental",
+      icon: DatabaseZap,
+      component: <ClientsApiPanel />,
+    },
+    {
+      value: "status-api",
+      title: "Status do sistema",
+      description: "Monitoramento da API de status",
+      icon: ServerCog,
+      component: <ApiMonitorPanel />,
+    },
+    {
+      value: "activities-api",
+      title: "API de atividades",
+      description: "Agenda, aulas e participantes",
+      icon: CalendarDays,
+      component: <ActivitiesApiPanel />,
+    },
+    {
+      value: "memberships-api",
+      title: "API de contratos",
+      description: "Contratos, renovações e buscas por cliente",
+      icon: CreditCard,
+      component: <MembershipsApiPanel />,
+    },
+    {
+      value: "sales-api",
+      title: "API vendas",
+      description: "Vendas realizadas por cliente",
+      icon: DatabaseZap,
+      component: <SalesApiPanel />,
+    },
+  ];
+  const [activeSection, setActiveSection] = useState(configSections[0].value);
+  const currentSection =
+    configSections.find((section) => section.value === activeSection) ?? configSections[0];
+
   return (
     <DashboardLayout
       title="Configurações"
       subtitle="Parâmetros operacionais e monitoramento"
       showFilters={false}
     >
-      <Tabs defaultValue="clients-api" className="space-y-4">
-        <TabsList className="h-auto flex-wrap">
-          <TabsTrigger value="clients-api" className="gap-2">
-            <DatabaseZap className="h-4 w-4" />
-            API de clientes
-          </TabsTrigger>
-          <TabsTrigger value="status-api" className="gap-2">
-            <ServerCog className="h-4 w-4" />
-            Status do sistema
-          </TabsTrigger>
-          <TabsTrigger value="activities-api" className="gap-2">
-            <CalendarDays className="h-4 w-4" />
-            API de atividades
-          </TabsTrigger>
-          <TabsTrigger value="memberships-api" className="gap-2">
-            <CreditCard className="h-4 w-4" />
-            API de contratos
-          </TabsTrigger>
-          <TabsTrigger value="sales-api" className="gap-2">
-            <DatabaseZap className="h-4 w-4" />
-            API vendas
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="clients-api" className="space-y-4">
-          <ClientsApiPanel />
-        </TabsContent>
-        <TabsContent value="status-api" className="space-y-4">
-          <ApiMonitorPanel />
-        </TabsContent>
-        <TabsContent value="activities-api" className="space-y-4">
-          <ActivitiesApiPanel />
-        </TabsContent>
-        <TabsContent value="memberships-api" className="space-y-4">
-          <MembershipsApiPanel />
-        </TabsContent>
-        <TabsContent value="sales-api" className="space-y-4">
-          <SalesApiPanel />
-        </TabsContent>
-      </Tabs>
+      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <nav className="space-y-2 rounded-xl border border-border bg-card p-3">
+          {configSections.map((section) => {
+            const Icon = section.icon;
+            const isActive = section.value === currentSection.value;
+
+            return (
+              <button
+                key={section.value}
+                type="button"
+                onClick={() => setActiveSection(section.value)}
+                className={`flex w-full items-center gap-3 rounded-lg border px-3 py-3 text-left transition ${
+                  isActive
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-transparent hover:border-border hover:bg-muted/60"
+                }`}
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold">{section.title}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {section.description}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="min-w-0 space-y-4">{currentSection.component}</div>
+      </div>
     </DashboardLayout>
   );
 }
@@ -123,11 +157,15 @@ type MemberSyncLog = {
   error_message?: string | null;
 };
 
+type MemberSyncMode = "full" | "recent";
+
 function ClientsApiPanel() {
   const [isSyncingMembers, setIsSyncingMembers] = useState(false);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
   const [intervalHours, setIntervalHours] = useState(24);
+  const [syncMode, setSyncMode] = useState<MemberSyncMode>("full");
+  const [recentDays, setRecentDays] = useState(7);
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
   const [apiCredential, setApiCredential] = useState("");
   const [hasApiCredential, setHasApiCredential] = useState(false);
@@ -156,6 +194,8 @@ function ClientsApiPanel() {
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
     setScheduleEnabled(result.settings?.enabled !== false);
     setIntervalHours(result.settings?.interval_hours ?? 24);
+    setSyncMode(result.settings?.sync_mode === "recent" ? "recent" : "full");
+    setRecentDays(Math.max(1, Math.min(30, Number(result.settings?.recent_days ?? 7) || 7)));
     setScheduleUpdatedAt(
       result.settings?.schedule_updated_at
         ? new Date(result.settings.schedule_updated_at).getTime()
@@ -182,7 +222,7 @@ function ClientsApiPanel() {
     setSyncMessage("");
     setSyncError("");
     try {
-      const response = await fetch("/api/sync-members", { method: "POST" });
+      const response = await fetch(`/api/sync-members?mode=${syncMode}`, { method: "POST" });
       const result = (await response.json()) as {
         synchronized?: number;
         newMembers?: number;
@@ -214,6 +254,8 @@ function ClientsApiPanel() {
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
       setScheduleEnabled(result.settings.enabled);
       setIntervalHours(result.settings.interval_hours);
+      setSyncMode(result.settings.sync_mode === "recent" ? "recent" : "full");
+      setRecentDays(Math.max(1, Math.min(30, Number(result.settings.recent_days ?? 7) || 7)));
       setScheduleUpdatedAt(new Date(result.settings.schedule_updated_at).getTime());
       setSyncMessage(
         result.settings.enabled
@@ -222,6 +264,32 @@ function ClientsApiPanel() {
       );
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : "Falha ao salvar agendamento.");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  }
+
+  async function saveSyncMode(mode = syncMode) {
+    setIsSavingSchedule(true);
+    setSyncError("");
+    try {
+      const response = await fetch("/api/member-sync-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ syncMode: mode, recentDays }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setSyncMode(result.settings.sync_mode === "recent" ? "recent" : "full");
+      setRecentDays(Math.max(1, Math.min(30, Number(result.settings.recent_days ?? 7) || 7)));
+      setScheduleUpdatedAt(new Date(result.settings.schedule_updated_at).getTime());
+      setSyncMessage(
+        result.settings.sync_mode === "recent"
+          ? `Consulta incremental ativada: cadastros dos últimos ${result.settings.recent_days} dia(s).`
+          : "Consulta completa ativada.",
+      );
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Falha ao salvar tipo de consulta.");
     } finally {
       setIsSavingSchedule(false);
     }
@@ -254,12 +322,7 @@ function ClientsApiPanel() {
   }
 
   return (
-    <Tabs defaultValue="sync" className="space-y-4">
-      <TabsList className="h-auto flex-wrap">
-        <TabsTrigger value="sync">Sincronização</TabsTrigger>
-        <TabsTrigger value="missing">Alunos sem contrato</TabsTrigger>
-      </TabsList>
-      <TabsContent value="sync" className="space-y-4">
+    <>
       <section className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col gap-5">
           <div className="flex items-center gap-2">
@@ -367,6 +430,70 @@ function ClientsApiPanel() {
               {isSyncingMembers ? "Sincronizando..." : "Atualizar agora"}
             </Button>
           </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Forma de consulta dos clientes</p>
+              <p className="text-xs text-muted-foreground">
+                A consulta incremental busca apenas alunos cadastrados nos últimos dias. A consulta
+                completa continua disponível para reconstruções ou conferências gerais.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setSyncMode("recent")}
+                className={`rounded-lg border p-4 text-left transition ${
+                  syncMode === "recent"
+                    ? "border-primary bg-primary/10"
+                    : "border-border hover:bg-muted/50"
+                }`}
+              >
+                <span className="text-sm font-semibold">Incremental</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Cadastro realizado de uma semana até hoje.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSyncMode("full")}
+                className={`rounded-lg border p-4 text-left transition ${
+                  syncMode === "full"
+                    ? "border-primary bg-primary/10"
+                    : "border-border hover:bg-muted/50"
+                }`}
+              >
+                <span className="text-sm font-semibold">Completa</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Percorre toda a paginação de alunos da API.
+                </span>
+              </button>
+            </div>
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <div className="w-52 space-y-2">
+                <Label htmlFor="client-sync-recent-days">Janela incremental em dias</Label>
+                <Input
+                  id="client-sync-recent-days"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={recentDays}
+                  onChange={(event) =>
+                    setRecentDays(Math.max(1, Math.min(30, Number(event.target.value) || 7)))
+                  }
+                  disabled={syncMode !== "recent"}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => saveSyncMode()}
+                disabled={isSavingSchedule}
+              >
+                Salvar forma de consulta
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -411,11 +538,7 @@ function ClientsApiPanel() {
           </TableBody>
         </Table>
       </section>
-      </TabsContent>
-      <TabsContent value="missing" className="space-y-4">
-        <MissingMembershipsPanel />
-      </TabsContent>
-    </Tabs>
+    </>
   );
 }
 

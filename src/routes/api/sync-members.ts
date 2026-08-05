@@ -5,6 +5,12 @@ const PAGE_SIZE = 100;
 const UPSERT_BATCH_SIZE = 250;
 
 type Member = Record<string, unknown> & { idMember: string | number };
+type MemberSyncMode = "full" | "recent";
+type MemberSyncSettings = {
+  authorization: string;
+  syncMode: MemberSyncMode;
+  recentDays: number;
+};
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -32,17 +38,28 @@ function extractMembers(payload: unknown): unknown[] {
   return [];
 }
 
-async function collectMembers() {
-  const authorization = await getEvoAuthorization();
+function isoDateTime(date: Date) {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+async function collectMembers(mode: MemberSyncMode, recentDays: number, authorization: string) {
   const endpoint = process.env.EVO_MEMBERS_URL || DEFAULT_EVO_URL;
   const branchId = process.env.EVO_BRANCH_ID || "1";
   const members: Member[] = [];
+  const now = new Date();
+  const registerDateStart = new Date(now);
+  registerDateStart.setDate(registerDateStart.getDate() - Math.max(1, Math.min(30, recentDays)));
+  registerDateStart.setHours(0, 0, 0, 0);
 
   for (let skip = 0, page = 0; page < 1000; skip += PAGE_SIZE, page += 1) {
     const url = new URL(endpoint);
     url.searchParams.set("idBranch", branchId);
     url.searchParams.set("take", String(PAGE_SIZE));
     url.searchParams.set("skip", String(skip));
+    if (mode === "recent") {
+      url.searchParams.set("registerDateStart", isoDateTime(registerDateStart));
+      url.searchParams.set("registerDateEnd", isoDateTime(now));
+    }
 
     const response = await fetchWithTimeout(url.toString(), {
       headers: { Authorization: authorization, Accept: "application/json" },
@@ -63,21 +80,35 @@ async function collectMembers() {
   throw new Error("EVO API pagination exceeded the safety limit");
 }
 
-async function getEvoAuthorization() {
-  if (process.env.EVO_API_AUTHORIZATION) return process.env.EVO_API_AUTHORIZATION;
+async function getMemberSyncSettings(): Promise<MemberSyncSettings> {
+  if (process.env.EVO_API_AUTHORIZATION) {
+    return {
+      authorization: process.env.EVO_API_AUTHORIZATION,
+      syncMode: "full",
+      recentDays: 7,
+    };
+  }
 
   const supabaseUrl = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
   const response = await fetchWithTimeout(
-    `${supabaseUrl}/rest/v1/member_sync_settings?select=evo_api_authorization&id=eq.true&limit=1`,
+    `${supabaseUrl}/rest/v1/member_sync_settings?select=evo_api_authorization,sync_mode,recent_days&id=eq.true&limit=1`,
     { headers: { apikey: requiredEnv("SUPABASE_SECRET_KEY") }, cache: "no-store" },
   );
   if (!response.ok) throw new Error(`Failed to load EVO API credential: HTTP ${response.status}`);
-  const settings = (await response.json()) as Array<{ evo_api_authorization?: string | null }>;
+  const settings = (await response.json()) as Array<{
+    evo_api_authorization?: string | null;
+    sync_mode?: MemberSyncMode | null;
+    recent_days?: number | null;
+  }>;
   const authorization = settings[0]?.evo_api_authorization?.trim();
   if (!authorization) {
     throw new Error("Configure a chave de acesso da API EVO em Configurações > API de clientes");
   }
-  return authorization;
+  return {
+    authorization,
+    syncMode: settings[0]?.sync_mode === "recent" ? "recent" : "full",
+    recentDays: Math.max(1, Math.min(30, Number(settings[0]?.recent_days ?? 7) || 7)),
+  };
 }
 
 async function upsertMembers(members: Member[]) {
@@ -143,19 +174,24 @@ export const Route = createFileRoute("/api/sync-members")({
 
         const startedAt = Date.now();
         const startedAtIso = new Date(startedAt).toISOString();
+        const url = new URL(request.url);
         const trigger =
-          new URL(request.url).searchParams.get("trigger") === "scheduled" ? "scheduled" : "manual";
+          url.searchParams.get("trigger") === "scheduled" ? "scheduled" : "manual";
+        const requestedMode = url.searchParams.get("mode");
         try {
+          const settings = await getMemberSyncSettings();
+          const mode: MemberSyncMode =
+            requestedMode === "recent" ? "recent" : requestedMode === "full" ? "full" : settings.syncMode;
           const [members, existingIds] = await Promise.all([
-            collectMembers(),
+            collectMembers(mode, settings.recentDays, settings.authorization),
             getExistingMemberIds(),
           ]);
-          if (!members.length)
+          if (!members.length && mode === "full")
             throw new Error("EVO API returned no members; Supabase was not changed");
           const newMembers = members.filter(
             (member) => !existingIds.has(String(member.idMember)),
           ).length;
-          await upsertMembers(members);
+          if (members.length) await upsertMembers(members);
           await recordHistory({
             started_at: startedAtIso,
             finished_at: new Date().toISOString(),
@@ -169,6 +205,7 @@ export const Route = createFileRoute("/api/sync-members")({
             ok: true,
             synchronized: members.length,
             newMembers,
+            mode,
             trigger,
             durationMs: Date.now() - startedAt,
             finishedAt: new Date().toISOString(),

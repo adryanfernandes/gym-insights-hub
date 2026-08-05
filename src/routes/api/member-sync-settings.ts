@@ -34,6 +34,8 @@ export const Route = createFileRoute("/api/member-sync-settings")({
                   id: current.id,
                   enabled: current.enabled,
                   interval_hours: current.interval_hours,
+                  sync_mode: current.sync_mode ?? "full",
+                  recent_days: current.recent_days ?? 7,
                   updated_at: current.updated_at,
                   schedule_updated_at: current.schedule_updated_at,
                   has_api_credential: Boolean(current.evo_api_authorization),
@@ -57,6 +59,8 @@ export const Route = createFileRoute("/api/member-sync-settings")({
           const input = (await request.json()) as {
             enabled?: boolean;
             intervalHours?: number;
+            syncMode?: "full" | "recent";
+            recentDays?: number;
             apiCredential?: string;
           };
           const { url, headers } = config();
@@ -69,6 +73,14 @@ export const Route = createFileRoute("/api/member-sync-settings")({
           }
           if (typeof input.intervalHours === "number") {
             updates.interval_hours = Math.max(1, Math.min(720, Math.round(input.intervalHours)));
+            scheduleChanged = true;
+          }
+          if (input.syncMode === "full" || input.syncMode === "recent") {
+            updates.sync_mode = input.syncMode;
+            scheduleChanged = true;
+          }
+          if (typeof input.recentDays === "number") {
+            updates.recent_days = Math.max(1, Math.min(30, Math.round(input.recentDays)));
             scheduleChanged = true;
           }
           if (scheduleChanged) updates.schedule_updated_at = changedAt;
@@ -90,6 +102,8 @@ export const Route = createFileRoute("/api/member-sync-settings")({
               id: settings.id,
               enabled: settings.enabled,
               interval_hours: settings.interval_hours,
+              sync_mode: settings.sync_mode ?? "full",
+              recent_days: settings.recent_days ?? 7,
               updated_at: settings.updated_at,
               schedule_updated_at: settings.schedule_updated_at,
               has_api_credential: Boolean(settings.evo_api_authorization),

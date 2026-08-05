@@ -26,6 +26,7 @@ export const Route = createFileRoute("/api/member-sync-scheduler")({
             | {
                 enabled: boolean;
                 interval_hours: number;
+                sync_mode?: "full" | "recent";
                 schedule_updated_at?: string;
                 updated_at: string;
               }
@@ -49,6 +50,7 @@ export const Route = createFileRoute("/api/member-sync-scheduler")({
           }
 
           const syncUrl = new URL("/api/sync-members?trigger=scheduled", request.url);
+          syncUrl.searchParams.set("mode", settings.sync_mode === "recent" ? "recent" : "full");
           const response = await fetch(syncUrl, {
             method: "POST",
             headers: { origin: new URL(request.url).origin },
