@@ -26,6 +26,7 @@ export const Route = createFileRoute("/api/member-sync-scheduler")({
             | {
                 enabled: boolean;
                 interval_hours: number;
+                interval_minutes?: number;
                 sync_mode?: "full" | "recent";
                 schedule_updated_at?: string;
                 updated_at: string;
@@ -45,7 +46,11 @@ export const Route = createFileRoute("/api/member-sync-scheduler")({
             settings.schedule_updated_at || settings.updated_at,
           ).getTime();
           const elapsed = Date.now() - Math.max(lastSuccessAt, scheduleUpdatedAt);
-          if (elapsed < settings.interval_hours * 60 * 60 * 1000) {
+          const intervalMinutes = Math.max(
+            1,
+            Number(settings.interval_minutes ?? settings.interval_hours * 60) || 1440,
+          );
+          if (elapsed < intervalMinutes * 60 * 1000) {
             return Response.json({ ok: true, action: "not-due" });
           }
 

@@ -164,6 +164,7 @@ function ClientsApiPanel() {
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
   const [intervalHours, setIntervalHours] = useState(24);
+  const [intervalMinutes, setIntervalMinutes] = useState(0);
   const [syncMode, setSyncMode] = useState<MemberSyncMode>("full");
   const [recentDays, setRecentDays] = useState(7);
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
@@ -180,8 +181,9 @@ function ClientsApiPanel() {
     const lastSuccess = history.find((log) => log.status === "success");
     const lastSuccessAt = lastSuccess ? new Date(lastSuccess.finished_at).getTime() : 0;
     const anchor = Math.max(lastSuccessAt, scheduleUpdatedAt ?? now);
-    return new Date(anchor + intervalHours * 60 * 60 * 1000);
-  }, [history, intervalHours, now, scheduleEnabled, scheduleUpdatedAt]);
+    const totalMinutes = Math.max(1, intervalHours * 60 + intervalMinutes);
+    return new Date(anchor + totalMinutes * 60 * 1000);
+  }, [history, intervalHours, intervalMinutes, now, scheduleEnabled, scheduleUpdatedAt]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -192,8 +194,14 @@ function ClientsApiPanel() {
     const response = await fetch("/api/member-sync-settings", { cache: "no-store" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    const totalMinutes = Math.max(
+      1,
+      Number(result.settings?.interval_minutes ?? (result.settings?.interval_hours ?? 24) * 60) ||
+        1440,
+    );
     setScheduleEnabled(result.settings?.enabled !== false);
-    setIntervalHours(result.settings?.interval_hours ?? 24);
+    setIntervalHours(Math.floor(totalMinutes / 60));
+    setIntervalMinutes(totalMinutes % 60);
     setSyncMode(result.settings?.sync_mode === "recent" ? "recent" : "full");
     setRecentDays(Math.max(1, Math.min(30, Number(result.settings?.recent_days ?? 7) || 7)));
     setScheduleUpdatedAt(
@@ -248,18 +256,26 @@ function ClientsApiPanel() {
       const response = await fetch("/api/member-sync-settings", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled, intervalHours }),
+        body: JSON.stringify({
+          enabled,
+          intervalMinutes: Math.max(1, intervalHours * 60 + intervalMinutes),
+        }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      const totalMinutes = Math.max(
+        1,
+        Number(result.settings.interval_minutes ?? result.settings.interval_hours * 60) || 1440,
+      );
       setScheduleEnabled(result.settings.enabled);
-      setIntervalHours(result.settings.interval_hours);
+      setIntervalHours(Math.floor(totalMinutes / 60));
+      setIntervalMinutes(totalMinutes % 60);
       setSyncMode(result.settings.sync_mode === "recent" ? "recent" : "full");
       setRecentDays(Math.max(1, Math.min(30, Number(result.settings.recent_days ?? 7) || 7)));
       setScheduleUpdatedAt(new Date(result.settings.schedule_updated_at).getTime());
       setSyncMessage(
         result.settings.enabled
-          ? `Atualização agendada a cada ${result.settings.interval_hours} hora(s).`
+          ? `Atualização agendada a cada ${formatIntervalMinutes(totalMinutes)}.`
           : "Atualização agendada pausada.",
       );
     } catch (error) {
@@ -397,15 +413,30 @@ function ClientsApiPanel() {
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
-            <div className="w-52 space-y-2">
-              <Label htmlFor="client-sync-hours">Atualização em horas</Label>
+            <div className="w-40 space-y-2">
+              <Label htmlFor="client-sync-hours">Horas</Label>
               <Input
                 id="client-sync-hours"
                 type="number"
-                min={1}
+                min={0}
                 max={720}
                 value={intervalHours}
-                onChange={(event) => setIntervalHours(Math.max(1, Number(event.target.value) || 1))}
+                onChange={(event) =>
+                  setIntervalHours(Math.max(0, Math.min(720, Number(event.target.value) || 0)))
+                }
+              />
+            </div>
+            <div className="w-40 space-y-2">
+              <Label htmlFor="client-sync-minutes">Minutos</Label>
+              <Input
+                id="client-sync-minutes"
+                type="number"
+                min={0}
+                max={59}
+                value={intervalMinutes}
+                onChange={(event) =>
+                  setIntervalMinutes(Math.max(0, Math.min(59, Number(event.target.value) || 0)))
+                }
               />
             </div>
             <Button

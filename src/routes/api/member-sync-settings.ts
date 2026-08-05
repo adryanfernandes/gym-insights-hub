@@ -34,6 +34,9 @@ export const Route = createFileRoute("/api/member-sync-settings")({
                   id: current.id,
                   enabled: current.enabled,
                   interval_hours: current.interval_hours,
+                  interval_minutes:
+                    current.interval_minutes ??
+                    Math.max(1, Number(current.interval_hours ?? 24) * 60),
                   sync_mode: current.sync_mode ?? "full",
                   recent_days: current.recent_days ?? 7,
                   updated_at: current.updated_at,
@@ -59,6 +62,7 @@ export const Route = createFileRoute("/api/member-sync-settings")({
           const input = (await request.json()) as {
             enabled?: boolean;
             intervalHours?: number;
+            intervalMinutes?: number;
             syncMode?: "full" | "recent";
             recentDays?: number;
             apiCredential?: string;
@@ -73,6 +77,16 @@ export const Route = createFileRoute("/api/member-sync-settings")({
           }
           if (typeof input.intervalHours === "number") {
             updates.interval_hours = Math.max(1, Math.min(720, Math.round(input.intervalHours)));
+            updates.interval_minutes = Math.max(
+              1,
+              Math.min(43200, Math.round(input.intervalHours * 60)),
+            );
+            scheduleChanged = true;
+          }
+          if (typeof input.intervalMinutes === "number") {
+            const intervalMinutes = Math.max(1, Math.min(43200, Math.round(input.intervalMinutes)));
+            updates.interval_minutes = intervalMinutes;
+            updates.interval_hours = Math.max(1, Math.ceil(intervalMinutes / 60));
             scheduleChanged = true;
           }
           if (input.syncMode === "full" || input.syncMode === "recent") {
@@ -102,6 +116,9 @@ export const Route = createFileRoute("/api/member-sync-settings")({
               id: settings.id,
               enabled: settings.enabled,
               interval_hours: settings.interval_hours,
+              interval_minutes:
+                settings.interval_minutes ??
+                Math.max(1, Number(settings.interval_hours ?? 24) * 60),
               sync_mode: settings.sync_mode ?? "full",
               recent_days: settings.recent_days ?? 7,
               updated_at: settings.updated_at,
