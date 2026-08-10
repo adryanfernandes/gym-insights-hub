@@ -84,8 +84,15 @@ function normalizedText(value: string | null | undefined) {
     .toLowerCase();
 }
 
+const ADMINISTRATIVE_MEMBERSHIPS = new Set([
+  "professor exclusivo movip max",
+  "aula exclusiva movip max",
+  "massagem movida movip max",
+]);
+
 export function isSingleUseMembership(row: Pick<MembershipRow, "membership_name">) {
-  return normalizedText(row.membership_name).includes("avulso");
+  const name = normalizedText(row.membership_name).trim();
+  return name.includes("avulso") || ADMINISTRATIVE_MEMBERSHIPS.has(name);
 }
 
 function isMembershipActiveAt(row: MembershipRow, referenceDate = new Date()) {

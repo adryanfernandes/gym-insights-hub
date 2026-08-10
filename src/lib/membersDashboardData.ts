@@ -251,9 +251,25 @@ function isProposalSale(sale: SalesRecord) {
   );
 }
 
+const ADMINISTRATIVE_SALE_TERMS = [
+  "professor exclusivo movip max",
+  "aula exclusiva movip max",
+  "massagem movida movip max",
+];
+
+function isAdministrativeSale(sale: SalesRecord) {
+  const text = saleText(sale);
+  return ADMINISTRATIVE_SALE_TERMS.some((term) => text.includes(term));
+}
+
 function isMembershipSale(sale: SalesRecord) {
   const text = saleText(sale);
-  return !isExperimentalSale(sale) && !isProposalSale(sale) && !text.includes("avulso");
+  return (
+    !isExperimentalSale(sale) &&
+    !isProposalSale(sale) &&
+    !isAdministrativeSale(sale) &&
+    !text.includes("avulso")
+  );
 }
 
 function salesDate(sale: SalesRecord) {

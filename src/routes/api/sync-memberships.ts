@@ -4,6 +4,11 @@ const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v3/membermembersh
 const MEMBER_BATCH_SIZE = 10;
 const MEMBER_LOOKUP_PAGE_SIZE = 25;
 const MAX_RUN_MS = 75000;
+const ADMINISTRATIVE_MEMBERSHIPS = new Set([
+  "professor exclusivo movip max",
+  "aula exclusiva movip max",
+  "massagem movida movip max",
+]);
 
 type RawRecord = Record<string, unknown> & {
   idMemberMemberShip: number;
@@ -95,6 +100,47 @@ async function page(auth: string, skip: number, options?: { idMember?: number; t
 
 function value(record: Record<string, unknown>, key: string) {
   return record[key] ?? null;
+}
+
+function normalizedText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isNonRecurringMembershipName(value: unknown) {
+  const name = normalizedText(value);
+  return name.includes("avulso") || ADMINISTRATIVE_MEMBERSHIPS.has(name);
+}
+
+function isRecurringRecord(record: RawRecord) {
+  return !isNonRecurringMembershipName(value(record, "nameMembership"));
+}
+
+function recordDate(value: unknown) {
+  if (!value) return null;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function recurringRow(record: RawRecord, syncedAt: string) {
+  const end = recordDate(value(record, "membershipEnd"));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return {
+    id_member: record.idMember,
+    last_contract_id: record.idMemberMemberShip,
+    membership_name: value(record, "nameMembership"),
+    membership_start: value(record, "membershipStart"),
+    membership_end: value(record, "membershipEnd"),
+    active:
+      Number(value(record, "statusMemberMembership")) === 1 &&
+      !value(record, "cancelDate") &&
+      Boolean(end && end >= today),
+    last_seen_at: syncedAt,
+  };
 }
 
 function membershipRow(record: RawRecord, syncedAt: string) {
@@ -220,14 +266,87 @@ async function activeMemberIds(base: string, key: string) {
   return ids;
 }
 
+async function recurringPriorityMemberIds(base: string, key: string) {
+  const response = await fetch(
+    `${base}/rest/v1/membership_recurring_members?select=id_member&priority_sync_count=lt.2&order=active.desc,membership_end.desc,last_seen_at.desc&limit=${MEMBER_BATCH_SIZE}`,
+    { headers: { apikey: key }, cache: "no-store" },
+  );
+  if (!response.ok)
+    throw new Error(`Falha ao consultar fila de contratos recorrentes: ${await response.text()}`);
+  return ((await response.json()) as Array<{ id_member?: number | string }>)
+    .map((row) => Number(row.id_member))
+    .filter((id) => Number.isFinite(id));
+}
+
+async function recurringMemberIds(base: string, key: string) {
+  const ids = new Set<number>();
+  for (let offset = 0; offset < 10000; offset += 1000) {
+    const response = await fetch(
+      `${base}/rest/v1/membership_recurring_members?select=id_member&offset=${offset}&limit=1000`,
+      { headers: { apikey: key }, cache: "no-store" },
+    );
+    if (!response.ok)
+      throw new Error(`Falha ao consultar clientes recorrentes: ${await response.text()}`);
+    const rows = (await response.json()) as Array<{ id_member?: number | string }>;
+    rows.forEach((row) => {
+      const id = Number(row.id_member);
+      if (Number.isFinite(id)) ids.add(id);
+    });
+    if (rows.length < 1000) break;
+  }
+  return ids;
+}
+
+async function inactiveMemberIds(base: string, key: string, offset: number) {
+  const [members, recurring] = await Promise.all([memberIds(base, key), recurringMemberIds(base, key)]);
+  return Array.from(members)
+    .filter((id) => !recurring.has(id))
+    .slice(offset, offset + MEMBER_BATCH_SIZE);
+}
+
 async function prioritizedMemberIds(base: string, key: string, offset: number) {
-  const [members, active] = await Promise.all([
-    memberIds(base, key),
-    activeMemberIds(base, key),
-  ]);
-  const activeFirst = Array.from(active).filter((id) => members.has(id));
-  const remaining = Array.from(members).filter((id) => !active.has(id));
-  return [...activeFirst, ...remaining].slice(offset, offset + MEMBER_BATCH_SIZE);
+  const recurring = await recurringPriorityMemberIds(base, key);
+  if (recurring.length) return { ids: recurring, phase: "recurring" as const };
+  return { ids: await inactiveMemberIds(base, key, offset), phase: "inactive" as const };
+}
+
+async function bumpRecurringPriorityCounts(base: string, key: string, ids: number[]) {
+  const uniqueIds = Array.from(new Set(ids));
+  if (!uniqueIds.length) return;
+  const response = await fetch(
+    `${base}/rest/v1/membership_recurring_members?select=id_member,priority_sync_count&id_member=in.(${uniqueIds.join(",")})`,
+    { headers: { apikey: key }, cache: "no-store" },
+  );
+  if (!response.ok)
+    throw new Error(`Falha ao atualizar prioridade de recorrentes: ${await response.text()}`);
+  const rows = (await response.json()) as Array<{
+    id_member: number | string;
+    priority_sync_count?: number | string;
+  }>;
+  await upsert(
+    base,
+    key,
+    "membership_recurring_members",
+    "id_member",
+    rows.map((row) => ({
+      id_member: Number(row.id_member),
+      priority_sync_count: Math.min(Number(row.priority_sync_count ?? 0) + 1, 2),
+      last_seen_at: new Date().toISOString(),
+    })),
+  );
+}
+
+async function resetRecurringPriorityCounts(base: string, key: string) {
+  const response = await fetch(
+    `${base}/rest/v1/membership_recurring_members?priority_sync_count=gte.2`,
+    {
+      method: "PATCH",
+      headers: { apikey: key, "content-type": "application/json", prefer: "return=minimal" },
+      body: JSON.stringify({ priority_sync_count: 0 }),
+    },
+  );
+  if (!response.ok)
+    throw new Error(`Falha ao reiniciar prioridade de recorrentes: ${await response.text()}`);
 }
 
 async function updateCursor(base: string, key: string, nextSkip: number, nextMemberOffset: number) {
@@ -317,6 +436,19 @@ export const Route = createFileRoute("/api/sync-memberships")({
             const existing = await existingIds(base, key, ids);
             newMemberships += ids.filter((id) => !existing.has(id)).length;
             const memberships = records.map((record) => membershipRow(record, syncedAt));
+            const recurringMembers = Array.from(
+              new Map(
+                records
+                  .filter(isRecurringRecord)
+                  .map((record) => recurringRow(record, syncedAt))
+                  .sort((a, b) => {
+                    const aDate = recordDate(a.membership_end)?.getTime() ?? 0;
+                    const bDate = recordDate(b.membership_end)?.getTime() ?? 0;
+                    return aDate - bDate;
+                  })
+                  .map((row) => [row.id_member, row]),
+              ).values(),
+            );
             const receivables = Array.from(
               new Map(
                 receivableRows(records, syncedAt).map((row) => [row.id_receivable, row]),
@@ -324,15 +456,25 @@ export const Route = createFileRoute("/api/sync-memberships")({
             );
             await upsert(base, key, "member_memberships", "id_member_membership", memberships);
             await upsert(base, key, "membership_receivables", "id_receivable", receivables);
+            await upsert(base, key, "membership_recurring_members", "id_member", recurringMembers);
             fetched += records.length;
             receivablesSynced += receivables.length;
           };
-          let ids = targeted ? targetIds : await prioritizedMemberIds(base, key, memberOffset);
+          let phase: "targeted" | "recurring" | "inactive" = "targeted";
+          let selection = targeted
+            ? { ids: targetIds, phase }
+            : await prioritizedMemberIds(base, key, memberOffset);
+          let ids = selection.ids;
+          phase = selection.phase;
           if (!targeted && !ids.length && memberOffset > 0) {
             memberOffset = 0;
-            ids = await prioritizedMemberIds(base, key, memberOffset);
+            await resetRecurringPriorityCounts(base, key);
+            selection = await prioritizedMemberIds(base, key, memberOffset);
+            ids = selection.ids;
+            phase = selection.phase;
             completed = true;
           }
+          const recurringMembersChecked: number[] = [];
 
           for (const idMember of ids) {
             if (Date.now() - started > MAX_RUN_MS) break;
@@ -354,15 +496,19 @@ export const Route = createFileRoute("/api/sync-memberships")({
             }
             if (!memberFinished) break;
             cursor = 0;
-            if (!targeted) memberOffset += 1;
+            if (!targeted && phase === "inactive") memberOffset += 1;
+            if (!targeted && phase === "recurring") recurringMembersChecked.push(idMember);
             membersChecked += 1;
           }
 
           if (targeted) {
             completed = membersChecked === ids.length;
+          } else if (phase === "recurring") {
+            await bumpRecurringPriorityCounts(base, key, recurringMembersChecked);
           } else if (ids.length < MEMBER_BATCH_SIZE && cursor === 0) {
             memberOffset = 0;
             completed = true;
+            await resetRecurringPriorityCounts(base, key);
           }
           if (!targeted) await updateCursor(base, key, cursor, memberOffset);
           const finishedAt = new Date().toISOString();
