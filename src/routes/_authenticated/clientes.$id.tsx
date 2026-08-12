@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, FileText, UserRound } from "lucide-react";
+import { ArrowLeft, CircleCheck, CircleX, FileText, UserRound } from "lucide-react";
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useApp } from "@/contexts/AppContext";
@@ -30,6 +30,8 @@ function ClienteDetalhePage() {
   const totalVendido = contracts.reduce((total, contract) => total + contract.valorVenda, 0);
   const totalVendasApi = clientSales.reduce((total, sale) => total + sale.valor, 0);
   const [historyTab, setHistoryTab] = useState<"contratos" | "vendas">("contratos");
+  const clientStatus = client ? normalizeClientStatus(client) : "Inativo";
+  const isClientActive = clientStatus === "Ativo";
 
   return (
     <DashboardLayout
@@ -61,7 +63,8 @@ function ClienteDetalhePage() {
           <>
             <section className="grid gap-4 lg:grid-cols-4">
               <div className="rounded-xl border border-border bg-card p-5 shadow-sm lg:col-span-2">
-                <div className="flex items-start gap-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
                   <ClientProfilePhoto name={client.nome} photoUrl={client.fotoUrl} />
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -73,12 +76,27 @@ function ClienteDetalhePage() {
                     </p>
                   </div>
                 </div>
+                  <div
+                    title={clientStatus}
+                    aria-label={`Status do cliente: ${clientStatus}`}
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
+                      isClientActive
+                        ? "bg-emerald-500/15 text-emerald-500"
+                        : "bg-red-500/15 text-red-500"
+                    }`}
+                  >
+                    {isClientActive ? (
+                      <CircleCheck className="h-5 w-5" />
+                    ) : (
+                      <CircleX className="h-5 w-5" />
+                    )}
+                  </div>
+                </div>
               </div>
-              <InfoCard label="Status" value={normalizeClientStatus(client)} />
               <InfoCard label="Contrato atual" value={client.contrato || "-"} />
               <InfoCard label="Início" value={client.inicio ?? "-"} />
               <InfoCard label="Vencimento" value={client.vencimento ?? "-"} />
-              <InfoCard label="Última frequência" value={client.ultimaFrequencia ?? "-"} />
+              <InfoCard label="Último acesso ao app" value={client.ultimaFrequencia ?? "-"} />
               <InfoCard label="Valor atual" value={formatBRL(client.valor)} />
             </section>
 
@@ -99,7 +117,7 @@ function ClienteDetalhePage() {
 
             <section className="grid gap-4 md:grid-cols-3">
               <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                <p className="text-xs text-muted-foreground">Vendas na API</p>
+                <p className="text-xs text-muted-foreground">Vendas</p>
                 <p className="mt-1 text-2xl font-bold">{formatNum(clientSales.length)}</p>
               </div>
               <div className="rounded-xl border border-border bg-card p-5 shadow-sm md:col-span-2">
@@ -202,7 +220,7 @@ function ClienteDetalhePage() {
                       <tr>
                         <th className="px-5 py-3">Venda</th>
                         <th className="px-5 py-3">Data</th>
-                        <th className="px-5 py-3">Item vendido</th>
+                        <th className="px-5 py-3">Descrição</th>
                         <th className="px-5 py-3">Origem</th>
                         <th className="px-5 py-3 text-right">Valor</th>
                       </tr>
@@ -212,7 +230,7 @@ function ClienteDetalhePage() {
                         <tr key={sale.sourceKey} className="border-t border-border">
                           <td className="px-5 py-3 font-mono text-xs">{sale.idVenda}</td>
                           <td className="px-5 py-3">{sale.data}</td>
-                          <td className="px-5 py-3 font-medium">{sale.item}</td>
+                          <td className="px-5 py-3 font-medium">{sale.descricao}</td>
                           <td className="px-5 py-3">{sale.origem}</td>
                           <td className="px-5 py-3 text-right">{formatBRL(sale.valor)}</td>
                         </tr>
@@ -285,9 +303,15 @@ function salesForClient(clientId: number, sales: SalesRecord[]) {
     .filter((sale) => Number(sale.id_member) === clientId)
     .map((sale) => {
       const payload = sale.payload ?? {};
-      const item =
+      const descricao =
         findTextInPayload(payload, [
           "description",
+          "descricao",
+          "itemDescription",
+          "productDescription",
+          "serviceDescription",
+          "saleDescription",
+          "nameProduct",
           "name",
           "item",
           "product",
@@ -296,7 +320,7 @@ function salesForClient(clientId: number, sales: SalesRecord[]) {
           "nameMembership",
           "service",
           "saleItem",
-        ]) ?? "Item não informado";
+        ]) ?? "Descrição não informada";
       const origin =
         findTextInPayload(payload, ["type", "saleType", "category", "status", "paymentType"]) ??
         "Venda";
@@ -312,7 +336,7 @@ function salesForClient(clientId: number, sales: SalesRecord[]) {
         sourceKey: sale.source_key,
         idVenda: sale.id_sale ?? sale.source_key,
         data: dateLabel(date),
-        item,
+        descricao,
         origem: origin,
         valor: value,
         timestamp: typeof date === "string" ? new Date(date).getTime() : 0,

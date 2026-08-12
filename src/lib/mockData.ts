@@ -504,7 +504,6 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
 
   const visitantes = Math.round(starts.length * 5.8);
   const aulas = Math.round(starts.length * 2.1);
-  const propostas = Math.round(starts.length * 1.35);
   return {
     periodLabel: range.label,
     overviewKpis: {
@@ -606,7 +605,6 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
     funilComercial: [
       { etapa: "Visitantes", valor: visitantes },
       { etapa: "Aulas Experimentais", valor: aulas },
-      { etapa: "Propostas", valor: propostas },
       { etapa: "Matriculas", valor: starts.length },
     ],
     rankingRetencao,

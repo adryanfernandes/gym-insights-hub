@@ -7,7 +7,22 @@ function config() {
   return { url, headers: { apikey: key, "content-type": "application/json" } };
 }
 
-function safe(settings?: Record<string, unknown>, inheritedCredential = false) {
+type MembershipProgress = {
+  phase: "recurring" | "members";
+  total: number;
+  checked: number;
+  remaining: number;
+  recurring_total: number;
+  recurring_checked: number;
+  recurring_remaining: number;
+  member_total: number;
+};
+
+function safe(
+  settings?: Record<string, unknown>,
+  inheritedCredential = false,
+  progress?: MembershipProgress,
+) {
   const intervalMinutes =
     typeof settings?.interval_minutes === "number"
       ? settings.interval_minutes
@@ -22,9 +37,69 @@ function safe(settings?: Record<string, unknown>, inheritedCredential = false) {
         schedule_updated_at: settings.schedule_updated_at,
         next_skip: settings.next_skip,
         next_member_offset: settings.next_member_offset ?? 0,
+        progress,
         has_api_credential: Boolean(settings.evo_api_authorization) || inheritedCredential,
       }
     : null;
+}
+
+function countFromContentRange(contentRange: string | null) {
+  const total = Number(contentRange?.split("/")?.[1]);
+  return Number.isFinite(total) ? total : 0;
+}
+
+async function countRows(url: string, headers: Record<string, string>, path: string) {
+  const response = await fetch(`${url}/rest/v1/${path}`, {
+    headers: { ...headers, prefer: "count=exact" },
+    cache: "no-store",
+  });
+  if (!response.ok) return 0;
+  return countFromContentRange(response.headers.get("content-range"));
+}
+
+async function membershipProgress(
+  url: string,
+  headers: Record<string, string>,
+  settings?: Record<string, unknown>,
+) {
+  const [memberTotal, recurringTotal, recurringRemaining] = await Promise.all([
+    countRows(url, headers, "members?select=idMember&limit=0"),
+    countRows(url, headers, "membership_recurring_members?select=id_member&limit=0"),
+    countRows(
+      url,
+      headers,
+      "membership_recurring_members?select=id_member&priority_sync_count=lt.2&limit=0",
+    ),
+  ]);
+  const recurringChecked = Math.max(0, recurringTotal - recurringRemaining);
+  const memberOffset = Math.max(0, Number(settings?.next_member_offset ?? 0));
+
+  if (recurringRemaining > 0) {
+    return {
+      phase: "recurring" as const,
+      total: recurringTotal,
+      checked: recurringChecked,
+      remaining: recurringRemaining,
+      recurring_total: recurringTotal,
+      recurring_checked: recurringChecked,
+      recurring_remaining: recurringRemaining,
+      member_total: memberTotal,
+    };
+  }
+
+  const memberQueueTotal = Math.max(0, memberTotal - recurringTotal);
+  const checked = Math.min(memberOffset, memberQueueTotal || memberTotal);
+  const total = memberQueueTotal || memberTotal;
+  return {
+    phase: "members" as const,
+    total,
+    checked,
+    remaining: Math.max(0, total - checked),
+    recurring_total: recurringTotal,
+    recurring_checked: recurringChecked,
+    recurring_remaining: recurringRemaining,
+    member_total: memberTotal,
+  };
 }
 
 export const Route = createFileRoute("/api/membership-sync-settings")({
@@ -75,12 +150,15 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
           const memberSettings = memberSettingsResponse.ok
             ? ((await memberSettingsResponse.json()) as Array<Record<string, unknown>>)
             : [];
+          const currentSettings = settings[0];
+          const progress = await membershipProgress(url, headers, currentSettings);
           return Response.json({
             settings: safe(
-              settings[0],
+              currentSettings,
               Boolean(
                 inherited[0]?.evo_api_authorization || memberSettings[0]?.evo_api_authorization,
               ),
+              progress,
             ),
             history: await historyResponse.json(),
           });

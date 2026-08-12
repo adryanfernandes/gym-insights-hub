@@ -947,6 +947,17 @@ type MembershipSyncLog = {
   duration_ms: number;
 };
 
+type MembershipSyncProgress = {
+  phase: "recurring" | "members";
+  total: number;
+  checked: number;
+  remaining: number;
+  recurring_total: number;
+  recurring_checked: number;
+  recurring_remaining: number;
+  member_total: number;
+};
+
 function MembershipsApiPanel() {
   const [enabled, setEnabled] = useState(true);
   const [intervalHours, setIntervalHours] = useState(24);
@@ -954,6 +965,7 @@ function MembershipsApiPanel() {
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState<number | null>(null);
   const [nextSkip, setNextSkip] = useState(0);
   const [nextMemberOffset, setNextMemberOffset] = useState(0);
+  const [progress, setProgress] = useState<MembershipSyncProgress | null>(null);
   const [history, setHistory] = useState<MembershipSyncLog[]>([]);
   const [credential, setCredential] = useState("");
   const [hasCredential, setHasCredential] = useState(false);
@@ -964,6 +976,9 @@ function MembershipsApiPanel() {
   const [error, setError] = useState("");
 
   const totalIntervalMinutes = Math.max(1, intervalHours * 60 + intervalMinutesPart);
+  const progressPercent = progress?.total
+    ? Math.min(100, Math.round((progress.checked / progress.total) * 100))
+    : 0;
 
   const nextScheduledAt = useMemo(() => {
     if (!enabled) return null;
@@ -995,6 +1010,7 @@ function MembershipsApiPanel() {
     );
     setNextSkip(result.settings?.next_skip ?? 0);
     setNextMemberOffset(result.settings?.next_member_offset ?? 0);
+    setProgress(result.settings?.progress ?? null);
     setHasCredential(result.settings?.has_api_credential === true);
     setHistory(Array.isArray(result.history) ? result.history : []);
   }, []);
@@ -1147,6 +1163,45 @@ function MembershipsApiPanel() {
             <Badge variant="outline" className="ml-auto">
               Cliente: {nextMemberOffset} | Cursor: {nextSkip}
             </Badge>
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Progresso da consulta por clientes</p>
+                <p className="text-sm font-semibold">
+                  {progress?.phase === "recurring"
+                    ? "Prioridade: clientes com contratos recorrentes"
+                    : "Fila: demais clientes por cadastro recente"}
+                </p>
+              </div>
+              <Badge variant="outline">{progressPercent}% verificado</Badge>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Clientes verificados</p>
+                <p className="text-xl font-bold">{formatNum(progress?.checked ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Clientes faltantes</p>
+                <p className="text-xl font-bold">{formatNum(progress?.remaining ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Total da fila atual</p>
+                <p className="text-xl font-bold">{formatNum(progress?.total ?? 0)}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Base cadastrada: {formatNum(progress?.member_total ?? 0)} clientes. Recorrentes
+              pendentes: {formatNum(progress?.recurring_remaining ?? 0)} de{" "}
+              {formatNum(progress?.recurring_total ?? 0)}.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-end gap-3">

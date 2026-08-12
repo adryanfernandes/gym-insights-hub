@@ -209,6 +209,11 @@ function toBRDate(value: unknown) {
   return date ? format(date, "dd/MM/yyyy") : null;
 }
 
+function toBRDateTime(value: unknown) {
+  const date = toDate(value);
+  return date ? format(date, "dd/MM/yyyy HH:mm") : null;
+}
+
 function normalizeSearchText(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -294,14 +299,12 @@ function salesFunnelFromRows(sales: SalesRecord[], filters: Filters, fallbackMat
   if (!scoped.length) return null;
 
   const aulasExperimentais = scoped.filter(isExperimentalSale).length;
-  const propostas = scoped.filter(isProposalSale).length;
   const matriculas = fallbackMatriculas;
-  const visitantes = Math.max(scoped.length, aulasExperimentais + propostas + matriculas);
+  const visitantes = Math.max(scoped.length, aulasExperimentais + matriculas);
 
   return [
     { etapa: "Visitantes", valor: visitantes },
     { etapa: "Aulas Experimentais", valor: aulasExperimentais },
-    { etapa: "Propostas", valor: propostas },
     { etapa: "Matriculas", valor: matriculas },
   ];
 }
@@ -582,7 +585,7 @@ function memberToClient(member: MemberRecord, index: number): ClientRow {
     contratoNome: contrato,
     inicio: startDate ? format(startDate, "dd/MM/yyyy") : null,
     vencimento: inferredDue ? format(inferredDue, "dd/MM/yyyy") : null,
-    ultimaFrequencia: toBRDate(pick(member, LAST_FREQUENCY_FIELDS)),
+    ultimaFrequencia: toBRDateTime(pick(member, LAST_FREQUENCY_FIELDS)),
     fotoUrl: toImageUrl(pick(member, IMAGE_FIELDS)),
     valor: value,
     valorTotal: value,
