@@ -282,7 +282,7 @@ export function getActivityDashboardDataFromNormalized(
         presentes: teacherMetrics.present,
         faltas: teacherMetrics.absent,
         faltasJustificadas: teacherMetrics.justifiedAbsence,
-        ocupacao: teacherMetrics.occupancy,
+        ocupacao: round((teacherMetrics.present / Math.max(teacherMetrics.capacity, 1)) * 100),
         noShow: teacherMetrics.noShow,
         mediaAlunos: teacherMetrics.averageStudents,
       };
