@@ -297,7 +297,7 @@ export function getActivityDashboardDataFromNormalized(
           return {
             atividade,
             aulas: value.classes,
-            ocupacao: value.occupancy,
+            ocupacao: round((value.present / Math.max(value.capacity, 1)) * 100),
             mediaAlunos: value.averageStudents,
             inscritos: value.occupied,
             presentes: value.present,
@@ -322,7 +322,7 @@ export function getActivityDashboardDataFromNormalized(
           inscritos: row.occupied,
           presentes: row.hasAttendance ? row.present : row.occupied,
           faltas: row.absent,
-          ocupacao: round((row.occupied / Math.max(row.capacity, 1)) * 100),
+          ocupacao: round(((row.hasAttendance ? row.present : row.occupied) / Math.max(row.capacity, 1)) * 100),
         }));
 
       return [professor, { porAtividade, aulas }];
