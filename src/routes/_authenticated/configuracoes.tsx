@@ -745,13 +745,6 @@ function ActivitiesApiPanel() {
   }
 
   return (
-    <Tabs defaultValue="sync" className="space-y-4">
-      <TabsList className="h-auto flex-wrap">
-        <TabsTrigger value="sync">Sincronizacao</TabsTrigger>
-        <TabsTrigger value="missing">Alunos sem contrato</TabsTrigger>
-        <TabsTrigger value="manual-list">Lista manual</TabsTrigger>
-      </TabsList>
-      <TabsContent value="sync" className="space-y-4">
     <div className="space-y-4">
       <section className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col gap-5">
@@ -937,14 +930,6 @@ function ActivitiesApiPanel() {
         </Table>
       </section>
     </div>
-      </TabsContent>
-      <TabsContent value="missing" className="space-y-4">
-        <MissingMembershipsPanel />
-      </TabsContent>
-      <TabsContent value="manual-list" className="space-y-4">
-        <ManualMembershipLookupPanel />
-      </TabsContent>
-    </Tabs>
   );
 }
 

@@ -289,6 +289,46 @@ export function getActivityDashboardDataFromNormalized(
     })
     .sort((a, b) => b.ocupacao - a.ocupacao);
 
+  const atividadesPorProfessor = Object.fromEntries(
+    Array.from(aggregate(rows, (row) => row.instructor).entries()).map(([professor, teacherRows]) => {
+      const porAtividade = Array.from(aggregate(teacherRows, (row) => row.modality).entries())
+        .map(([atividade, activityRows]) => {
+          const value = metrics(activityRows);
+          return {
+            atividade,
+            aulas: value.classes,
+            ocupacao: value.occupancy,
+            mediaAlunos: value.averageStudents,
+            inscritos: value.occupied,
+            presentes: value.present,
+            faltas: value.absent,
+            capacidade: value.capacity,
+          };
+        })
+        .sort((a, b) => b.aulas - a.aulas || b.ocupacao - a.ocupacao);
+
+      const aulas = teacherRows
+        .slice()
+        .sort((a, b) => {
+          const dateCompare = b.date.getTime() - a.date.getTime();
+          return dateCompare || b.startTime.localeCompare(a.startTime);
+        })
+        .map((row) => ({
+          data: format(row.date, "dd/MM/yyyy"),
+          horario: row.endTime ? `${row.startTime} - ${row.endTime}` : row.startTime,
+          atividade: row.modality,
+          unidade: row.area,
+          capacidade: row.capacity,
+          inscritos: row.occupied,
+          presentes: row.hasAttendance ? row.present : row.occupied,
+          faltas: row.absent,
+          ocupacao: round((row.occupied / Math.max(row.capacity, 1)) * 100),
+        }));
+
+      return [professor, { porAtividade, aulas }];
+    }),
+  );
+
   const porModalidade = Array.from(aggregate(rows, (row) => row.modality).entries())
     .map(([modalidade, modalityRows]) => {
       const value = metrics(modalityRows);
@@ -347,6 +387,7 @@ export function getActivityDashboardDataFromNormalized(
         mediaAlunos: totals.averageStudents,
       },
       ranking,
+      atividadesPorProfessor,
       porModalidade,
       porHorario,
       evolucao,

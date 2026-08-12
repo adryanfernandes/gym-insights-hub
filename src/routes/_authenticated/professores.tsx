@@ -20,6 +20,13 @@ import { useApp } from "@/contexts/AppContext";
 import { formatNum } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToExcel, exportToPdf } from "@/lib/exporters";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/professores")({
   head: () => ({
@@ -167,7 +174,11 @@ function ProfessoresPage() {
   const professores = data.professores;
   const k = professores.kpis;
   const [showAllTeachers, setShowAllTeachers] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null);
   const rankingData = showAllTeachers ? professores.ranking : professores.ranking.slice(0, 10);
+  const selectedTeacherDetails = selectedTeacher
+    ? professores.atividadesPorProfessor?.[selectedTeacher]
+    : null;
   const setFiltersRef = useRef(setFilters);
 
   useEffect(() => {
@@ -230,6 +241,107 @@ function ProfessoresPage() {
       onExportExcel={onExportExcel}
       showFilters={false}
     >
+      <Dialog open={Boolean(selectedTeacher)} onOpenChange={(open) => !open && setSelectedTeacher(null)}>
+        <DialogContent className="flex max-h-[85vh] max-w-6xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5 pr-14">
+            <DialogTitle>{selectedTeacher || "Professor"}</DialogTitle>
+            <DialogDescription>
+              Atividades realizadas e estatísticas de ocupação por modalidade no período filtrado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-5 overflow-auto p-6">
+            <section>
+              <h3 className="text-sm font-semibold">Ocupação por atividade</h3>
+              <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Atividade</th>
+                      <th className="px-4 py-3 font-medium text-right">Aulas</th>
+                      <th className="px-4 py-3 font-medium text-right">Ocupação</th>
+                      <th className="px-4 py-3 font-medium text-right">Média/aula</th>
+                      <th className="px-4 py-3 font-medium text-right">Inscritos</th>
+                      <th className="px-4 py-3 font-medium text-right">Presentes</th>
+                      <th className="px-4 py-3 font-medium text-right">Faltas</th>
+                      <th className="px-4 py-3 font-medium text-right">Capacidade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedTeacherDetails?.porAtividade.length ? (
+                      selectedTeacherDetails.porAtividade.map((row) => (
+                        <tr key={row.atividade} className="border-t border-border">
+                          <td className="px-4 py-3 font-medium">{row.atividade}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.aulas)}</td>
+                          <td className="px-4 py-3 text-right font-semibold">{row.ocupacao}%</td>
+                          <td className="px-4 py-3 text-right">{row.mediaAlunos}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.inscritos)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.presentes)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.faltas)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.capacidade)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={8} className="h-20 text-center text-muted-foreground">
+                          Nenhuma atividade encontrada para este professor no período.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-sm font-semibold">Atividades realizadas</h3>
+              <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[900px] text-sm">
+                  <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Data</th>
+                      <th className="px-4 py-3 font-medium">Horário</th>
+                      <th className="px-4 py-3 font-medium">Atividade</th>
+                      <th className="px-4 py-3 font-medium">Unidade</th>
+                      <th className="px-4 py-3 font-medium text-right">Ocupação</th>
+                      <th className="px-4 py-3 font-medium text-right">Inscritos</th>
+                      <th className="px-4 py-3 font-medium text-right">Presentes</th>
+                      <th className="px-4 py-3 font-medium text-right">Faltas</th>
+                      <th className="px-4 py-3 font-medium text-right">Capacidade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedTeacherDetails?.aulas.length ? (
+                      selectedTeacherDetails.aulas.map((row, index) => (
+                        <tr
+                          key={`${row.data}-${row.horario}-${row.atividade}-${index}`}
+                          className="border-t border-border"
+                        >
+                          <td className="px-4 py-3">{row.data}</td>
+                          <td className="px-4 py-3">{row.horario}</td>
+                          <td className="px-4 py-3 font-medium">{row.atividade}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{row.unidade}</td>
+                          <td className="px-4 py-3 text-right font-semibold">{row.ocupacao}%</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.inscritos)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.presentes)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.faltas)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.capacidade)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={9} className="h-20 text-center text-muted-foreground">
+                          Nenhuma aula encontrada.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="relative z-40 flex flex-wrap items-end gap-3 overflow-visible rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
         <TeacherDateInput
           label="Início"
@@ -385,12 +497,22 @@ function ProfessoresPage() {
 
         <ChartCard title="Modalidades" description="Ocupacao e media de alunos por aula">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={professores.porModalidade}>
+            <ComposedChart
+              data={professores.porModalidade}
+              margin={{ top: 10, right: 18, left: 0, bottom: 72 }}
+            >
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="modalidade"
                 tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                 interval={0}
+                angle={-35}
+                textAnchor="end"
+                height={84}
+                tickMargin={12}
+                tickFormatter={(value) =>
+                  String(value).length > 18 ? `${String(value).slice(0, 18)}…` : String(value)
+                }
               />
               <YAxis
                 yAxisId="left"
@@ -529,7 +651,15 @@ function ProfessoresPage() {
                     key={row.professor}
                     className="border-t border-border hover:bg-accent/40 transition"
                   >
-                    <td className="px-5 py-3 font-medium">{row.professor}</td>
+                    <td className="px-5 py-3 font-medium">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTeacher(row.professor)}
+                        className="text-left font-semibold text-primary underline-offset-4 hover:underline"
+                      >
+                        {row.professor}
+                      </button>
+                    </td>
                     <td className="px-5 py-3 text-muted-foreground">{row.modalidade}</td>
                     <td className="px-5 py-3 text-muted-foreground">{row.unidade}</td>
                     <td className="px-5 py-3">{formatNum(row.aulas)}</td>

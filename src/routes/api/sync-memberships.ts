@@ -9,6 +9,13 @@ const ADMINISTRATIVE_MEMBERSHIPS = new Set([
   "aula exclusiva movip max",
   "massagem movida movip max",
 ]);
+const MEMBER_REGISTRATION_ORDER_COLUMNS = [
+  "registerDate",
+  "registrationDate",
+  "created_at",
+  "joined_at",
+  "conversionDate",
+];
 
 type RawRecord = Record<string, unknown> & {
   idMemberMemberShip: number;
@@ -227,22 +234,44 @@ async function existingIds(base: string, key: string, ids: number[]) {
   );
 }
 
-async function memberIds(base: string, key: string) {
-  const ids = new Set<number>();
-  for (let offset = 0; offset < 10000; offset += 1000) {
-    const response = await fetch(
-      `${base}/rest/v1/members?select=idMember&order=idMember.asc&offset=${offset}&limit=1000`,
-      { headers: { apikey: key }, cache: "no-store" },
-    );
-    if (!response.ok) throw new Error(`Falha ao consultar clientes: ${await response.text()}`);
-    const rows = (await response.json()) as Array<{ idMember?: number | string }>;
-    rows.forEach((row) => {
-      const id = Number(row.idMember);
-      if (Number.isFinite(id)) ids.add(id);
-    });
-    if (rows.length < 1000) break;
+async function memberIdsOrderedByRegistration(base: string, key: string) {
+  const tryColumn = async (column: string | null) => {
+    const ids: number[] = [];
+    const seen = new Set<number>();
+    const select = column ? `idMember,${column}` : "idMember";
+    const order = column ? `${column}.desc.nullslast,idMember.desc` : "idMember.desc";
+    for (let offset = 0; offset < 10000; offset += 1000) {
+      const response = await fetch(
+        `${base}/rest/v1/members?select=${encodeURIComponent(select)}&order=${encodeURIComponent(order)}&offset=${offset}&limit=1000`,
+        { headers: { apikey: key }, cache: "no-store" },
+      );
+      if (!response.ok) {
+        if (column) return null;
+        throw new Error(`Falha ao consultar clientes: ${await response.text()}`);
+      }
+      const rows = (await response.json()) as Array<{ idMember?: number | string }>;
+      rows.forEach((row) => {
+        const id = Number(row.idMember);
+        if (Number.isFinite(id) && !seen.has(id)) {
+          seen.add(id);
+          ids.push(id);
+        }
+      });
+      if (rows.length < 1000) break;
+    }
+    return ids;
+  };
+
+  for (const column of MEMBER_REGISTRATION_ORDER_COLUMNS) {
+    const ids = await tryColumn(column);
+    if (ids?.length) return ids;
   }
-  return ids;
+
+  return (await tryColumn(null)) ?? [];
+}
+
+async function memberIds(base: string, key: string) {
+  return new Set(await memberIdsOrderedByRegistration(base, key));
 }
 
 async function activeMemberIds(base: string, key: string) {
@@ -266,16 +295,31 @@ async function activeMemberIds(base: string, key: string) {
   return ids;
 }
 
+async function recurringPriorityMemberIdSet(base: string, key: string) {
+  const ids = new Set<number>();
+  for (let offset = 0; offset < 10000; offset += 1000) {
+    const response = await fetch(
+      `${base}/rest/v1/membership_recurring_members?select=id_member&priority_sync_count=lt.2&offset=${offset}&limit=1000`,
+      { headers: { apikey: key }, cache: "no-store" },
+    );
+    if (!response.ok)
+      throw new Error(`Falha ao consultar fila de contratos recorrentes: ${await response.text()}`);
+    const rows = (await response.json()) as Array<{ id_member?: number | string }>;
+    rows.forEach((row) => {
+      const id = Number(row.id_member);
+      if (Number.isFinite(id)) ids.add(id);
+    });
+    if (rows.length < 1000) break;
+  }
+  return ids;
+}
+
 async function recurringPriorityMemberIds(base: string, key: string) {
-  const response = await fetch(
-    `${base}/rest/v1/membership_recurring_members?select=id_member&priority_sync_count=lt.2&order=active.desc,membership_end.desc,last_seen_at.desc&limit=${MEMBER_BATCH_SIZE}`,
-    { headers: { apikey: key }, cache: "no-store" },
-  );
-  if (!response.ok)
-    throw new Error(`Falha ao consultar fila de contratos recorrentes: ${await response.text()}`);
-  return ((await response.json()) as Array<{ id_member?: number | string }>)
-    .map((row) => Number(row.id_member))
-    .filter((id) => Number.isFinite(id));
+  const [orderedMembers, recurring] = await Promise.all([
+    memberIdsOrderedByRegistration(base, key),
+    recurringPriorityMemberIdSet(base, key),
+  ]);
+  return orderedMembers.filter((id) => recurring.has(id)).slice(0, MEMBER_BATCH_SIZE);
 }
 
 async function recurringMemberIds(base: string, key: string) {
@@ -298,8 +342,11 @@ async function recurringMemberIds(base: string, key: string) {
 }
 
 async function inactiveMemberIds(base: string, key: string, offset: number) {
-  const [members, recurring] = await Promise.all([memberIds(base, key), recurringMemberIds(base, key)]);
-  return Array.from(members)
+  const [members, recurring] = await Promise.all([
+    memberIdsOrderedByRegistration(base, key),
+    recurringMemberIds(base, key),
+  ]);
+  return members
     .filter((id) => !recurring.has(id))
     .slice(offset, offset + MEMBER_BATCH_SIZE);
 }
