@@ -16,11 +16,33 @@ export type ClientContractDetail = {
   renovacaoAtiva: string;
 };
 
+export type ClientSyncUpdate = {
+  origem: string;
+  registros: number;
+  primeiroRegistro: string;
+  ultimaAtualizacao: string;
+  atualizadoHa: string;
+  status: "Atualizado" | "Atenção" | "Antigo" | "Sem data";
+};
+
 export function toDateLabel(value: string | null | undefined) {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
   return parsed.toLocaleDateString("pt-BR");
+}
+
+export function toDateTimeLabel(value: string | null | undefined) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function toCurrencyNumber(value: number | string | null | undefined) {
@@ -141,4 +163,98 @@ export function contractsForClient(
       };
     })
     .sort((a, b) => dateSortValue(b.inicio) - dateSortValue(a.inicio));
+}
+
+function parseSyncDate(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function syncFreshness(lastSync: Date | null): ClientSyncUpdate["status"] {
+  if (!lastSync) return "Sem data";
+  const diffMs = Date.now() - lastSync.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays <= 2) return "Atualizado";
+  if (diffDays <= 7) return "Atenção";
+  return "Antigo";
+}
+
+function elapsedSyncLabel(lastSync: Date | null) {
+  if (!lastSync) return "-";
+  const diffMs = Math.max(0, Date.now() - lastSync.getTime());
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 60) return diffMinutes <= 1 ? "há 1 minuto" : `há ${diffMinutes} minutos`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return diffHours === 1 ? "há 1 hora" : `há ${diffHours} horas`;
+  const diffDays = Math.floor(diffHours / 24);
+  return diffDays === 1 ? "há 1 dia" : `há ${diffDays} dias`;
+}
+
+function syncUpdateRow(
+  origem: string,
+  registros: number,
+  firstValues: Array<string | null | undefined>,
+  lastValues: Array<string | null | undefined>,
+): ClientSyncUpdate {
+  const firstDates = firstValues.map(parseSyncDate).filter((value): value is Date => Boolean(value));
+  const lastDates = lastValues.map(parseSyncDate).filter((value): value is Date => Boolean(value));
+  const first = firstDates.length
+    ? firstDates.reduce((lowest, value) => (value < lowest ? value : lowest), firstDates[0])
+    : null;
+  const last = lastDates.length
+    ? lastDates.reduce((highest, value) => (value > highest ? value : highest), lastDates[0])
+    : null;
+
+  return {
+    origem,
+    registros,
+    primeiroRegistro: toDateTimeLabel(first?.toISOString()),
+    ultimaAtualizacao: toDateTimeLabel(last?.toISOString()),
+    atualizadoHa: elapsedSyncLabel(last),
+    status: syncFreshness(last),
+  };
+}
+
+export function syncUpdatesForClient(
+  client: ClientRow,
+  memberships: MembershipRow[],
+  receivables: ReceivableRow[],
+  sales: Array<{
+    id_member?: number | string | null;
+    first_synced_at?: string | null;
+    last_synced_at?: string | null;
+  }>,
+) {
+  const clientMemberships = memberships.filter((row) => row.id_member === client.id);
+  const membershipIds = new Set(clientMemberships.map((row) => row.id_member_membership));
+  const clientReceivables = receivables.filter((row) => membershipIds.has(row.id_member_membership));
+  const clientSales = sales.filter((row) => Number(row.id_member) === client.id);
+
+  return [
+    syncUpdateRow(
+      "API de clientes",
+      1,
+      [client.firstSyncedAt, client.lastSyncedAt],
+      [client.lastSyncedAt, client.firstSyncedAt],
+    ),
+    syncUpdateRow(
+      "API de contratos",
+      clientMemberships.length,
+      clientMemberships.map((row) => row.first_synced_at ?? row.last_synced_at),
+      clientMemberships.map((row) => row.last_synced_at ?? row.first_synced_at),
+    ),
+    syncUpdateRow(
+      "Recebíveis dos contratos",
+      clientReceivables.length,
+      clientReceivables.map((row) => row.last_synced_at),
+      clientReceivables.map((row) => row.last_synced_at),
+    ),
+    syncUpdateRow(
+      "API de vendas",
+      clientSales.length,
+      clientSales.map((row) => row.first_synced_at ?? row.last_synced_at),
+      clientSales.map((row) => row.last_synced_at ?? row.first_synced_at),
+    ),
+  ];
 }

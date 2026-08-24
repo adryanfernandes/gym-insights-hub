@@ -5,11 +5,12 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { Search, Users } from "lucide-react";
+import { Download, Search, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useApp } from "@/contexts/AppContext";
 import { normalizeClientStatus } from "@/lib/clientDetails";
+import { exportToExcel } from "@/lib/exporters";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { formatBRL, formatNum, type ClientRow } from "@/lib/mockData";
 
@@ -126,6 +127,30 @@ function ClientesPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const downloadAllClients = () => {
+    exportToExcel("clientes-cadastrados", {
+      Clientes: clients.map((client) => {
+        const contracts = contractsByClient.get(client.id);
+        return {
+          "Número": client.id,
+          Cliente: client.nome,
+          Status: normalizeClientStatus(client),
+          "Contrato atual": contracts?.latest || client.contrato || "-",
+          Bairro: client.bairro || "-",
+          Cidade: client.cidade || "-",
+          Gênero: client.genero || "-",
+          Idade: client.idade || 0,
+          "Início": client.inicio || "-",
+          Vencimento: client.vencimento || "-",
+          "Último acesso ao app": client.ultimaFrequencia || "-",
+          Valor: client.valor,
+          "Contratos carregados": contracts?.total ?? 0,
+          "Primeira sincronização": client.firstSyncedAt || "-",
+          "Última sincronização": client.lastSyncedAt || "-",
+        };
+      }),
+    });
+  };
   const updateSort = (key: ClientSortKey) => {
     setSort((current) => ({
       key,
@@ -177,7 +202,17 @@ function ClientesPage() {
                   : `${formatNum(filtered.length)} clientes encontrados`}
               </p>
             </div>
-            <label className="relative w-full md:max-w-sm">
+            <div className="flex w-full flex-col gap-2 md:max-w-xl md:flex-row">
+              <button
+                type="button"
+                onClick={downloadAllClients}
+                disabled={!clients.length}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition hover:bg-accent disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                Baixar todos
+              </button>
+            <label className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={search}
@@ -189,6 +224,7 @@ function ClientesPage() {
                 className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary"
               />
             </label>
+            </div>
           </div>
 
           {membersError ? (

@@ -25,6 +25,8 @@ export type ClientRow = {
   valorTotal: number;
   diasAtivo: number;
   ativo: boolean;
+  firstSyncedAt?: string | null;
+  lastSyncedAt?: string | null;
 };
 
 const parsedDateCache = new Map<string, Date | null>();

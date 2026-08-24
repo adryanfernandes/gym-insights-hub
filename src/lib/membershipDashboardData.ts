@@ -26,6 +26,8 @@ export type MembershipRow = {
   status: number | null;
   transferred?: boolean | null;
   membership_swapped?: boolean | null;
+  first_synced_at?: string | null;
+  last_synced_at?: string | null;
 };
 
 export type ReceivableRow = {
@@ -40,6 +42,7 @@ export type ReceivableRow = {
   due_date: string | null;
   receiving_date: string | null;
   payment_type_name: string | null;
+  last_synced_at?: string | null;
 };
 
 function num(value: number | string | null | undefined) {

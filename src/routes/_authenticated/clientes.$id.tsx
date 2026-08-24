@@ -3,7 +3,7 @@ import { ArrowLeft, CircleCheck, CircleX, FileText, UserRound } from "lucide-rea
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useApp } from "@/contexts/AppContext";
-import { contractsForClient, normalizeClientStatus } from "@/lib/clientDetails";
+import { contractsForClient, normalizeClientStatus, syncUpdatesForClient } from "@/lib/clientDetails";
 import { useDashboardData, type SalesRecord } from "@/lib/membersDashboardData";
 import { formatBRL, formatNum } from "@/lib/mockData";
 
@@ -26,10 +26,11 @@ function ClienteDetalhePage() {
   const client = clients.find((row) => row.id === clientId);
   const contracts = contractsForClient(clientId, memberships, receivables);
   const clientSales = salesForClient(clientId, sales);
+  const syncUpdates = client ? syncUpdatesForClient(client, memberships, receivables, sales) : [];
   const totalPago = contracts.reduce((total, contract) => total + contract.valorPago, 0);
   const totalVendido = contracts.reduce((total, contract) => total + contract.valorVenda, 0);
   const totalVendasApi = clientSales.reduce((total, sale) => total + sale.valor, 0);
-  const [historyTab, setHistoryTab] = useState<"contratos" | "vendas">("contratos");
+  const [historyTab, setHistoryTab] = useState<"contratos" | "vendas" | "atualizacoes">("contratos");
   const clientStatus = client ? normalizeClientStatus(client) : "Inativo";
   const isClientActive = clientStatus === "Ativo";
 
@@ -162,6 +163,17 @@ function ClienteDetalhePage() {
                   >
                     Vendas ({formatNum(clientSales.length)})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryTab("atualizacoes")}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      historyTab === "atualizacoes"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-accent"
+                    }`}
+                  >
+                    Atualizações
+                  </button>
                 </div>
               </div>
 
@@ -213,7 +225,7 @@ function ClienteDetalhePage() {
                     </tbody>
                   </table>
                 </div>
-              ) : (
+              ) : historyTab === "vendas" ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
@@ -243,6 +255,47 @@ function ClienteDetalhePage() {
                           </td>
                         </tr>
                       )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="px-5 py-3">Origem</th>
+                        <th className="px-5 py-3 text-right">Registros</th>
+                        <th className="px-5 py-3">Primeira sincronização</th>
+                        <th className="px-5 py-3">Última atualização</th>
+                        <th className="px-5 py-3">Atualizado</th>
+                        <th className="px-5 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {syncUpdates.map((update) => (
+                        <tr key={update.origem} className="border-t border-border">
+                          <td className="px-5 py-3 font-medium">{update.origem}</td>
+                          <td className="px-5 py-3 text-right">{formatNum(update.registros)}</td>
+                          <td className="px-5 py-3">{update.primeiroRegistro}</td>
+                          <td className="px-5 py-3">{update.ultimaAtualizacao}</td>
+                          <td className="px-5 py-3">{update.atualizadoHa}</td>
+                          <td className="px-5 py-3">
+                            <span
+                              className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                update.status === "Atualizado"
+                                  ? "bg-emerald-500/10 text-emerald-600"
+                                  : update.status === "Atenção"
+                                    ? "bg-amber-500/10 text-amber-600"
+                                    : update.status === "Antigo"
+                                      ? "bg-red-500/10 text-red-600"
+                                      : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {update.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

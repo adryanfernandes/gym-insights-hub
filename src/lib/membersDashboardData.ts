@@ -36,6 +36,8 @@ export type SalesRecord = {
   sale_date?: string | null;
   sale_value?: number | string | null;
   payload?: Record<string, unknown> | null;
+  first_synced_at?: string | null;
+  last_synced_at?: string | null;
 };
 
 const NAME_FIELDS = [
@@ -593,6 +595,8 @@ function memberToClient(member: MemberRecord, index: number): ClientRow {
       ? Math.max(differenceInCalendarDays(inferredDue ?? today, startDate), 0)
       : 0,
     ativo: !inactive,
+    firstSyncedAt: toStringValue(member.first_synced_at, "") || null,
+    lastSyncedAt: toStringValue(member.last_synced_at, "") || null,
   };
 }
 
