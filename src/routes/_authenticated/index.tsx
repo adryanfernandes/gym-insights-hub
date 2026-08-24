@@ -215,6 +215,7 @@ function GeralPage() {
     (typeof data.agendaHoje)[number] | null
   >(null);
   const [selectedAgendaDate, setSelectedAgendaDate] = useState(todayInputDate);
+  const agendaScrollRef = useRef<HTMLDivElement | null>(null);
   const currentActivityRef = useRef<HTMLTableRowElement | null>(null);
   const [activeContractFilter, setActiveContractFilter] = useState("Todos");
   const [activePage, setActivePage] = useState(1);
@@ -385,7 +386,13 @@ function GeralPage() {
     [participantsSort, selectedActivity],
   );
   useEffect(() => {
-    currentActivityRef.current?.scrollIntoView({ block: "center" });
+    const container = agendaScrollRef.current;
+    const currentRow = currentActivityRef.current;
+    if (!container || !currentRow) return;
+
+    const targetTop =
+      currentRow.offsetTop - container.clientHeight / 2 + currentRow.clientHeight / 2;
+    container.scrollTop = Math.max(0, targetTop);
   }, [selectedAgendaDate, data.agendaEventos.length]);
 
   useEffect(() => {
@@ -1332,7 +1339,7 @@ function GeralPage() {
           </div>
         </div>
 
-        <div className="max-h-[390px] overflow-auto rounded-lg border border-border">
+        <div ref={agendaScrollRef} className="max-h-[390px] overflow-auto rounded-lg border border-border">
           <table className="w-full min-w-[860px] text-sm">
             <thead className="sticky top-0 z-10 bg-muted text-left text-xs uppercase text-muted-foreground">
               <tr>
