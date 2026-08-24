@@ -69,7 +69,7 @@ function ComercialPage() {
       ],
       EvolucaoVendas: data.evolucaoVendas,
       Funil: data.funilComercial,
-      Ranking: data.rankingRetencao,
+      RenovacoesVencimentos: data.renovacoesMensais,
       AlunosRisco: data.alunosRisco,
     });
 
@@ -181,23 +181,26 @@ function ComercialPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Ranking de retenção por unidade" description="% de alunos retidos">
+        <ChartCard title="Renovações e vencimentos por mês" description="Retenção real dos contratos">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.rankingRetencao} layout="vertical">
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                unit="%"
-              />
-              <YAxis
-                type="category"
-                dataKey="unidade"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                width={110}
-              />
+            <BarChart data={data.renovacoesMensais}>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+              <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
               <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="retencao" fill="var(--chart-2)" radius={[0, 4, 4, 0]} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar
+                dataKey="renovacoes"
+                name="Renovações"
+                fill="var(--chart-2)"
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar
+                dataKey="vencimentos"
+                name="Vencimentos sem renovação"
+                fill="var(--chart-5)"
+                radius={[4, 4, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
