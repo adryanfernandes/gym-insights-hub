@@ -30,10 +30,16 @@ export type ClientRow = {
 const parsedDateCache = new Map<string, Date | null>();
 const parseBRDate = (value: string | null) => {
   if (!value) return null;
-  if (parsedDateCache.has(value)) return parsedDateCache.get(value) ?? null;
-  const parsed = parse(value, "dd/MM/yyyy", new Date());
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (parsedDateCache.has(normalized)) return parsedDateCache.get(normalized) ?? null;
+  const formats = ["dd/MM/yyyy HH:mm:ss", "dd/MM/yyyy HH:mm", "dd/MM/yyyy", "yyyy-MM-dd"];
+  const parsed =
+    formats
+      .map((dateFormat) => parse(normalized, dateFormat, new Date()))
+      .find((date) => !Number.isNaN(date.getTime())) ?? new Date(normalized);
   const date = Number.isNaN(parsed.getTime()) ? null : parsed;
-  parsedDateCache.set(value, date);
+  parsedDateCache.set(normalized, date);
   return date;
 };
 
