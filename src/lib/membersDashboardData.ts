@@ -194,16 +194,18 @@ function startOfDate(date: Date | null) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function hasActiveMembershipStatus(status: MembershipRow["status"]) {
-  return status === null || status === undefined || Number(status) === 1;
-}
-
 function isMembershipStatusExplicitlyCancelled(status: MembershipRow["status"]) {
   const normalized = String(status ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   return Number(status) === 2 || normalized.includes("cancel");
+}
+
+function isContractCancellationEffective(contract: MembershipRow, reference: Date) {
+  const cancel = startOfDate(toDate(contract.cancel_date));
+  if (cancel) return cancel <= reference;
+  return isMembershipStatusExplicitlyCancelled(contract.status);
 }
 
 function toBRDate(value: unknown) {
@@ -321,22 +323,18 @@ function isContractActiveToday(contract: MembershipRow, today = new Date()) {
   if (isSingleUseMembership(contract)) return false;
   const start = startOfDate(toDate(contract.membership_start || contract.sale_date));
   const end = endOfDate(toDate(contract.membership_end));
-  const cancel = toDate(contract.cancel_date);
   const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
   const isCurrentByPeriod =
-    (!start || start <= reference) && Boolean(end && end >= reference) && (!cancel || cancel > reference);
-  return (
-    isCurrentByPeriod &&
-    (hasActiveMembershipStatus(contract.status) ||
-      (!isMembershipStatusExplicitlyCancelled(contract.status) && isCurrentByPeriod))
-  );
+    (!start || start <= reference) &&
+    Boolean(end && end >= reference) &&
+    !isContractCancellationEffective(contract, reference);
+  return isCurrentByPeriod;
 }
 
 function isSingleUseActiveToday(contract: MembershipRow, today = new Date()) {
   if (!isSingleUseMembership(contract)) return false;
   const start = startOfDate(toDate(contract.membership_start || contract.sale_date));
   const end = endOfDate(toDate(contract.membership_end));
-  const cancel = toDate(contract.cancel_date);
   const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
   const startsToday =
     start &&
@@ -345,8 +343,7 @@ function isSingleUseActiveToday(contract: MembershipRow, today = new Date()) {
     start.getDate() === reference.getDate();
 
   return (
-    hasActiveMembershipStatus(contract.status) &&
-    (!cancel || cancel > reference) &&
+    !isContractCancellationEffective(contract, reference) &&
     ((Boolean(start && end && start <= reference && end >= reference)) || Boolean(startsToday))
   );
 }
@@ -411,14 +408,11 @@ function isContractActiveAt(contract: MembershipRow, day: Date) {
   const reference = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12);
   const start = startOfDate(toDate(contract.membership_start || contract.sale_date));
   const end = endOfDate(toDate(contract.membership_end));
-  const cancel = toDate(contract.cancel_date);
   const isCurrentByPeriod =
-    (!start || start <= reference) && Boolean(end && end >= reference) && (!cancel || cancel > reference);
-  return (
-    isCurrentByPeriod &&
-    (hasActiveMembershipStatus(contract.status) ||
-      (!isMembershipStatusExplicitlyCancelled(contract.status) && isCurrentByPeriod))
-  );
+    (!start || start <= reference) &&
+    Boolean(end && end >= reference) &&
+    !isContractCancellationEffective(contract, reference);
+  return isCurrentByPeriod;
 }
 
 function activeStudentsEvolutionFromContracts(

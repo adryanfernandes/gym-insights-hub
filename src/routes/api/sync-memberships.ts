@@ -134,6 +134,7 @@ function recordDate(value: unknown) {
 
 function recurringRow(record: RawRecord, syncedAt: string) {
   const end = recordDate(value(record, "membershipEnd"));
+  const cancel = recordDate(value(record, "cancelDate"));
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return {
@@ -143,9 +144,8 @@ function recurringRow(record: RawRecord, syncedAt: string) {
     membership_start: value(record, "membershipStart"),
     membership_end: value(record, "membershipEnd"),
     active:
-      Number(value(record, "statusMemberMembership")) === 1 &&
-      !value(record, "cancelDate") &&
-      Boolean(end && end >= today),
+      Boolean(end && end >= today) &&
+      (!cancel || cancel > today),
     last_seen_at: syncedAt,
   };
 }
@@ -278,9 +278,10 @@ async function activeMemberIds(base: string, key: string) {
   const ids = new Set<number>();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayIso = today.toISOString();
   for (let offset = 0; offset < 10000; offset += 1000) {
     const response = await fetch(
-      `${base}/rest/v1/member_memberships?select=id_member&status=eq.1&membership_end=gte.${today.toISOString()}&cancel_date=is.null&order=id_member.asc&offset=${offset}&limit=1000`,
+      `${base}/rest/v1/member_memberships?select=id_member&membership_end=gte.${todayIso}&or=(cancel_date.is.null,cancel_date.gt.${todayIso})&order=id_member.asc&offset=${offset}&limit=1000`,
       { headers: { apikey: key }, cache: "no-store" },
     );
     if (!response.ok)

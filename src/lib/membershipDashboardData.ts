@@ -68,16 +68,18 @@ function startOfDate(value: string | null | undefined) {
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
 }
 
-function hasActiveMembershipStatus(status: MembershipRow["status"]) {
-  return status === null || status === undefined || Number(status) === 1;
-}
-
 function isMembershipStatusExplicitlyCancelled(status: MembershipRow["status"]) {
   const normalized = String(status ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   return Number(status) === 2 || normalized.includes("cancel");
+}
+
+function isCancellationEffective(row: MembershipRow, referenceDate: Date) {
+  const cancel = startOfDate(row.cancel_date);
+  if (cancel) return cancel <= referenceDate;
+  return isMembershipStatusExplicitlyCancelled(row.status);
 }
 
 function normalizedText(value: string | null | undefined) {
@@ -108,14 +110,11 @@ function isMembershipActiveAt(row: MembershipRow, referenceDate = new Date()) {
   );
   const start = startOfDate(row.membership_start || row.sale_date);
   const end = endOfDate(row.membership_end);
-  const cancel = date(row.cancel_date);
   const isCurrentByPeriod =
-    (!start || start <= reference) && Boolean(end && end >= reference) && (!cancel || cancel > reference);
-  return (
-    isCurrentByPeriod &&
-    (hasActiveMembershipStatus(row.status) ||
-      (!isMembershipStatusExplicitlyCancelled(row.status) && isCurrentByPeriod))
-  );
+    (!start || start <= reference) &&
+    Boolean(end && end >= reference) &&
+    !isCancellationEffective(row, reference);
+  return isCurrentByPeriod;
 }
 
 function inputDate(value: string | null | undefined, endOfDay = false) {
@@ -417,7 +416,7 @@ export function getMembershipDashboardData(
   });
   const cancellations = scoped.filter((row) => {
     const value = date(row.cancel_date);
-    return value && value >= start && value <= end;
+    return value && value <= now && value >= start && value <= end;
   });
   const renewalLatestByMember = new Map<number, MembershipRow>();
   scoped.forEach((row) => {

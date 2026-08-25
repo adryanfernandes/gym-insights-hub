@@ -1,6 +1,7 @@
 import { useApp, type Filters } from "@/contexts/AppContext";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { useRouterState } from "@tanstack/react-router";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const PERIODOS = ["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Este ano"];
 const ALL_OPTIONS: Partial<Record<keyof Filters, string>> = {
@@ -45,10 +46,14 @@ function Select({
 function DateInput({
   label,
   value,
+  min,
+  max,
   onChange,
 }: {
   label: string;
   value: string;
+  min?: string;
+  max?: string;
   onChange: (v: string) => void;
 }) {
   return (
@@ -59,11 +64,30 @@ function DateInput({
       <input
         type="date"
         value={value}
+        min={min}
+        max={max}
         onChange={(event) => onChange(event.target.value)}
         className="h-9 rounded-md border border-input bg-card px-2 text-sm text-foreground transition focus:outline-none focus:ring-2 focus:ring-ring"
       />
     </div>
   );
+}
+
+function todayInputDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Fortaleza",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
+}
+
+function clampInputDate(value: string, min: string | undefined, max: string) {
+  if (!value) return value;
+  if (min && value < min) return min;
+  if (value > max) return max;
+  return value;
 }
 
 function MultiSelect({
@@ -79,6 +103,8 @@ function MultiSelect({
   allOption: string;
   onChange: (value: string[]) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const selected = value.length ? value : [allOption];
   const activeOptions = selected.includes(allOption) ? [] : selected;
   const summary = activeOptions.length
@@ -100,12 +126,38 @@ function MultiSelect({
     onChange(next.length ? next : [allOption]);
   }
 
+  useEffect(() => {
+    if (!open) return;
+
+    function closeOnOutsideClick(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (!detailsRef.current?.contains(target)) setOpen(false);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
   return (
     <div className="relative z-30 flex min-w-40 flex-col gap-1">
       <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </label>
-      <details className="group">
+      <details
+        ref={detailsRef}
+        open={open}
+        onToggle={(event) => setOpen(event.currentTarget.open)}
+        className="group"
+      >
         <summary className="flex h-9 cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-input bg-card px-2 text-sm text-foreground transition hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring">
           <span className="truncate">{summary}</span>
           <span className="text-[10px] text-muted-foreground">▼</span>
@@ -131,11 +183,13 @@ function MultiSelect({
   );
 }
 
-export function FiltersBar({ extra }: { extra?: React.ReactNode }) {
+export function FiltersBar({ extra }: { extra?: ReactNode }) {
   const { filters, setFilters } = useApp();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { filterOptions } = useDashboardData(filters);
   const hideDateFilters = pathname === "/perfil";
+  const today = todayInputDate();
+  const maxStartDate = filters.dataFim && filters.dataFim < today ? filters.dataFim : today;
   const updMulti =
     (k: "unidade" | "tipoContrato" | "sexo" | "faixaEtaria" | "statusAluno") => (value: string[]) =>
       setFilters({ [k]: value });
@@ -146,12 +200,21 @@ export function FiltersBar({ extra }: { extra?: React.ReactNode }) {
           <DateInput
             label="Início"
             value={filters.dataInicio}
-            onChange={(dataInicio) => setFilters({ dataInicio, periodo: "Período personalizado" })}
+            max={maxStartDate}
+            onChange={(value) => {
+              const dataInicio = clampInputDate(value, undefined, maxStartDate);
+              setFilters({ dataInicio, periodo: "Período personalizado" });
+            }}
           />
           <DateInput
             label="Fim"
             value={filters.dataFim}
-            onChange={(dataFim) => setFilters({ dataFim, periodo: "Período personalizado" })}
+            min={filters.dataInicio || undefined}
+            max={today}
+            onChange={(value) => {
+              const dataFim = clampInputDate(value, filters.dataInicio || undefined, today);
+              setFilters({ dataFim, periodo: "Período personalizado" });
+            }}
           />
         </>
       )}

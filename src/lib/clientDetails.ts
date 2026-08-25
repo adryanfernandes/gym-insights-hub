@@ -57,8 +57,17 @@ function endOfDate(value: string | null | undefined) {
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
 }
 
-function hasActiveMembershipStatus(status: MembershipRow["status"]) {
-  return status === null || status === undefined || Number(status) === 1;
+function effectiveCancelDate(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+}
+
+function isCancellationEffective(contract: MembershipRow, referenceDate = new Date()) {
+  const cancel = effectiveCancelDate(contract.cancel_date);
+  if (cancel) return cancel < referenceDate;
+  return isMembershipStatusExplicitlyCancelled(contract.status);
 }
 
 function isMembershipStatusExplicitlyCancelled(status: MembershipRow["status"]) {
@@ -74,23 +83,21 @@ export function normalizeClientStatus(client: ClientRow) {
 }
 
 export function contractStatus(contract: MembershipRow) {
-  if (contract.cancel_date) return "Cancelado";
+  const cancel = effectiveCancelDate(contract.cancel_date);
+  if (cancel && cancel > new Date()) return "Cancelamento agendado";
+  if (isCancellationEffective(contract)) return "Cancelado";
   const end = endOfDate(contract.membership_end);
   if (end && end < new Date()) return "Vencido";
-  if (end && end >= new Date() && !isMembershipStatusExplicitlyCancelled(contract.status)) return "Ativo";
+  if (end && end >= new Date()) return "Ativo";
   if (contract.status !== null && contract.status !== undefined) return `Status ${contract.status}`;
   return "Ativo";
 }
 
 function isActiveContract(contract: MembershipRow) {
-  if (contract.cancel_date) return false;
+  if (isCancellationEffective(contract)) return false;
   const end = endOfDate(contract.membership_end);
   const isCurrentByPeriod = Boolean(end && end >= new Date());
-  return (
-    isCurrentByPeriod &&
-    (hasActiveMembershipStatus(contract.status) ||
-      !isMembershipStatusExplicitlyCancelled(contract.status))
-  );
+  return isCurrentByPeriod;
 }
 
 function dateSortValue(label: string) {
