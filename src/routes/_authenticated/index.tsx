@@ -210,6 +210,7 @@ function GeralPage() {
   const [inactiveStudentsOpen, setInactiveStudentsOpen] = useState(false);
   const [salesOpen, setSalesOpen] = useState(false);
   const [cancellationsOpen, setCancellationsOpen] = useState(false);
+  const [planChangesOpen, setPlanChangesOpen] = useState(false);
   const [riskStudentsOpen, setRiskStudentsOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<
     (typeof data.agendaHoje)[number] | null
@@ -224,6 +225,7 @@ function GeralPage() {
   const [inactiveSort, setInactiveSort] = useState<SortState>(null);
   const [salesSort, setSalesSort] = useState<SortState>(null);
   const [cancellationsSort, setCancellationsSort] = useState<SortState>(null);
+  const [planChangesSort, setPlanChangesSort] = useState<SortState>(null);
   const [riskSort, setRiskSort] = useState<SortState>(null);
   const [participantsSort, setParticipantsSort] = useState<SortState>(null);
   const [renewalOpen, setRenewalOpen] = useState(false);
@@ -273,6 +275,7 @@ function GeralPage() {
   const movimentacaoPeriodo = k.movimentacaoPeriodo ?? {
     entradas: 0,
     saidas: 0,
+    mudancasPlano: 0,
     saldo: 0,
     renovacoes: 0,
   };
@@ -356,6 +359,18 @@ function GeralPage() {
         valorRestante: (row) => row.valorRestante,
       }),
     [cancellationsSort, data.cancelamentosLista],
+  );
+  const sortedPlanChanges = useMemo(
+    () =>
+      sortedRows(data.mudancasPlanoLista ?? [], planChangesSort, {
+        idAluno: (row) => row.idAluno,
+        aluno: (row) => row.aluno,
+        planoAnterior: (row) => row.planoAnterior,
+        planoNovo: (row) => row.planoNovo,
+        dataAlteracao: (row) => row.dataAlteracao,
+        valorNovo: (row) => row.valorNovo,
+      }),
+    [data.mudancasPlanoLista, planChangesSort],
   );
   const sortedRiskStudents = useMemo(
     () =>
@@ -443,11 +458,26 @@ function GeralPage() {
       })),
     });
 
+  const exportPlanChanges = () =>
+    exportToExcel("mudancas-de-plano", {
+      "Mudanças de plano": sortedPlanChanges.map((row) => ({
+        Número: row.idAluno,
+        Cliente: row.aluno,
+        "Plano anterior": row.planoAnterior,
+        "Plano novo": row.planoNovo,
+        "Data da alteração": displayDate(row.dataAlteracao),
+        "Contrato anterior": row.idContratoAnterior,
+        "Contrato novo": row.idContratoNovo,
+        "Valor novo": row.valorNovo,
+      })),
+    });
+
   const onExportExcel = () =>
     exportToExcel("geral", {
       KPIs: [
         { metrica: "Alunos ativos", valor: k.alunosAtivos },
         { metrica: "Alunos inativos", valor: k.alunosNaoAtivos },
+        { metrica: "Mudanças de plano", valor: movimentacaoPeriodo.mudancasPlano },
         { metrica: "Ticket médio", valor: k.ticketMedio },
         { metrica: "Cancelamentos 30d (qtd)", valor: k.cancelamentos30d.qtd },
         { metrica: "Cancelamentos 30d (R$)", valor: k.cancelamentos30d.valor },
@@ -471,12 +501,14 @@ function GeralPage() {
       })),
       TaxaRenovacao: data.taxaRenovacao,
       RenovacoesMensais: data.renovacoesMensais,
+      MudancasPlano: sortedPlanChanges,
     });
 
   const onExportPdf = () =>
     exportToPdf("Geral - KPIs", [
       { Métrica: "Alunos ativos", Valor: formatNum(k.alunosAtivos) },
       { Métrica: "Alunos inativos", Valor: formatNum(k.alunosNaoAtivos) },
+      { Métrica: "Mudanças de plano", Valor: formatNum(movimentacaoPeriodo.mudancasPlano) },
       { Métrica: "Ticket médio", Valor: formatBRL(k.ticketMedio) },
       { Métrica: "Vendas 30d", Valor: `${k.vendas30d.qtd} (${formatBRL(k.vendas30d.valor)})` },
       {
@@ -500,11 +532,13 @@ function GeralPage() {
           label="Alunos ativos"
           value={formatNum(k.alunosAtivos)}
           icon={<Users className="h-5 w-5" />}
-          hint={`Entraram ${formatNum(movimentacaoPeriodo.entradas)} • Saíram ${formatNum(
+          hint={`Entraram ${formatNum(movimentacaoPeriodo.entradas)} • Cancelaram ${formatNum(
             movimentacaoPeriodo.saidas,
-          )} • Saldo ${movimentacaoPeriodo.saldo >= 0 ? "+" : ""}${formatNum(
-            movimentacaoPeriodo.saldo,
-          )} • Renovações ${formatNum(movimentacaoPeriodo.renovacoes)}`}
+          )} • Mudaram ${formatNum(movimentacaoPeriodo.mudancasPlano)} • Saldo ${
+            movimentacaoPeriodo.saldo >= 0 ? "+" : ""
+          }${formatNum(movimentacaoPeriodo.saldo)} • Renovações ${formatNum(
+            movimentacaoPeriodo.renovacoes,
+          )}`}
           onClick={() => setActiveStudentsOpen(true)}
         />
         <KpiCard
@@ -521,6 +555,14 @@ function GeralPage() {
           value={formatBRL(k.ticketMedio)}
           accent="success"
           icon={<DollarSign className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Mudanças de plano"
+          value={formatNum(movimentacaoPeriodo.mudancasPlano)}
+          hint="Clique para ver e baixar a lista"
+          accent="success"
+          icon={<RefreshCw className="h-5 w-5" />}
+          onClick={() => setPlanChangesOpen(true)}
         />
         <KpiCard
           label={periodKpiLabel("Vendas", filters.periodo)}
@@ -862,6 +904,71 @@ function GeralPage() {
                   <tr>
                     <td colSpan={8} className="px-5 py-10 text-center text-muted-foreground">
                       Nenhum cancelamento encontrado no período selecionado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={planChangesOpen} onOpenChange={setPlanChangesOpen}>
+        <DialogContent className="flex max-h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <DialogTitle>Mudanças de plano</DialogTitle>
+                <DialogDescription>
+                  {formatNum(sortedPlanChanges.length)} alunos mudaram de plano no período
+                  selecionado.
+                </DialogDescription>
+              </div>
+              <button
+                type="button"
+                onClick={exportPlanChanges}
+                disabled={!sortedPlanChanges.length}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Baixar XLSX
+              </button>
+            </div>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
+                <tr>
+                  <SortHeader id="idAluno" label="Nº" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="aluno" label="Aluno" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="planoAnterior" label="Plano anterior" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="planoNovo" label="Plano novo" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="dataAlteracao" label="Data da alteração" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="valorNovo" label="Valor novo" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} align="right" />
+                </tr>
+              </thead>
+              <tbody>
+                {sortedPlanChanges.map((change) => (
+                  <tr
+                    key={`${change.idAluno}-${change.idContratoNovo}`}
+                    onClick={() => openClientPage(change.idAluno)}
+                    className="cursor-pointer border-t border-border hover:bg-accent/40"
+                    title="Abrir página do cliente"
+                  >
+                    <td className="px-5 py-3 font-mono text-xs">{change.idAluno}</td>
+                    <td className="px-5 py-3 font-medium">{change.aluno}</td>
+                    <td className="px-5 py-3">{change.planoAnterior}</td>
+                    <td className="px-5 py-3">{change.planoNovo}</td>
+                    <td className="px-5 py-3">{displayDate(change.dataAlteracao)}</td>
+                    <td className="px-5 py-3 text-right font-medium">
+                      {formatBRL(change.valorNovo)}
+                    </td>
+                  </tr>
+                ))}
+                {!sortedPlanChanges.length && (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-10 text-center text-muted-foreground">
+                      Nenhuma mudança de plano encontrada no período selecionado.
                     </td>
                   </tr>
                 )}

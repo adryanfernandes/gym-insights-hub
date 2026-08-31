@@ -935,6 +935,10 @@ function useDashboardDataState(filters: Filters) {
         ...row,
         aluno: membersById.get(row.idAluno)?.nome ?? `Aluno ${row.idAluno}`,
       })),
+      mudancasPlanoLista: membershipData.mudancasPlanoLista.map((row) => ({
+        ...row,
+        aluno: membersById.get(row.idAluno)?.nome ?? `Aluno ${row.idAluno}`,
+      })),
     };
   }, [activityData, deferredFilters, memberData, membershipData, memberships, sales, sourceRows]);
   const filterOptions = useMemo(() => getDashboardFilterOptions(sourceRows), [sourceRows]);

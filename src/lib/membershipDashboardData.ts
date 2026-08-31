@@ -365,6 +365,63 @@ function newEnrollmentsInPeriod(rows: MembershipRow[], start: Date, end: Date) {
   );
 }
 
+function planChangesInPeriod(rows: MembershipRow[], start: Date, end: Date) {
+  const byMember = new Map<number, MembershipRow[]>();
+  rows.forEach((row) => {
+    const group = byMember.get(row.id_member) ?? [];
+    group.push(row);
+    byMember.set(row.id_member, group);
+  });
+
+  const changes: Array<{
+    idAluno: number;
+    idContratoAnterior: number;
+    idContratoNovo: number;
+    planoAnterior: string;
+    planoNovo: string;
+    dataAlteracao: string | null;
+    valorNovo: number;
+  }> = [];
+
+  byMember.forEach((memberRows) => {
+    const ordered = memberRows
+      .slice()
+      .sort(
+        (a, b) =>
+          (date(a.membership_start || a.sale_date)?.getTime() ?? 0) -
+          (date(b.membership_start || b.sale_date)?.getTime() ?? 0),
+      );
+
+    ordered.slice(1).forEach((row, index) => {
+      const previous = ordered[index];
+      const changedAt = date(row.sale_date || row.membership_start);
+      if (!changedAt || changedAt < start || changedAt > end) return;
+
+      const previousName = previous.membership_name?.trim() || "Não informado";
+      const currentName = row.membership_name?.trim() || "Não informado";
+      const changedPlan =
+        normalizedText(previousName).trim() !== normalizedText(currentName).trim();
+
+      if (!changedPlan && !row.membership_swapped) return;
+
+      changes.push({
+        idAluno: row.id_member,
+        idContratoAnterior: previous.id_member_membership,
+        idContratoNovo: row.id_member_membership,
+        planoAnterior: previousName,
+        planoNovo: currentName,
+        dataAlteracao: row.sale_date || row.membership_start,
+        valorNovo: num(row.sale_value),
+      });
+    });
+  });
+
+  return changes.sort(
+    (a, b) =>
+      (date(b.dataAlteracao)?.getTime() ?? 0) - (date(a.dataAlteracao)?.getTime() ?? 0),
+  );
+}
+
 export function getMembershipDashboardData(
   memberships: MembershipRow[],
   receivables: ReceivableRow[],
@@ -433,6 +490,7 @@ export function getMembershipDashboardData(
   const totalSales = sales.reduce((sum, row) => sum + num(row.sale_value), 0);
   const renovacoesPeriodo = renewalsInPeriod(scoped, start, end);
   const novasMatriculasPeriodo = newEnrollmentsInPeriod(scoped, start, end);
+  const mudancasPlanoPeriodo = planChangesInPeriod(scoped, start, end);
   const currentMonth = monthKey(now);
   const paidCurrentMonth = scopedReceivables.reduce((sum, row) => {
     const reference = date(row.receiving_date || row.registration_date);
@@ -553,6 +611,7 @@ export function getMembershipDashboardData(
       movimentacaoPeriodo: {
         entradas: novasMatriculasPeriodo.length,
         saidas: cancellations.length,
+        mudancasPlano: mudancasPlanoPeriodo.length,
         saldo: novasMatriculasPeriodo.length - cancellations.length,
         renovacoes: renovacoesPeriodo,
       },
@@ -572,6 +631,7 @@ export function getMembershipDashboardData(
     evolucaoVendas,
     renovacoesMensais,
     tipoContratoData,
+    mudancasPlanoLista: mudancasPlanoPeriodo,
     renovacaoAtivaLista: renewalActiveRows.map((row) => ({
       idAluno: row.id_member,
       idContrato: row.id_member_membership,

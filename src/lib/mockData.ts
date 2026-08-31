@@ -658,6 +658,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
         vencimento: client.vencimento,
         ultimaFrequencia: client.ultimaFrequencia,
       })),
+    mudancasPlanoLista: [],
     professores: {
       kpis: professoresKpis,
       ranking: professoresRanking,
