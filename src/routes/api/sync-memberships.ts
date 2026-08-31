@@ -8,6 +8,7 @@ const ADMINISTRATIVE_MEMBERSHIPS = new Set([
   "professor exclusivo movip max",
   "aula exclusiva movip max",
   "massagem movida movip max",
+  "adicional multi unidade movip max",
 ]);
 const MEMBER_REGISTRATION_ORDER_COLUMNS = [
   "registerDate",

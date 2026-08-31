@@ -264,6 +264,7 @@ const ADMINISTRATIVE_SALE_TERMS = [
   "professor exclusivo movip max",
   "aula exclusiva movip max",
   "massagem movida movip max",
+  "adicional multi unidade movip max",
 ];
 
 function isAdministrativeSale(sale: SalesRecord) {
