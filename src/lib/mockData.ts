@@ -25,6 +25,7 @@ export type ClientRow = {
   valorTotal: number;
   diasAtivo: number;
   ativo: boolean;
+  statusComposicao?: string;
   firstSyncedAt?: string | null;
   lastSyncedAt?: string | null;
 };
@@ -645,6 +646,7 @@ function buildFilteredDashboardData(filters: Filters, clients: ClientRow[]) {
         inicio: client.inicio,
         vencimento: client.vencimento,
         ultimaFrequencia: client.ultimaFrequencia,
+        statusComposicao: client.statusComposicao ?? "Contrato vigente",
       })),
     alunosInativosLista: inactiveRows
       .slice()

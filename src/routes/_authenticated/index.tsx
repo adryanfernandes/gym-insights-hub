@@ -17,7 +17,6 @@ import {
   UserX,
   DollarSign,
   TrendingDown,
-  ShoppingCart,
   RefreshCw,
   CalendarCheck,
   TriangleAlert,
@@ -311,6 +310,16 @@ function GeralPage() {
       }),
     [activeSort, filteredActiveStudents],
   );
+  const activeStatusSummary = useMemo(() => {
+    const totals = new Map<string, number>();
+    filteredActiveStudents.forEach((student) => {
+      const status = student.statusComposicao?.trim() || "Contrato vigente";
+      totals.set(status, (totals.get(status) ?? 0) + 1);
+    });
+    return Array.from(totals, ([status, total]) => ({ status, total })).sort(
+      (a, b) => b.total - a.total || a.status.localeCompare(b.status, "pt-BR"),
+    );
+  }, [filteredActiveStudents]);
   const sortedInactiveStudents = useMemo(
     () =>
       sortedRows(data.alunosInativosLista, inactiveSort, {
@@ -416,10 +425,15 @@ function GeralPage() {
 
   const exportActiveStudents = () =>
     exportToExcel("alunos-ativos", {
+      "Composição dos ativos": activeStatusSummary.map((row) => ({
+        Status: row.status,
+        Alunos: row.total,
+      })),
       "Alunos ativos": sortedActiveStudents.map((student) => ({
         Número: student.id,
         Aluno: student.nome,
         Contrato: student.contrato,
+        "Composição": student.statusComposicao ?? "Contrato vigente",
         Bairro: student.bairro,
         Início: student.inicio ?? "-",
         Vencimento: student.vencimento ?? "-",
@@ -534,9 +548,7 @@ function GeralPage() {
           icon={<Users className="h-5 w-5" />}
           hint={`Entraram ${formatNum(movimentacaoPeriodo.entradas)} • Cancelaram ${formatNum(
             movimentacaoPeriodo.saidas,
-          )} • Mudaram ${formatNum(movimentacaoPeriodo.mudancasPlano)} • Saldo ${
-            movimentacaoPeriodo.saldo >= 0 ? "+" : ""
-          }${formatNum(movimentacaoPeriodo.saldo)} • Renovações ${formatNum(
+          )} • Mudaram ${formatNum(movimentacaoPeriodo.mudancasPlano)} • Renovações ${formatNum(
             movimentacaoPeriodo.renovacoes,
           )}`}
           onClick={() => setActiveStudentsOpen(true)}
@@ -563,14 +575,6 @@ function GeralPage() {
           accent="success"
           icon={<RefreshCw className="h-5 w-5" />}
           onClick={() => setPlanChangesOpen(true)}
-        />
-        <KpiCard
-          label={periodKpiLabel("Vendas", filters.periodo)}
-          value={formatNum(k.vendas30d.qtd)}
-          hint={formatBRL(k.vendas30d.valor)}
-          accent="success"
-          icon={<ShoppingCart className="h-5 w-5" />}
-          onClick={() => setSalesOpen(true)}
         />
         <KpiCard
           label={periodKpiLabel("Cancelamentos", filters.periodo)}
@@ -935,6 +939,27 @@ function GeralPage() {
               </button>
             </div>
           </DialogHeader>
+          <div className="border-b border-border px-6 py-4">
+            <h3 className="text-sm font-semibold text-foreground">Composição dos ativos</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Status dos contratos que compõem o total de alunos ativos exibido nesta lista.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {activeStatusSummary.map((row) => (
+                <div key={row.status} className="rounded-lg border border-border bg-card p-3">
+                  <p className="truncate text-xs font-medium text-muted-foreground" title={row.status}>
+                    {row.status}
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold">{formatNum(row.total)}</p>
+                </div>
+              ))}
+              {!activeStatusSummary.length && (
+                <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
+                  Nenhum aluno ativo encontrado com os filtros selecionados.
+                </div>
+              )}
+            </div>
+          </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[900px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">

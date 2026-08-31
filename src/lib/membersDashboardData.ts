@@ -349,6 +349,21 @@ function isSingleUseActiveToday(contract: MembershipRow, today = new Date()) {
   );
 }
 
+function activeStatusComposition(contract: MembershipRow | undefined, today = new Date()) {
+  if (!contract) return "Sem contrato vigente";
+  if (isSingleUseActiveToday(contract, today)) return "Avulso vigente hoje";
+
+  const rawStatus =
+    contract.status === null || contract.status === undefined || contract.status === ""
+      ? "não informado"
+      : String(contract.status);
+  const reference = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+  const cancel = startOfDate(toDate(contract.cancel_date));
+
+  if (cancel && cancel > reference) return `Status ${rawStatus} - cancelamento agendado`;
+  return `Status ${rawStatus} - contrato vigente`;
+}
+
 function inputFilterDate(value: string | null | undefined, endOfDay = false) {
   if (!value) return null;
   const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
@@ -795,6 +810,9 @@ function useDashboardDataState(filters: Filters) {
       const memberContracts = contracts.get(member.id) ?? [];
       const selectedContract = mostRelevantContract(memberContracts);
       const contractName = selectedContract?.membership_name?.trim();
+      const activeContract =
+        memberContracts.find((contract) => isContractActiveToday(contract)) ??
+        memberContracts.find((contract) => isSingleUseActiveToday(contract));
       const activeByContract = memberContracts.some(
         (contract) => isContractActiveToday(contract) || isSingleUseActiveToday(contract),
       );
@@ -802,6 +820,7 @@ function useDashboardDataState(filters: Filters) {
       return {
         ...member,
         ativo: activeByContract,
+        statusComposicao: activeStatusComposition(activeContract),
         contrato: contractName || member.contrato,
         contratoNome: contractName || member.contratoNome,
         inicio:
