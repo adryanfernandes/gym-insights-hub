@@ -351,12 +351,47 @@ function findTextInPayload(value: unknown, keys: string[]): string | null {
   return null;
 }
 
+function saleItemDescription(payload: Record<string, unknown>) {
+  const itemGroups = [
+    payload.saleItens,
+    payload.saleItems,
+    payload.items,
+    payload.products,
+    payload.services,
+  ];
+  const descriptions = itemGroups
+    .flatMap((group) => (Array.isArray(group) ? group : []))
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      return findTextInPayload(record, [
+        "description",
+        "descricao",
+        "itemDescription",
+        "productDescription",
+        "serviceDescription",
+        "nameProduct",
+        "productName",
+        "nameMembership",
+        "membershipName",
+        "item",
+        "name",
+        "service",
+        "product",
+      ]);
+    })
+    .filter((description): description is string => Boolean(description));
+
+  return descriptions.length ? Array.from(new Set(descriptions)).join(" + ") : null;
+}
+
 function salesForClient(clientId: number, sales: SalesRecord[]) {
   return sales
     .filter((sale) => Number(sale.id_member) === clientId)
     .map((sale) => {
       const payload = sale.payload ?? {};
       const descricao =
+        saleItemDescription(payload) ??
         findTextInPayload(payload, [
           "description",
           "descricao",
