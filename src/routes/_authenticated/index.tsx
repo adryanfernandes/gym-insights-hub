@@ -310,16 +310,21 @@ function GeralPage() {
       }),
     [activeSort, filteredActiveStudents],
   );
-  const activeStatusSummary = useMemo(() => {
-    const totals = new Map<string, number>();
-    filteredActiveStudents.forEach((student) => {
-      const status = student.statusComposicao?.trim() || "Contrato vigente";
-      totals.set(status, (totals.get(status) ?? 0) + 1);
-    });
-    return Array.from(totals, ([status, total]) => ({ status, total })).sort(
-      (a, b) => b.total - a.total || a.status.localeCompare(b.status, "pt-BR"),
-    );
-  }, [filteredActiveStudents]);
+  const activeMovementSummary = useMemo(() => {
+    const entradas = movimentacaoPeriodo.entradas;
+    const saidas = movimentacaoPeriodo.saidas;
+    const renovaram = movimentacaoPeriodo.renovacoes;
+    const alteraram = movimentacaoPeriodo.mudancasPlano;
+    const mantiveram = Math.max(0, filteredActiveStudents.length - entradas - renovaram - alteraram);
+
+    return [
+      { status: "Entraram", total: entradas, description: "Novos alunos no período" },
+      { status: "Saíram", total: saidas, description: "Cancelamentos efetivados no período" },
+      { status: "Renovaram", total: renovaram, description: "Renovações realizadas no período" },
+      { status: "Alteraram", total: alteraram, description: "Mudanças de plano no período" },
+      { status: "Mantiveram", total: mantiveram, description: "Ativos sem entrada, renovação ou alteração" },
+    ];
+  }, [filteredActiveStudents.length, movimentacaoPeriodo]);
   const sortedInactiveStudents = useMemo(
     () =>
       sortedRows(data.alunosInativosLista, inactiveSort, {
@@ -425,7 +430,7 @@ function GeralPage() {
 
   const exportActiveStudents = () =>
     exportToExcel("alunos-ativos", {
-      "Composição dos ativos": activeStatusSummary.map((row) => ({
+      "Composição dos ativos": activeMovementSummary.map((row) => ({
         Status: row.status,
         Alunos: row.total,
       })),
@@ -647,7 +652,7 @@ function GeralPage() {
               Status dos contratos que compõem o total de alunos ativos exibido nesta lista.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {activeStatusSummary.map((row) => (
+              {activeMovementSummary.map((row) => (
                 <div key={row.status} className="rounded-lg border border-border bg-card p-3">
                   <p
                     className="truncate text-xs font-medium text-muted-foreground"
@@ -656,9 +661,10 @@ function GeralPage() {
                     {row.status}
                   </p>
                   <p className="mt-1 text-2xl font-semibold">{formatNum(row.total)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{row.description}</p>
                 </div>
               ))}
-              {!activeStatusSummary.length && (
+              {!activeMovementSummary.length && (
                 <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
                   Nenhum aluno ativo encontrado com os filtros selecionados.
                 </div>
