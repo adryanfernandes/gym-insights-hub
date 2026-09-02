@@ -641,6 +641,30 @@ function GeralPage() {
               </button>
             </div>
           </DialogHeader>
+          <div className="border-b border-border px-6 py-4">
+            <h3 className="text-sm font-semibold text-foreground">Composição dos ativos</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Status dos contratos que compõem o total de alunos ativos exibido nesta lista.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {activeStatusSummary.map((row) => (
+                <div key={row.status} className="rounded-lg border border-border bg-card p-3">
+                  <p
+                    className="truncate text-xs font-medium text-muted-foreground"
+                    title={row.status}
+                  >
+                    {row.status}
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold">{formatNum(row.total)}</p>
+                </div>
+              ))}
+              {!activeStatusSummary.length && (
+                <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
+                  Nenhum aluno ativo encontrado com os filtros selecionados.
+                </div>
+              )}
+            </div>
+          </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[980px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
@@ -939,27 +963,6 @@ function GeralPage() {
               </button>
             </div>
           </DialogHeader>
-          <div className="border-b border-border px-6 py-4">
-            <h3 className="text-sm font-semibold text-foreground">Composição dos ativos</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Status dos contratos que compõem o total de alunos ativos exibido nesta lista.
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {activeStatusSummary.map((row) => (
-                <div key={row.status} className="rounded-lg border border-border bg-card p-3">
-                  <p className="truncate text-xs font-medium text-muted-foreground" title={row.status}>
-                    {row.status}
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold">{formatNum(row.total)}</p>
-                </div>
-              ))}
-              {!activeStatusSummary.length && (
-                <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
-                  Nenhum aluno ativo encontrado com os filtros selecionados.
-                </div>
-              )}
-            </div>
-          </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[900px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
