@@ -114,21 +114,49 @@ async function getMemberSyncSettings(): Promise<MemberSyncSettings> {
 async function upsertMembers(members: Member[]) {
   const supabaseUrl = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
   const secretKey = requiredEnv("SUPABASE_SECRET_KEY");
+  const ignoredColumns = new Set<string>();
 
   for (let start = 0; start < members.length; start += UPSERT_BATCH_SIZE) {
-    const batch = members.slice(start, start + UPSERT_BATCH_SIZE);
-    const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/members?on_conflict=idMember`, {
-      method: "POST",
-      headers: {
-        apikey: secretKey,
-        "content-type": "application/json",
-        prefer: "resolution=merge-duplicates,return=minimal",
-      },
-      body: JSON.stringify(batch),
+    let batch = members.slice(start, start + UPSERT_BATCH_SIZE).map((member) => {
+      const sanitized = { ...member };
+      ignoredColumns.forEach((column) => {
+        delete sanitized[column];
+      });
+      return sanitized;
     });
-    if (!response.ok) {
+
+    let saved = false;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/members?on_conflict=idMember`, {
+        method: "POST",
+        headers: {
+          apikey: secretKey,
+          "content-type": "application/json",
+          prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify(batch),
+      });
+      if (response.ok) {
+        saved = true;
+        break;
+      }
+
       const body = await response.text();
+      const missingColumn = body.match(/Could not find the '([^']+)' column/)?.[1];
+      if (response.status === 400 && missingColumn) {
+        ignoredColumns.add(missingColumn);
+        batch = batch.map((member) => {
+          const sanitized = { ...member };
+          delete sanitized[missingColumn];
+          return sanitized;
+        });
+        continue;
+      }
+
       throw new Error(`Supabase returned HTTP ${response.status}: ${body.slice(0, 300)}`);
+    }
+    if (!saved) {
+      throw new Error("Supabase returned too many unknown member columns in the same batch");
     }
   }
 }
