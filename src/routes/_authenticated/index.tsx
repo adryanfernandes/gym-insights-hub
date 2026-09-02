@@ -84,6 +84,37 @@ function todayInputDate() {
   return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
 }
 
+function dateRangeForFilters(period: string, startInput?: string | null, endInput?: string | null) {
+  const now = new Date();
+  const end =
+    endInput && !Number.isNaN(new Date(`${endInput}T23:59:59.999`).getTime())
+      ? new Date(`${endInput}T23:59:59.999`)
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  let start =
+    startInput && !Number.isNaN(new Date(`${startInput}T00:00:00`).getTime())
+      ? new Date(`${startInput}T00:00:00`)
+      : new Date(end);
+
+  const normalized = period
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (!startInput) {
+    if (normalized.includes("hoje")) start = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    else if (normalized.includes("7")) start.setDate(end.getDate() - 6);
+    else if (normalized.includes("90")) start.setDate(end.getDate() - 89);
+    else if (normalized.includes("ano")) start = new Date(end.getFullYear(), 0, 1);
+    else start.setDate(end.getDate() - 29);
+  }
+
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
+function isDateInRange(value: string | null | undefined, start: Date, end: Date) {
+  const time = parseSortableDate(value);
+  return time !== null && time >= start.getTime() && time <= end.getTime();
+}
+
 type SortDirection = "asc" | "desc";
 type SortState = { key: string; direction: SortDirection } | null;
 
@@ -297,9 +328,42 @@ function GeralPage() {
           ),
     [activeContractFilter, data.alunosAtivosLista],
   );
+  const activeStudentsWithMovement = useMemo(() => {
+    const { start, end } = dateRangeForFilters(
+      filters.periodo,
+      filters.dataInicio,
+      filters.dataFim,
+    );
+    const changedPlanIds = new Set(
+      (data.mudancasPlanoLista ?? [])
+        .filter((row) => isDateInRange(row.dataAlteracao, start, end))
+        .map((row) => row.idAluno),
+    );
+    const renewedIds = new Set(
+      data.renovacoesMensais
+        .flatMap((month) => month.renovacoesLista ?? [])
+        .filter((row) => isDateInRange(row.inicio, start, end))
+        .map((row) => row.idAluno),
+    );
+
+    return filteredActiveStudents.map((student) => {
+      let statusComposicao = "Manteve plano";
+      if (isDateInRange(student.inicio, start, end)) statusComposicao = "Entrou";
+      if (renewedIds.has(student.id)) statusComposicao = "Renovou";
+      if (changedPlanIds.has(student.id)) statusComposicao = "Alterou plano";
+      return { ...student, statusComposicao };
+    });
+  }, [
+    data.mudancasPlanoLista,
+    data.renovacoesMensais,
+    filteredActiveStudents,
+    filters.dataFim,
+    filters.dataInicio,
+    filters.periodo,
+  ]);
   const sortedActiveStudents = useMemo(
     () =>
-      sortedRows(filteredActiveStudents, activeSort, {
+      sortedRows(activeStudentsWithMovement, activeSort, {
         id: (row) => row.id,
         nome: (row) => row.nome,
         contrato: (row) => row.contrato,
@@ -308,7 +372,7 @@ function GeralPage() {
         vencimento: (row) => row.vencimento,
         ultimaFrequencia: (row) => row.ultimaFrequencia,
       }),
-    [activeSort, filteredActiveStudents],
+    [activeSort, activeStudentsWithMovement],
   );
   const activeMovementSummary = useMemo(() => {
     const entradas = movimentacaoPeriodo.entradas;

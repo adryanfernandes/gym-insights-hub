@@ -364,64 +364,6 @@ function activeStatusComposition(contract: MembershipRow | undefined, today = ne
   return `Status ${rawStatus} - contrato vigente`;
 }
 
-function activeMovementCompositionByMember(rows: MembershipRow[], filters: Filters) {
-  const { start, end } = dashboardDateRange(filters, new Date());
-  const newEnrollmentIds = new Set(
-    newEnrollmentsInPeriod(rows, start, end).map(({ row }) => row.id_member),
-  );
-  const planChangeIds = new Set(planChangesInPeriod(rows, start, end).map((row) => row.idAluno));
-  const renewalIds = new Set<number>();
-  const byMember = new Map<number, MembershipRow[]>();
-
-  rows.forEach((row) => {
-    if (isSingleUseMembership(row)) return;
-    const list = byMember.get(row.id_member) ?? [];
-    list.push(row);
-    byMember.set(row.id_member, list);
-  });
-
-  byMember.forEach((memberRows, memberId) => {
-    const periodsByStart = new Map<string, { start: Date; end: Date | null; performedAt: Date }>();
-
-    memberRows.forEach((row) => {
-      const startDate = toDate(row.membership_start || row.sale_date);
-      if (!startDate) return;
-      const key = format(startDate, "yyyy-MM-dd");
-      const endDate = toDate(row.membership_end);
-      const performedAt = toDate(row.sale_date) ?? startDate;
-      const current = periodsByStart.get(key);
-      periodsByStart.set(key, {
-        start: startDate,
-        end: endDate && (!current?.end || endDate > current.end) ? endDate : (current?.end ?? null),
-        performedAt:
-          current && current.performedAt < performedAt ? current.performedAt : performedAt,
-      });
-    });
-
-    const periods = Array.from(periodsByStart.values()).sort(
-      (a, b) => a.start.getTime() - b.start.getTime(),
-    );
-    let previousEnd = periods[0]?.end ?? null;
-
-    periods.slice(1).forEach((period) => {
-      const gap = previousEnd
-        ? differenceInCalendarDays(period.start, previousEnd)
-        : Number.POSITIVE_INFINITY;
-      if (gap >= -30 && gap <= 30 && period.performedAt >= start && period.performedAt <= end) {
-        renewalIds.add(memberId);
-      }
-      previousEnd = period.end;
-    });
-  });
-
-  return (memberId: number) => {
-    if (newEnrollmentIds.has(memberId)) return "Entrou";
-    if (planChangeIds.has(memberId)) return "Alterou plano";
-    if (renewalIds.has(memberId)) return "Renovou";
-    return "Manteve plano";
-  };
-}
-
 function inputFilterDate(value: string | null | undefined, endOfDay = false) {
   if (!value) return null;
   const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
@@ -938,10 +880,6 @@ function useDashboardDataState(filters: Filters) {
       deferredFilters,
       memberData.overviewKpis.alunosAtivos,
     );
-    const activeMovementComposition = activeMovementCompositionByMember(
-      memberships,
-      deferredFilters,
-    );
     const contractsByMember = new Map<number, IndexedContract[]>();
     memberships.forEach((contract) => {
       if (isSingleUseMembership(contract)) return;
@@ -969,10 +907,6 @@ function useDashboardDataState(filters: Filters) {
       }));
     return {
       ...memberData,
-      alunosAtivosLista: memberData.alunosAtivosLista.map((student) => ({
-        ...student,
-        statusComposicao: activeMovementComposition(student.id),
-      })),
       overviewKpis: {
         ...memberData.overviewKpis,
         ...membershipData.kpis,
