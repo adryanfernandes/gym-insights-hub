@@ -303,7 +303,7 @@ function GeralPage() {
         id: (row) => row.id,
         nome: (row) => row.nome,
         contrato: (row) => row.contrato,
-        bairro: (row) => row.bairro,
+        statusComposicao: (row) => row.statusComposicao ?? "Contrato vigente",
         inicio: (row) => row.inicio,
         vencimento: (row) => row.vencimento,
         ultimaFrequencia: (row) => row.ultimaFrequencia,
@@ -678,7 +678,7 @@ function GeralPage() {
                   <SortHeader id="id" label="Número" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="nome" label="Aluno" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="contrato" label="Contrato" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
-                  <SortHeader id="bairro" label="Bairro" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="statusComposicao" label="Status atual" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="inicio" label="Início" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="vencimento" label="Vencimento" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="ultimaFrequencia" label="Última frequência" sort={activeSort} onSort={(key) => setActiveSort((sort) => nextSort(sort, key))} />
@@ -695,7 +695,7 @@ function GeralPage() {
                     <td className="px-5 py-3 font-medium">{student.id}</td>
                     <td className="px-5 py-3 font-medium">{student.nome}</td>
                     <td className="px-5 py-3">{student.contrato}</td>
-                    <td className="px-5 py-3">{student.bairro}</td>
+                    <td className="px-5 py-3">{student.statusComposicao ?? "Contrato vigente"}</td>
                     <td className="px-5 py-3">{student.inicio ?? "-"}</td>
                     <td className="px-5 py-3">{student.vencimento ?? "-"}</td>
                     <td className="px-5 py-3">{student.ultimaFrequencia ?? "-"}</td>
