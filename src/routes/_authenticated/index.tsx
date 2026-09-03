@@ -117,6 +117,40 @@ function isDateInRange(value: string | null | undefined, start: Date, end: Date)
 
 type SortDirection = "asc" | "desc";
 type SortState = { key: string; direction: SortDirection } | null;
+type InactiveColumnFilters = {
+  id: string;
+  nome: string;
+  contrato: string;
+  bairro: string;
+  inicio: string;
+  vencimento: string;
+  ultimaFrequencia: string;
+};
+
+const emptyInactiveColumnFilters: InactiveColumnFilters = {
+  id: "",
+  nome: "",
+  contrato: "",
+  bairro: "",
+  inicio: "",
+  vencimento: "",
+  ultimaFrequencia: "",
+};
+
+function includesFilter(value: unknown, filter: string) {
+  if (!filter.trim()) return true;
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .includes(
+      filter
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase(),
+    );
+}
 
 function parseSortableDate(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
@@ -215,6 +249,7 @@ function SortHeader({
   align?: "left" | "right";
 }) {
   const active = sort?.key === id;
+
   return (
     <th className={`px-5 py-3 ${align === "right" ? "text-right" : ""}`}>
       <button
@@ -251,6 +286,8 @@ function GeralPage() {
   const [activeContractFilter, setActiveContractFilter] = useState("Todos");
   const [activePage, setActivePage] = useState(1);
   const [inactivePage, setInactivePage] = useState(1);
+  const [inactiveColumnFilters, setInactiveColumnFilters] =
+    useState<InactiveColumnFilters>(emptyInactiveColumnFilters);
   const [activeSort, setActiveSort] = useState<SortState>(null);
   const [inactiveSort, setInactiveSort] = useState<SortState>(null);
   const [salesSort, setSalesSort] = useState<SortState>(null);
@@ -389,9 +426,23 @@ function GeralPage() {
       { status: "Mantiveram", total: mantiveram, description: "Ativos sem entrada, renovação ou alteração" },
     ];
   }, [filteredActiveStudents.length, movimentacaoPeriodo]);
+  const filteredInactiveStudents = useMemo(
+    () =>
+      data.alunosInativosLista.filter(
+        (student) =>
+          includesFilter(student.id, inactiveColumnFilters.id) &&
+          includesFilter(student.nome, inactiveColumnFilters.nome) &&
+          includesFilter(student.contrato, inactiveColumnFilters.contrato) &&
+          includesFilter(student.bairro, inactiveColumnFilters.bairro) &&
+          includesFilter(student.inicio ?? "-", inactiveColumnFilters.inicio) &&
+          includesFilter(student.vencimento ?? "-", inactiveColumnFilters.vencimento) &&
+          includesFilter(student.ultimaFrequencia ?? "-", inactiveColumnFilters.ultimaFrequencia),
+      ),
+    [data.alunosInativosLista, inactiveColumnFilters],
+  );
   const sortedInactiveStudents = useMemo(
     () =>
-      sortedRows(data.alunosInativosLista, inactiveSort, {
+      sortedRows(filteredInactiveStudents, inactiveSort, {
         id: (row) => row.id,
         nome: (row) => row.nome,
         contrato: (row) => row.contrato,
@@ -400,7 +451,7 @@ function GeralPage() {
         vencimento: (row) => row.vencimento,
         ultimaFrequencia: (row) => row.ultimaFrequencia,
       }),
-    [inactiveSort, data.alunosInativosLista],
+    [inactiveSort, filteredInactiveStudents],
   );
   const activePages = Math.max(1, Math.ceil(sortedActiveStudents.length / ACTIVE_PAGE_SIZE));
   const activeRows = sortedActiveStudents.slice(
@@ -433,8 +484,7 @@ function GeralPage() {
         dataCancelamento: (row) => row.dataCancelamento,
         motivo: (row) => row.motivo,
         valorVenda: (row) => row.valorVenda,
-        multa: (row) => row.multa,
-        valorRestante: (row) => row.valorRestante,
+        valorPago: (row) => row.valorPago,
       }),
     [cancellationsSort, data.cancelamentosLista],
   );
@@ -445,7 +495,9 @@ function GeralPage() {
         aluno: (row) => row.aluno,
         planoAnterior: (row) => row.planoAnterior,
         planoNovo: (row) => row.planoNovo,
+        tipoAlteracao: (row) => row.tipoAlteracao,
         dataAlteracao: (row) => row.dataAlteracao,
+        valorAnterior: (row) => row.valorAnterior,
         valorNovo: (row) => row.valorNovo,
       }),
     [data.mudancasPlanoLista, planChangesSort],
@@ -491,6 +543,10 @@ function GeralPage() {
   useEffect(() => {
     setActivePage(1);
   }, [activeContractFilter]);
+
+  useEffect(() => {
+    setInactivePage(1);
+  }, [inactiveColumnFilters]);
 
   const exportActiveStudents = () =>
     exportToExcel("alunos-ativos", {
@@ -548,9 +604,11 @@ function GeralPage() {
         Cliente: row.aluno,
         "Plano anterior": row.planoAnterior,
         "Plano novo": row.planoNovo,
+        Tipo: row.tipoAlteracao,
         "Data da alteração": displayDate(row.dataAlteracao),
         "Contrato anterior": row.idContratoAnterior,
         "Contrato novo": row.idContratoNovo,
+        "Valor anterior": row.valorAnterior,
         "Valor novo": row.valorNovo,
       })),
     });
@@ -798,7 +856,10 @@ function GeralPage() {
         open={inactiveStudentsOpen}
         onOpenChange={(open) => {
           setInactiveStudentsOpen(open);
-          if (open) setInactivePage(1);
+          if (open) {
+            setInactivePage(1);
+            setInactiveColumnFilters(emptyInactiveColumnFilters);
+          }
         }}
       >
         <DialogContent className="flex max-h-[85vh] max-w-6xl flex-col gap-0 overflow-hidden p-0">
@@ -807,6 +868,7 @@ function GeralPage() {
               <div>
                 <DialogTitle>Alunos inativos</DialogTitle>
                 <DialogDescription>
+                  {formatNum(sortedInactiveStudents.length)} de{" "}
                   {formatNum(data.alunosInativosLista.length)} alunos inativos conforme os filtros
                   selecionados.
                 </DialogDescription>
@@ -821,22 +883,6 @@ function GeralPage() {
               </button>
             </div>
           </DialogHeader>
-          <div className="flex flex-wrap items-end gap-3 border-b border-border px-6 py-4">
-            <label className="flex min-w-[260px] flex-col gap-1 text-xs font-medium text-muted-foreground">
-              Contrato
-              <select
-                value={activeContractFilter}
-                onChange={(event) => setActiveContractFilter(event.target.value)}
-                className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary"
-              >
-                {activeContractOptions.map((contract) => (
-                  <option key={contract} value={contract}>
-                    {contract}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[980px] text-sm">
               <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
@@ -851,6 +897,34 @@ function GeralPage() {
                 </tr>
               </thead>
               <tbody>
+                <tr className="sticky top-10 z-10 border-t border-border bg-muted/95">
+                  {(
+                    [
+                      ["id", "Filtrar nÃºmero"],
+                      ["nome", "Filtrar aluno"],
+                      ["contrato", "Filtrar contrato"],
+                      ["bairro", "Filtrar bairro"],
+                      ["inicio", "Filtrar inÃ­cio"],
+                      ["vencimento", "Filtrar vencimento"],
+                      ["ultimaFrequencia", "Filtrar frequÃªncia"],
+                    ] as const
+                  ).map(([key, placeholder]) => (
+                    <td key={key} className="px-3 pb-3 pt-2">
+                      <input
+                        value={inactiveColumnFilters[key]}
+                        onChange={(event) =>
+                          setInactiveColumnFilters((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                        onClick={(event) => event.stopPropagation()}
+                        placeholder={placeholder}
+                        className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary"
+                      />
+                    </td>
+                  ))}
+                </tr>
                 {inactiveRows.map((student) => (
                   <tr
                     key={student.id}
@@ -972,8 +1046,7 @@ function GeralPage() {
                   <SortHeader id="dataCancelamento" label="Data" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="motivo" label="Motivo" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="valorVenda" label="Venda" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} align="right" />
-                  <SortHeader id="multa" label="Multa" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} align="right" />
-                  <SortHeader id="valorRestante" label="Restante" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} align="right" />
+                  <SortHeader id="valorPago" label="Último valor pago" sort={cancellationsSort} onSort={(key) => setCancellationsSort((sort) => nextSort(sort, key))} align="right" />
                 </tr>
               </thead>
               <tbody>
@@ -992,9 +1065,8 @@ function GeralPage() {
                       {cancellation.motivo}
                     </td>
                     <td className="px-5 py-3 text-right">{formatBRL(cancellation.valorVenda)}</td>
-                    <td className="px-5 py-3 text-right">{formatBRL(cancellation.multa)}</td>
                     <td className="px-5 py-3 text-right font-medium">
-                      {formatBRL(cancellation.valorRestante)}
+                      {formatBRL(cancellation.valorPago)}
                     </td>
                   </tr>
                 ))}
@@ -1041,7 +1113,9 @@ function GeralPage() {
                   <SortHeader id="aluno" label="Aluno" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="planoAnterior" label="Plano anterior" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="planoNovo" label="Plano novo" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="tipoAlteracao" label="Tipo" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
                   <SortHeader id="dataAlteracao" label="Data da alteração" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} />
+                  <SortHeader id="valorAnterior" label="Valor anterior" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} align="right" />
                   <SortHeader id="valorNovo" label="Valor novo" sort={planChangesSort} onSort={(key) => setPlanChangesSort((sort) => nextSort(sort, key))} align="right" />
                 </tr>
               </thead>
@@ -1057,7 +1131,21 @@ function GeralPage() {
                     <td className="px-5 py-3 font-medium">{change.aluno}</td>
                     <td className="px-5 py-3">{change.planoAnterior}</td>
                     <td className="px-5 py-3">{change.planoNovo}</td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                          change.tipoAlteracao === "Upgrade"
+                            ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
+                            : change.tipoAlteracao === "Downgrade"
+                              ? "border-amber-400/40 bg-amber-400/10 text-amber-300"
+                              : "border-border bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {change.tipoAlteracao}
+                      </span>
+                    </td>
                     <td className="px-5 py-3">{displayDate(change.dataAlteracao)}</td>
+                    <td className="px-5 py-3 text-right">{formatBRL(change.valorAnterior)}</td>
                     <td className="px-5 py-3 text-right font-medium">
                       {formatBRL(change.valorNovo)}
                     </td>

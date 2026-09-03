@@ -381,6 +381,8 @@ function planChangesInPeriod(rows: MembershipRow[], start: Date, end: Date) {
     planoAnterior: string;
     planoNovo: string;
     dataAlteracao: string | null;
+    tipoAlteracao: string;
+    valorAnterior: number;
     valorNovo: number;
   }> = [];
 
@@ -412,6 +414,13 @@ function planChangesInPeriod(rows: MembershipRow[], start: Date, end: Date) {
         planoAnterior: previousName,
         planoNovo: currentName,
         dataAlteracao: row.sale_date || row.membership_start,
+        tipoAlteracao:
+          num(row.sale_value) > num(previous.sale_value)
+            ? "Upgrade"
+            : num(row.sale_value) < num(previous.sale_value)
+              ? "Downgrade"
+              : "Mesmo valor",
+        valorAnterior: num(previous.sale_value),
         valorNovo: num(row.sale_value),
       });
     });
@@ -449,6 +458,13 @@ export function getMembershipDashboardData(
   );
   const byId = new Map(scoped.map((row) => [row.id_member_membership, row]));
   const scopedReceivables = receivables.filter((row) => byId.has(row.id_member_membership));
+  const paidByContract = new Map<number, number>();
+  scopedReceivables.forEach((row) => {
+    paidByContract.set(
+      row.id_member_membership,
+      (paidByContract.get(row.id_member_membership) ?? 0) + num(row.amount_paid),
+    );
+  });
   const contractMembers = new Map<string, Set<number>>();
   scoped.forEach((row) => {
     if (activeMemberIds && !activeMemberIds.has(row.id_member)) return;
@@ -673,6 +689,7 @@ export function getMembershipDashboardData(
         dataCancelamento: row.cancel_date,
         motivo: row.cancellation_reason?.trim() || "Não informado",
         valorVenda: num(row.sale_value),
+        valorPago: paidByContract.get(row.id_member_membership) ?? 0,
         multa: num(row.cancellation_fine),
         valorRestante: num(row.remaining_value),
       })),

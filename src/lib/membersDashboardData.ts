@@ -894,6 +894,13 @@ function useDashboardDataState(filters: Filters) {
     contractsByMember.forEach((list) => {
       list.sort((a, b) => (b.start?.getTime() ?? 0) - (a.start?.getTime() ?? 0));
     });
+    const membersWithRecurringContracts = new Set(contractsByMember.keys());
+    const riskRowsWithRecurringContracts = memberData.alunosRisco.filter((row) =>
+      membersWithRecurringContracts.has(row.id),
+    );
+    const riskListWithRecurringContracts = memberData.alunosRiscoLista.filter((row) =>
+      membersWithRecurringContracts.has(row.id),
+    );
     const enrichAgenda = (agenda: typeof activityData.agendaHoje) =>
       agenda.map((activity) => ({
         ...activity,
@@ -910,6 +917,7 @@ function useDashboardDataState(filters: Filters) {
       overviewKpis: {
         ...memberData.overviewKpis,
         ...membershipData.kpis,
+        alunosRisco: riskListWithRecurringContracts.length,
         taxaOcupacaoAgenda: activityData.overviewOccupancy,
       },
       funilComercial:
@@ -924,6 +932,8 @@ function useDashboardDataState(filters: Filters) {
       agendaHoje: enrichAgenda(activityData.agendaHoje),
       professores: activityData.professores,
       activityFilterOptions: activityData.filterOptions,
+      alunosRisco: riskRowsWithRecurringContracts,
+      alunosRiscoLista: riskListWithRecurringContracts,
       faturamentoMensal: membershipData.faturamentoMensal,
       receitaPorPlano: membershipData.receitaPorPlano,
       projecaoFaturamento: membershipData.projecaoFaturamento,
