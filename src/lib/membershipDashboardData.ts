@@ -488,9 +488,19 @@ export function getMembershipDashboardData(
     const value = date(row.sale_date);
     return value && value >= start && value <= end;
   });
+  const mudancasPlanoPeriodo = planChangesInPeriod(scoped, start, end);
+  const changedPreviousContractIds = new Set(
+    mudancasPlanoPeriodo.map((change) => change.idContratoAnterior),
+  );
   const cancellations = scoped.filter((row) => {
     const value = date(row.cancel_date);
-    return value && value <= now && value >= start && value <= end;
+    return (
+      value &&
+      value <= now &&
+      value >= start &&
+      value <= end &&
+      !changedPreviousContractIds.has(row.id_member_membership)
+    );
   });
   const renewalLatestByMember = new Map<number, MembershipRow>();
   scoped.forEach((row) => {
@@ -507,7 +517,6 @@ export function getMembershipDashboardData(
   const totalSales = sales.reduce((sum, row) => sum + num(row.sale_value), 0);
   const renovacoesPeriodo = renewalsInPeriod(scoped, start, end);
   const novasMatriculasPeriodo = newEnrollmentsInPeriod(scoped, start, end);
-  const mudancasPlanoPeriodo = planChangesInPeriod(scoped, start, end);
   const currentMonth = monthKey(now);
   const paidCurrentMonth = scopedReceivables.reduce((sum, row) => {
     const reference = date(row.receiving_date || row.registration_date);
