@@ -673,11 +673,6 @@ function GeralPage() {
           label="Alunos ativos"
           value={formatNum(k.alunosAtivos)}
           icon={<Users className="h-5 w-5" />}
-          hint={`Entraram ${formatNum(movimentacaoPeriodo.entradas)} • Cancelaram ${formatNum(
-            movimentacaoPeriodo.saidas,
-          )} • Mudaram ${formatNum(movimentacaoPeriodo.mudancasPlano)} • Renovações ${formatNum(
-            movimentacaoPeriodo.renovacoes,
-          )}`}
           onClick={() => setActiveStudentsOpen(true)}
         />
         <KpiCard
