@@ -268,7 +268,7 @@ function ProfessoresPage() {
             <section>
               <h3 className="text-sm font-semibold">Ocupação por atividade</h3>
               <div className="mt-3 overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="w-full min-w-[840px] text-sm">
                   <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3 font-medium">Atividade</th>
@@ -278,6 +278,7 @@ function ProfessoresPage() {
                       <th className="px-4 py-3 font-medium text-right">Inscritos</th>
                       <th className="px-4 py-3 font-medium text-right">Presentes</th>
                       <th className="px-4 py-3 font-medium text-right">Faltas</th>
+                      <th className="px-4 py-3 font-medium text-right">Justificadas</th>
                       <th className="px-4 py-3 font-medium text-right">Capacidade</th>
                     </tr>
                   </thead>
@@ -292,12 +293,13 @@ function ProfessoresPage() {
                           <td className="px-4 py-3 text-right">{formatNum(row.inscritos)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.presentes)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.faltas)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.faltasJustificadas)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.capacidade)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={8} className="h-20 text-center text-muted-foreground">
+                        <td colSpan={9} className="h-20 text-center text-muted-foreground">
                           Nenhuma atividade encontrada para este professor no período.
                         </td>
                       </tr>
@@ -310,7 +312,7 @@ function ProfessoresPage() {
             <section>
               <h3 className="text-sm font-semibold">Atividades realizadas</h3>
               <div className="mt-3 overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[900px] text-sm">
+                <table className="w-full min-w-[980px] text-sm">
                   <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3 font-medium">Data</th>
@@ -321,6 +323,7 @@ function ProfessoresPage() {
                       <th className="px-4 py-3 font-medium text-right">Inscritos</th>
                       <th className="px-4 py-3 font-medium text-right">Presentes</th>
                       <th className="px-4 py-3 font-medium text-right">Faltas</th>
+                      <th className="px-4 py-3 font-medium text-right">Justificadas</th>
                       <th className="px-4 py-3 font-medium text-right">Capacidade</th>
                     </tr>
                   </thead>
@@ -339,12 +342,13 @@ function ProfessoresPage() {
                           <td className="px-4 py-3 text-right">{formatNum(row.inscritos)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.presentes)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.faltas)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.faltasJustificadas)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.capacidade)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={9} className="h-20 text-center text-muted-foreground">
+                        <td colSpan={10} className="h-20 text-center text-muted-foreground">
                           Nenhuma aula encontrada.
                         </td>
                       </tr>

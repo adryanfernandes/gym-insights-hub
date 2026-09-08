@@ -302,6 +302,7 @@ export function getActivityDashboardDataFromNormalized(
             inscritos: value.occupied,
             presentes: value.present,
             faltas: value.absent,
+            faltasJustificadas: value.justifiedAbsence,
             capacidade: value.capacity,
           };
         })
@@ -322,6 +323,7 @@ export function getActivityDashboardDataFromNormalized(
           inscritos: row.occupied,
           presentes: row.hasAttendance ? row.present : row.occupied,
           faltas: row.absent,
+          faltasJustificadas: row.justifiedAbsence,
           ocupacao: round(((row.hasAttendance ? row.present : row.occupied) / Math.max(row.capacity, 1)) * 100),
         }));
 
