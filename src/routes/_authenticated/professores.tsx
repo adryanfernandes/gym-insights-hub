@@ -647,6 +647,62 @@ function ProfessoresPage() {
             </ComposedChart>
           </ResponsiveContainer>
         </ChartCard>
+
+        <div className="xl:col-span-2">
+          <ChartCard
+            title="Agenda da semana"
+            description="Heatmap de presentes por dia e horário na semana atual"
+          >
+            <div className="flex h-full min-h-[280px] flex-col overflow-hidden">
+              <div className="grid grid-cols-[72px_repeat(7,minmax(72px,1fr))] gap-2 text-xs">
+                <div className="text-muted-foreground">Horário</div>
+                {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
+                  <div key={day} className="text-center font-medium text-muted-foreground">
+                    {day}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 min-h-0 flex-1 overflow-auto pr-1">
+                <div className="grid grid-cols-[72px_repeat(7,minmax(72px,1fr))] gap-2">
+                  {professores.agendaSemanaHeatmap.length ? (
+                    professores.agendaSemanaHeatmap.flatMap((row) => [
+                      <div
+                        key={`${row.horario}-label`}
+                        className="flex h-14 items-center text-xs font-medium text-muted-foreground"
+                      >
+                        {row.horario}
+                      </div>,
+                      ...row.dias.map((cell) => (
+                        <div
+                          key={`${row.horario}-${cell.dia}`}
+                          title={`${cell.dia} ${row.horario}: ${formatNum(cell.presentes)} presentes em ${formatNum(cell.aulas)} aula(s)${cell.atividades ? ` - ${cell.atividades}` : ""}`}
+                          className="flex h-14 flex-col items-center justify-center rounded-lg border border-border text-center transition hover:border-primary/50"
+                          style={{
+                            backgroundColor:
+                              cell.presentes > 0
+                                ? `color-mix(in srgb, var(--chart-2) ${Math.max(cell.intensidade, 12)}%, transparent)`
+                                : "var(--muted)",
+                          }}
+                        >
+                          <span className="text-sm font-semibold text-foreground">
+                            {formatNum(cell.presentes)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {formatNum(cell.aulas)} aula{cell.aulas === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                      )),
+                    ])
+                  ) : (
+                    <div className="col-span-8 flex h-40 items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
+                      Nenhuma atividade encontrada na semana atual com os filtros aplicados.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </ChartCard>
+        </div>
       </div>
 
       <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">

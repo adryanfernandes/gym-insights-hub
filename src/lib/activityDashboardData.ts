@@ -108,6 +108,8 @@ function timeToMinutes(value: string) {
   return Number(hours) * 60 + Number(minutes);
 }
 
+const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
 function normalize(row: StoredActivity): NormalizedActivity | null {
   const date = new Date(`${row.query_date}T12:00:00`);
   if (Number.isNaN(date.getTime())) return null;
@@ -367,6 +369,43 @@ export function getActivityDashboardDataFromNormalized(
         aulas: value.classes,
       };
     });
+  const weekStart = subDays(now, now.getDay());
+  const weekStartKey = format(weekStart, "yyyy-MM-dd");
+  const weekEndKey = format(subDays(weekStart, -6), "yyyy-MM-dd");
+  const weekRows = rows.filter((row) => {
+    const key = format(row.date, "yyyy-MM-dd");
+    return key >= weekStartKey && key <= weekEndKey;
+  });
+  const heatmapHours = Array.from(new Set(weekRows.map((row) => row.startTime))).sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const heatmapCells = new Map<string, { presentes: number; aulas: number; atividades: string[] }>();
+  weekRows.forEach((row) => {
+    const dayIndex = row.date.getDay();
+    const key = `${row.startTime}-${dayIndex}`;
+    const current = heatmapCells.get(key) ?? { presentes: 0, aulas: 0, atividades: [] };
+    current.presentes += row.hasAttendance ? row.present : row.occupied;
+    current.aulas += 1;
+    current.atividades.push(row.modality);
+    heatmapCells.set(key, current);
+  });
+  const maxHeatmapPresentes = Math.max(
+    1,
+    ...Array.from(heatmapCells.values()).map((cell) => cell.presentes),
+  );
+  const agendaSemanaHeatmap = heatmapHours.map((horario) => ({
+    horario,
+    dias: WEEKDAY_LABELS.map((dia, index) => {
+      const cell = heatmapCells.get(`${horario}-${index}`);
+      return {
+        dia,
+        presentes: cell?.presentes ?? 0,
+        aulas: cell?.aulas ?? 0,
+        intensidade: round(((cell?.presentes ?? 0) / maxHeatmapPresentes) * 100, 0),
+        atividades: Array.from(new Set(cell?.atividades ?? [])).slice(0, 3).join(", "),
+      };
+    }),
+  }));
 
   return {
     filterOptions,
@@ -393,6 +432,7 @@ export function getActivityDashboardDataFromNormalized(
       porModalidade,
       porHorario,
       evolucao,
+      agendaSemanaHeatmap,
       oportunidades: ranking
         .filter((row) => row.ocupacao < 55)
         .slice(-4)
