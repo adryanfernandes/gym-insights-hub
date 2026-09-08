@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -117,24 +117,30 @@ function TeacherMultiSelect({
   allOption: string;
   onChange: (value: string[]) => void;
 }) {
-  const selected = value.length ? value : [allOption];
-  const activeOptions = selected.includes(allOption) ? [] : selected;
+  const selected = value;
+  const hasAllOption = selected.includes(allOption);
+  const allValues = options.filter((option) => option !== allOption);
+  const allSelected =
+    hasAllOption || (allValues.length > 0 && allValues.every((option) => selected.includes(option)));
+  const activeOptions = allSelected ? [] : selected.filter((option) => option !== allOption);
   const summary = activeOptions.length
     ? activeOptions.length === 1
       ? activeOptions[0]
       : `${activeOptions.length} selecionados`
-    : allOption;
+    : allSelected
+      ? allOption
+      : "Nenhum";
 
   function toggle(option: string) {
     if (option === allOption) {
-      onChange([allOption]);
+      onChange(allSelected ? [] : [allOption]);
       return;
     }
-    const withoutAll = selected.filter((item) => item !== allOption);
+    const withoutAll = allSelected ? allValues : selected.filter((item) => item !== allOption);
     const next = withoutAll.includes(option)
       ? withoutAll.filter((item) => item !== option)
       : [...withoutAll, option];
-    onChange(next.length ? next : [allOption]);
+    onChange(next);
   }
 
   return (
@@ -155,7 +161,7 @@ function TeacherMultiSelect({
             >
               <input
                 type="checkbox"
-                checked={selected.includes(option)}
+                checked={option === allOption ? allSelected : allSelected || selected.includes(option)}
                 onChange={() => toggle(option)}
                 className="h-4 w-4 rounded border-input accent-primary"
               />
@@ -170,6 +176,7 @@ function TeacherMultiSelect({
 
 function ProfessoresPage() {
   const { filters, setFilters } = useApp();
+  const [draftFilters, setDraftFilters] = useState(filters);
   const { data, loadingActivities, activitiesError } = useDashboardData(filters);
   const professores = data.professores;
   const k = professores.kpis;
@@ -179,7 +186,15 @@ function ProfessoresPage() {
   const selectedTeacherDetails = selectedTeacher
     ? professores.atividadesPorProfessor?.[selectedTeacher]
     : null;
+  const hasPendingFilterChanges = useMemo(
+    () => JSON.stringify(draftFilters) !== JSON.stringify(filters),
+    [draftFilters, filters],
+  );
   const setFiltersRef = useRef(setFilters);
+
+  useEffect(() => {
+    setDraftFilters(filters);
+  }, [filters]);
 
   useEffect(() => {
     setFiltersRef.current = setFilters;
@@ -345,7 +360,7 @@ function ProfessoresPage() {
       <div className="relative z-40 flex flex-wrap items-end gap-3 overflow-visible rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
         <TeacherDateInput
           label="Início"
-          value={filters.dataInicio}
+          value={draftFilters.dataInicio}
           onChange={(dataInicio) =>
             setFilters({
               dataInicio,
@@ -359,7 +374,7 @@ function ProfessoresPage() {
         />
         <TeacherDateInput
           label="Fim"
-          value={filters.dataFim}
+          value={draftFilters.dataFim}
           onChange={(dataFim) =>
             setFilters({
               dataFim,
@@ -373,46 +388,57 @@ function ProfessoresPage() {
         />
         <TeacherMultiSelect
           label="Professor"
-          value={filters.professor}
+          value={draftFilters.professor}
           options={data.activityFilterOptions.professores}
           allOption="Todos"
-          onChange={(professor) => setFilters({ professor })}
+          onChange={(professor) => setDraftFilters((current) => ({ ...current, professor }))}
         />
         <TeacherMultiSelect
           label="Modalidade"
-          value={filters.modalidade}
+          value={draftFilters.modalidade}
           options={data.activityFilterOptions.modalidades}
           allOption="Todas"
-          onChange={(modalidade) => setFilters({ modalidade })}
+          onChange={(modalidade) => setDraftFilters((current) => ({ ...current, modalidade }))}
         />
         <TeacherMultiSelect
           label="Área / Unidade"
-          value={filters.atividadeUnidade}
+          value={draftFilters.atividadeUnidade}
           options={data.activityFilterOptions.unidades}
           allOption="Todas"
-          onChange={(atividadeUnidade) => setFilters({ atividadeUnidade })}
+          onChange={(atividadeUnidade) =>
+            setDraftFilters((current) => ({ ...current, atividadeUnidade }))
+          }
         />
         <TeacherMultiSelect
           label="Horário"
-          value={filters.horario}
+          value={draftFilters.horario}
           options={data.activityFilterOptions.horarios}
           allOption="Todos"
-          onChange={(horario) => setFilters({ horario })}
+          onChange={(horario) => setDraftFilters((current) => ({ ...current, horario }))}
         />
         <button
           type="button"
           onClick={() =>
-            setFilters({
+            setDraftFilters((current) => ({
+              ...current,
               professor: ["Todos"],
               modalidade: ["Todas"],
               atividadeUnidade: ["Todas"],
               horario: ["Todos"],
-            })
+            }))
           }
           className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-medium transition hover:bg-accent"
         >
           <RotateCcw className="h-3.5 w-3.5" />
           Limpar
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilters(draftFilters)}
+          disabled={!hasPendingFilterChanges}
+          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Aplicar filtros
         </button>
       </div>
       {(loadingActivities || activitiesError) && (

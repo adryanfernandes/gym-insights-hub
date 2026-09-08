@@ -1,7 +1,7 @@
 import { useApp, type Filters } from "@/contexts/AppContext";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 const PERIODOS = ["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Este ano"];
 const ALL_OPTIONS: Partial<Record<keyof Filters, string>> = {
@@ -105,25 +105,31 @@ function MultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
-  const selected = value.length ? value : [allOption];
-  const activeOptions = selected.includes(allOption) ? [] : selected;
+  const selected = value;
+  const hasAllOption = selected.includes(allOption);
+  const allValues = options.filter((option) => option !== allOption);
+  const allSelected =
+    hasAllOption || (allValues.length > 0 && allValues.every((option) => selected.includes(option)));
+  const activeOptions = allSelected ? [] : selected.filter((option) => option !== allOption);
   const summary = activeOptions.length
     ? activeOptions.length === 1
       ? activeOptions[0]
       : `${activeOptions.length} selecionados`
-    : allOption;
+    : allSelected
+      ? allOption
+      : "Nenhum";
 
   function toggle(option: string) {
     if (option === allOption) {
-      onChange([allOption]);
+      onChange(allSelected ? [] : [allOption]);
       return;
     }
 
-    const withoutAll = selected.filter((item) => item !== allOption);
+    const withoutAll = allSelected ? allValues : selected.filter((item) => item !== allOption);
     const next = withoutAll.includes(option)
       ? withoutAll.filter((item) => item !== option)
       : [...withoutAll, option];
-    onChange(next.length ? next : [allOption]);
+    onChange(next);
   }
 
   useEffect(() => {
@@ -170,7 +176,7 @@ function MultiSelect({
             >
               <input
                 type="checkbox"
-                checked={selected.includes(option)}
+                checked={option === allOption ? allSelected : allSelected || selected.includes(option)}
                 onChange={() => toggle(option)}
                 className="h-4 w-4 rounded border-input accent-primary"
               />
@@ -185,63 +191,80 @@ function MultiSelect({
 
 export function FiltersBar({ extra }: { extra?: ReactNode }) {
   const { filters, setFilters } = useApp();
+  const [draftFilters, setDraftFilters] = useState<Filters>(filters);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { filterOptions } = useDashboardData(filters);
   const hideDateFilters = pathname === "/perfil";
   const today = todayInputDate();
-  const maxStartDate = filters.dataFim && filters.dataFim < today ? filters.dataFim : today;
+  const maxStartDate = draftFilters.dataFim && draftFilters.dataFim < today ? draftFilters.dataFim : today;
+  const hasPendingChanges = useMemo(
+    () => JSON.stringify(draftFilters) !== JSON.stringify(filters),
+    [draftFilters, filters],
+  );
+  useEffect(() => {
+    setDraftFilters(filters);
+  }, [filters]);
   const updMulti =
     (k: "unidade" | "tipoContrato" | "sexo" | "faixaEtaria" | "statusAluno") => (value: string[]) =>
-      setFilters({ [k]: value });
+      setDraftFilters((current) => ({ ...current, [k]: value }));
+  const applyFilters = () => setFilters(draftFilters);
   return (
     <div className="relative z-40 flex flex-wrap items-end gap-3 overflow-visible rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
       {!hideDateFilters && (
         <>
           <DateInput
             label="Início"
-            value={filters.dataInicio}
+            value={draftFilters.dataInicio}
             max={maxStartDate}
             onChange={(value) => {
               const dataInicio = clampInputDate(value, undefined, maxStartDate);
-              setFilters({ dataInicio, periodo: "Período personalizado" });
+              setDraftFilters((current) => ({
+                ...current,
+                dataInicio,
+                periodo: "Período personalizado",
+              }));
             }}
           />
           <DateInput
             label="Fim"
-            value={filters.dataFim}
-            min={filters.dataInicio || undefined}
+            value={draftFilters.dataFim}
+            min={draftFilters.dataInicio || undefined}
             max={today}
             onChange={(value) => {
-              const dataFim = clampInputDate(value, filters.dataInicio || undefined, today);
-              setFilters({ dataFim, periodo: "Período personalizado" });
+              const dataFim = clampInputDate(value, draftFilters.dataInicio || undefined, today);
+              setDraftFilters((current) => ({
+                ...current,
+                dataFim,
+                periodo: "Período personalizado",
+              }));
             }}
           />
         </>
       )}
       <MultiSelect
         label="Bairro"
-        value={filters.unidade}
+        value={draftFilters.unidade}
         options={filterOptions.unidades}
         allOption={ALL_OPTIONS.unidade ?? "Todos"}
         onChange={updMulti("unidade")}
       />
       <MultiSelect
         label="Contrato"
-        value={filters.tipoContrato}
+        value={draftFilters.tipoContrato}
         options={filterOptions.tiposContrato}
         allOption={ALL_OPTIONS.tipoContrato ?? "Todos"}
         onChange={updMulti("tipoContrato")}
       />
       <MultiSelect
         label="Sexo"
-        value={filters.sexo}
+        value={draftFilters.sexo}
         options={filterOptions.sexos}
         allOption={ALL_OPTIONS.sexo ?? "Todos"}
         onChange={updMulti("sexo")}
       />
       <MultiSelect
         label="Faixa etária"
-        value={filters.faixaEtaria}
+        value={draftFilters.faixaEtaria}
         options={filterOptions.faixasEtarias}
         allOption={ALL_OPTIONS.faixaEtaria ?? "Todas"}
         onChange={updMulti("faixaEtaria")}
@@ -249,13 +272,21 @@ export function FiltersBar({ extra }: { extra?: ReactNode }) {
       {pathname === "/perfil" && (
         <MultiSelect
           label="Status do aluno"
-          value={filters.statusAluno}
+          value={draftFilters.statusAluno}
           options={["Todos", "Ativos", "Inativos"]}
           allOption={ALL_OPTIONS.statusAluno ?? "Todos"}
           onChange={updMulti("statusAluno")}
         />
       )}
       {extra}
+      <button
+        type="button"
+        onClick={applyFilters}
+        disabled={!hasPendingChanges}
+        className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Aplicar filtros
+      </button>
     </div>
   );
 }

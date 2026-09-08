@@ -432,6 +432,40 @@ function planChangesInPeriod(rows: MembershipRow[], start: Date, end: Date) {
   );
 }
 
+function previousContractsFromPlanChanges(rows: MembershipRow[]) {
+  const byMember = new Map<number, MembershipRow[]>();
+  rows.forEach((row) => {
+    const group = byMember.get(row.id_member) ?? [];
+    group.push(row);
+    byMember.set(row.id_member, group);
+  });
+
+  const previousContractIds = new Set<number>();
+  byMember.forEach((memberRows) => {
+    const ordered = memberRows
+      .slice()
+      .sort(
+        (a, b) =>
+          (date(a.membership_start || a.sale_date)?.getTime() ?? 0) -
+          (date(b.membership_start || b.sale_date)?.getTime() ?? 0),
+      );
+
+    ordered.slice(1).forEach((row, index) => {
+      const previous = ordered[index];
+      const previousName = previous.membership_name?.trim() || "NÃ£o informado";
+      const currentName = row.membership_name?.trim() || "NÃ£o informado";
+      const changedPlan =
+        normalizedText(previousName).trim() !== normalizedText(currentName).trim();
+
+      if (changedPlan || row.membership_swapped) {
+        previousContractIds.add(previous.id_member_membership);
+      }
+    });
+  });
+
+  return previousContractIds;
+}
+
 export function getMembershipDashboardData(
   memberships: MembershipRow[],
   receivables: ReceivableRow[],
@@ -489,9 +523,7 @@ export function getMembershipDashboardData(
     return value && value >= start && value <= end;
   });
   const mudancasPlanoPeriodo = planChangesInPeriod(scoped, start, end);
-  const changedPreviousContractIds = new Set(
-    mudancasPlanoPeriodo.map((change) => change.idContratoAnterior),
-  );
+  const changedPreviousContractIds = previousContractsFromPlanChanges(scoped);
   const cancellations = scoped.filter((row) => {
     const value = date(row.cancel_date);
     return (
