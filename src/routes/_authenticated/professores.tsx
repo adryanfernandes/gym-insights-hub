@@ -186,6 +186,8 @@ function ProfessoresPage() {
     dia: string;
     horario: string;
     inscritos: number;
+    agendados: number;
+    checkins: number;
     presentes: number;
     justificadas: number;
     aulas: number;
@@ -195,6 +197,8 @@ function ProfessoresPage() {
       unidade: string;
       horario: string;
       inscritos: number;
+      agendados: number;
+      checkins: number;
       presentes: number;
       justificadas: number;
       capacidade: number;
@@ -294,6 +298,8 @@ function ProfessoresPage() {
                       <th className="px-4 py-3 font-medium text-right">Ocupação</th>
                       <th className="px-4 py-3 font-medium text-right">Média/aula</th>
                       <th className="px-4 py-3 font-medium text-right">Inscritos</th>
+                      <th className="px-4 py-3 font-medium text-right">Agendados</th>
+                      <th className="px-4 py-3 font-medium text-right">Check-ins</th>
                       <th className="px-4 py-3 font-medium text-right">Presentes</th>
                       <th className="px-4 py-3 font-medium text-right">Faltas</th>
                       <th className="px-4 py-3 font-medium text-right">Justificadas</th>
@@ -309,6 +315,8 @@ function ProfessoresPage() {
                           <td className="px-4 py-3 text-right font-semibold">{row.ocupacao}%</td>
                           <td className="px-4 py-3 text-right">{row.mediaAlunos}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.inscritos)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.agendados)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.checkins)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.presentes)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.faltas)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.faltasJustificadas)}</td>
@@ -317,7 +325,7 @@ function ProfessoresPage() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={9} className="h-20 text-center text-muted-foreground">
+                        <td colSpan={11} className="h-20 text-center text-muted-foreground">
                           Nenhuma atividade encontrada para este professor no período.
                         </td>
                       </tr>
@@ -339,6 +347,8 @@ function ProfessoresPage() {
                       <th className="px-4 py-3 font-medium">Unidade</th>
                       <th className="px-4 py-3 font-medium text-right">Ocupação</th>
                       <th className="px-4 py-3 font-medium text-right">Inscritos</th>
+                      <th className="px-4 py-3 font-medium text-right">Agendados</th>
+                      <th className="px-4 py-3 font-medium text-right">Check-ins</th>
                       <th className="px-4 py-3 font-medium text-right">Presentes</th>
                       <th className="px-4 py-3 font-medium text-right">Faltas</th>
                       <th className="px-4 py-3 font-medium text-right">Justificadas</th>
@@ -358,6 +368,8 @@ function ProfessoresPage() {
                           <td className="px-4 py-3 text-muted-foreground">{row.unidade}</td>
                           <td className="px-4 py-3 text-right font-semibold">{row.ocupacao}%</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.inscritos)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.agendados)}</td>
+                          <td className="px-4 py-3 text-right">{formatNum(row.checkins)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.presentes)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.faltas)}</td>
                           <td className="px-4 py-3 text-right">{formatNum(row.faltasJustificadas)}</td>
@@ -366,7 +378,7 @@ function ProfessoresPage() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={10} className="h-20 text-center text-muted-foreground">
+                        <td colSpan={12} className="h-20 text-center text-muted-foreground">
                           Nenhuma aula encontrada.
                         </td>
                       </tr>
@@ -390,7 +402,9 @@ function ProfessoresPage() {
             </DialogTitle>
             <DialogDescription>
               {formatNum(selectedHeatmapCell?.inscritos ?? 0)} inscritos,{" "}
-              {formatNum(selectedHeatmapCell?.presentes ?? 0)} presentes e{" "}
+              {formatNum(selectedHeatmapCell?.agendados ?? 0)} agendados,{" "}
+              {formatNum(selectedHeatmapCell?.checkins ?? 0)} check-ins,{" "}
+              {formatNum(selectedHeatmapCell?.presentes ?? 0)} presentes,{" "}
               {formatNum(selectedHeatmapCell?.justificadas ?? 0)} faltas justificadas no horário.
             </DialogDescription>
           </DialogHeader>
@@ -404,6 +418,8 @@ function ProfessoresPage() {
                     <th className="px-4 py-3 font-medium">Unidade</th>
                     <th className="px-4 py-3 font-medium">Horário</th>
                     <th className="px-4 py-3 font-medium text-right">Inscritos</th>
+                    <th className="px-4 py-3 font-medium text-right">Agendados</th>
+                    <th className="px-4 py-3 font-medium text-right">Check-ins</th>
                     <th className="px-4 py-3 font-medium text-right">Presentes</th>
                     <th className="px-4 py-3 font-medium text-right">Justificadas</th>
                     <th className="px-4 py-3 font-medium text-right">Capacidade</th>
@@ -421,6 +437,8 @@ function ProfessoresPage() {
                         <td className="px-4 py-3 text-muted-foreground">{row.unidade}</td>
                         <td className="px-4 py-3">{row.horario}</td>
                         <td className="px-4 py-3 text-right">{formatNum(row.inscritos)}</td>
+                        <td className="px-4 py-3 text-right">{formatNum(row.agendados)}</td>
+                        <td className="px-4 py-3 text-right">{formatNum(row.checkins)}</td>
                         <td className="px-4 py-3 text-right">{formatNum(row.presentes)}</td>
                         <td className="px-4 py-3 text-right">{formatNum(row.justificadas)}</td>
                         <td className="px-4 py-3 text-right">{formatNum(row.capacidade)}</td>
@@ -428,7 +446,7 @@ function ProfessoresPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={8} className="h-20 text-center text-muted-foreground">
+                      <td colSpan={10} className="h-20 text-center text-muted-foreground">
                         Nenhuma aula encontrada para este horário.
                       </td>
                     </tr>

@@ -183,13 +183,20 @@ async function fetchDay(date: string, authorization: string, branchId: number) {
   throw new Error(`Falha ao consultar ${date} após 3 tentativas: ${lastError}`);
 }
 
+function isFinalizedActivity(activity: Activity) {
+  return [6, 10, 11].includes(Number(activity.status));
+}
+
 function enrollmentSummary(detail: Activity) {
   const enrollments = Array.isArray(detail.enrollments)
     ? detail.enrollments.filter(isObject).filter((row) => row.removed !== true)
     : [];
+  const finalized = isFinalizedActivity(detail);
   return {
     total: enrollments.length,
-    present: enrollments.filter((row) => Number(row.status) === 0).length,
+    scheduled: enrollments.filter((row) => Number(row.status) === 0 && !finalized).length,
+    checkins: enrollments.filter((row) => Number(row.status) === 0 && finalized).length,
+    present: enrollments.filter((row) => Number(row.status) === 0 && finalized).length,
     absent: enrollments.filter((row) => Number(row.status) === 1).length,
     justified_absence: enrollments.filter(
       (row) => Number(row.status) === 2 || row.justifiedAbsence === true,
@@ -197,10 +204,18 @@ function enrollmentSummary(detail: Activity) {
   };
 }
 
+function enrollmentStatus(row: Activity, finalized: boolean) {
+  if (Number(row.status) === 2 || row.justifiedAbsence === true) return "Falta justificada";
+  if (Number(row.status) === 1) return "Falta";
+  if (Number(row.status) === 0) return finalized ? "Check-in" : "Agendado";
+  return row.status ?? null;
+}
+
 function enrollmentParticipants(detail: Activity) {
   const enrollments = Array.isArray(detail.enrollments)
     ? detail.enrollments.filter(isObject).filter((row) => row.removed !== true)
     : [];
+  const finalized = isFinalizedActivity(detail);
   return enrollments.map((row, index) => {
     const firstName =
       typeof (row.firstName ?? row.registerName) === "string"
@@ -216,7 +231,7 @@ function enrollmentParticipants(detail: Activity) {
     return {
       id: String(row.idMember ?? row.memberId ?? row.idPerson ?? row.id ?? index + 1),
       name,
-      status: row.status ?? null,
+      status: enrollmentStatus(row, finalized),
     };
   });
 }

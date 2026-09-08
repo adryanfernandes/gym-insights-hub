@@ -24,6 +24,8 @@ export type NormalizedActivity = {
   endTime: string;
   capacity: number;
   occupied: number;
+  scheduled: number;
+  checkins: number;
   present: number;
   absent: number;
   justifiedAbsence: number;
@@ -76,15 +78,18 @@ function participantName(row: Record<string, unknown>) {
   );
 }
 
-function participantStatus(value: unknown) {
+function participantStatus(value: unknown, finalized = false) {
+  if (typeof value === "string" && value.trim() && Number.isNaN(Number(value))) {
+    return value.trim();
+  }
   const raw = typeof value === "number" ? value : Number(value);
-  if (raw === 0) return "Presente";
+  if (raw === 0) return finalized ? "Check-in" : "Agendado";
   if (raw === 1) return "Falta";
   if (raw === 2) return "Falta justificada";
   return text(value, "Inscrito");
 }
 
-function activityParticipants(payload: Record<string, unknown>): ActivityParticipant[] {
+function activityParticipants(payload: Record<string, unknown>, finalized = false): ActivityParticipant[] {
   const source =
     array(payload.enrollments).length > 0
       ? array(payload.enrollments)
@@ -99,7 +104,7 @@ function activityParticipants(payload: Record<string, unknown>): ActivityPartici
     .map((row, index) => ({
       id: text(row.idMember ?? row.memberId ?? row.idPerson ?? row.id ?? index + 1, String(index + 1)),
       name: participantName(row),
-      status: participantStatus(row.status ?? row.attendanceStatus),
+      status: participantStatus(row.status ?? row.attendanceStatus, finalized),
     }));
 }
 
@@ -129,11 +134,13 @@ function normalize(row: StoredActivity): NormalizedActivity | null {
     endTime: text(row.payload.endTime, "").slice(0, 5),
     capacity: number(row.payload.capacity),
     occupied: enrolled ?? number(row.payload.ocupation ?? row.payload.occupation),
+    scheduled: summary ? number(summary.scheduled) : finalized ? 0 : (enrolled ?? number(row.payload.ocupation ?? row.payload.occupation)),
+    checkins: summary ? number(summary.checkins ?? summary.present) : 0,
     present: finalized && summary ? number(summary.present) : 0,
     absent: finalized && summary ? number(summary.absent) : 0,
     justifiedAbsence: finalized && summary ? number(summary.justified_absence) : 0,
     hasAttendance: finalized && Boolean(summary),
-    participants: activityParticipants(row.payload),
+    participants: activityParticipants(row.payload, finalized),
   };
 }
 
@@ -176,18 +183,19 @@ function aggregate<T extends string>(
 function metrics(rows: NormalizedActivity[]) {
   const capacity = rows.reduce((total, row) => total + row.capacity, 0);
   const occupied = rows.reduce((total, row) => total + row.occupied, 0);
-  const present = rows.reduce(
-    (total, row) => total + (row.hasAttendance ? row.present : row.occupied),
-    0,
-  );
+  const scheduled = rows.reduce((total, row) => total + row.scheduled, 0);
+  const checkins = rows.reduce((total, row) => total + row.checkins, 0);
+  const present = rows.reduce((total, row) => total + row.present, 0);
   const absent = rows.reduce((total, row) => total + row.absent, 0);
   const justifiedAbsence = rows.reduce((total, row) => total + row.justifiedAbsence, 0);
   return {
     classes: rows.length,
     capacity,
     occupied,
-    occupancy: round((occupied / Math.max(capacity, 1)) * 100),
+    occupancy: round((present / Math.max(capacity, 1)) * 100),
     averageStudents: round(present / Math.max(rows.length, 1)),
+    scheduled,
+    checkins,
     present,
     absent,
     justifiedAbsence,
@@ -281,6 +289,8 @@ export function getActivityDashboardDataFromNormalized(
         aulas: teacherMetrics.classes,
         capacidade: teacherMetrics.capacity,
         inscritos: teacherMetrics.occupied,
+        agendados: teacherMetrics.scheduled,
+        checkins: teacherMetrics.checkins,
         presentes: teacherMetrics.present,
         faltas: teacherMetrics.absent,
         faltasJustificadas: teacherMetrics.justifiedAbsence,
@@ -302,6 +312,8 @@ export function getActivityDashboardDataFromNormalized(
             ocupacao: round((value.present / Math.max(value.capacity, 1)) * 100),
             mediaAlunos: value.averageStudents,
             inscritos: value.occupied,
+            agendados: value.scheduled,
+            checkins: value.checkins,
             presentes: value.present,
             faltas: value.absent,
             faltasJustificadas: value.justifiedAbsence,
@@ -323,7 +335,9 @@ export function getActivityDashboardDataFromNormalized(
           unidade: row.area,
           capacidade: row.capacity,
           inscritos: row.occupied,
-          presentes: row.hasAttendance ? row.present : row.occupied,
+          agendados: row.scheduled,
+          checkins: row.checkins,
+          presentes: row.present,
           faltas: row.absent,
           faltasJustificadas: row.justifiedAbsence,
           ocupacao: round(((row.hasAttendance ? row.present : row.occupied) / Math.max(row.capacity, 1)) * 100),
@@ -383,6 +397,8 @@ export function getActivityDashboardDataFromNormalized(
     string,
     {
       inscritos: number;
+      agendados: number;
+      checkins: number;
       presentes: number;
       justificadas: number;
       aulas: number;
@@ -393,6 +409,8 @@ export function getActivityDashboardDataFromNormalized(
         unidade: string;
         horario: string;
         inscritos: number;
+        agendados: number;
+        checkins: number;
         presentes: number;
         justificadas: number;
         capacidade: number;
@@ -404,14 +422,18 @@ export function getActivityDashboardDataFromNormalized(
     const key = `${row.startTime}-${dayIndex}`;
     const current = heatmapCells.get(key) ?? {
       inscritos: 0,
+      agendados: 0,
+      checkins: 0,
       presentes: 0,
       justificadas: 0,
       aulas: 0,
       atividades: [],
       detalhes: [],
     };
-    const presentes = row.hasAttendance ? row.present : row.occupied;
+    const presentes = row.present;
     current.inscritos += row.occupied;
+    current.agendados += row.scheduled;
+    current.checkins += row.checkins;
     current.presentes += presentes;
     current.justificadas += row.justifiedAbsence;
     current.aulas += 1;
@@ -422,6 +444,8 @@ export function getActivityDashboardDataFromNormalized(
       unidade: row.area,
       horario: row.endTime ? `${row.startTime} - ${row.endTime}` : row.startTime,
       inscritos: row.occupied,
+      agendados: row.scheduled,
+      checkins: row.checkins,
       presentes,
       justificadas: row.justifiedAbsence,
       capacidade: row.capacity,
@@ -439,6 +463,8 @@ export function getActivityDashboardDataFromNormalized(
       return {
         dia,
         inscritos: cell?.inscritos ?? 0,
+        agendados: cell?.agendados ?? 0,
+        checkins: cell?.checkins ?? 0,
         presentes: cell?.presentes ?? 0,
         justificadas: cell?.justificadas ?? 0,
         aulas: cell?.aulas ?? 0,
@@ -461,6 +487,8 @@ export function getActivityDashboardDataFromNormalized(
         aulasMinistradas: totals.classes,
         capacidadeTotal: totals.capacity,
         alunosInscritos: totals.occupied,
+        alunosAgendados: totals.scheduled,
+        alunosCheckins: totals.checkins,
         alunosPresentes: totals.present,
         faltas: totals.absent,
         faltasJustificadas: totals.justifiedAbsence,
