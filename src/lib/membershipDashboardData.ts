@@ -534,16 +534,22 @@ export function getMembershipDashboardData(
       !changedPreviousContractIds.has(row.id_member_membership)
     );
   });
-  const renewalLatestByMember = new Map<number, MembershipRow>();
-  scoped.forEach((row) => {
-    const current = renewalLatestByMember.get(row.id_member);
-    const currentDate = date(current?.membership_start || current?.sale_date)?.getTime() ?? 0;
-    const rowDate = date(row.membership_start || row.sale_date)?.getTime() ?? 0;
-    if (!current || rowDate >= currentDate) renewalLatestByMember.set(row.id_member, row);
-  });
-  const renewalRows = Array.from(renewalLatestByMember.values());
-  const renewalActiveRows = renewalRows.filter((row) => isMembershipActiveAt(row));
-  const renewalInactiveRows = renewalRows.filter((row) => !isMembershipActiveAt(row));
+  const latestByMember = (rows: MembershipRow[]) => {
+    const latest = new Map<number, MembershipRow>();
+    rows.forEach((row) => {
+      const current = latest.get(row.id_member);
+      const currentDate = date(current?.membership_start || current?.sale_date)?.getTime() ?? 0;
+      const rowDate = date(row.membership_start || row.sale_date)?.getTime() ?? 0;
+      if (!current || rowDate >= currentDate) latest.set(row.id_member, row);
+    });
+    return Array.from(latest.values());
+  };
+  const renewalActiveRows = latestByMember(scoped.filter((row) => isMembershipActiveAt(row)));
+  const activeRenewalMemberIds = new Set(renewalActiveRows.map((row) => row.id_member));
+  const renewalInactiveRows = latestByMember(
+    scoped.filter((row) => !activeRenewalMemberIds.has(row.id_member)),
+  );
+  const renewalRows = [...renewalActiveRows, ...renewalInactiveRows];
   const renewalInactivePercent =
     (renewalInactiveRows.length / Math.max(renewalRows.length, 1)) * 100;
   const totalSales = sales.reduce((sum, row) => sum + num(row.sale_value), 0);
