@@ -502,6 +502,21 @@ function GeralPage() {
       }),
     [data.mudancasPlanoLista, planChangesSort],
   );
+  const planChangeSummary = useMemo(() => {
+    const rows = data.mudancasPlanoLista ?? [];
+    const total = rows.length;
+    const upgrades = rows.filter((row) => row.tipoAlteracao === "Upgrade").length;
+    const downgrades = rows.filter((row) => row.tipoAlteracao === "Downgrade").length;
+    const formatPercent = (value: number) =>
+      total > 0 ? `${((value / total) * 100).toFixed(1).replace(".", ",")}%` : "0,0%";
+
+    return {
+      upgrades,
+      downgrades,
+      upgradePercent: formatPercent(upgrades),
+      downgradePercent: formatPercent(downgrades),
+    };
+  }, [data.mudancasPlanoLista]);
   const sortedRiskStudents = useMemo(
     () =>
       sortedRows(data.alunosRiscoLista, riskSort, {
@@ -693,7 +708,7 @@ function GeralPage() {
         <KpiCard
           label="Mudanças de plano"
           value={formatNum(movimentacaoPeriodo.mudancasPlano)}
-          hint="Clique para ver e baixar a lista"
+          hint={`Upgrades: ${formatNum(planChangeSummary.upgrades)} (${planChangeSummary.upgradePercent}) • Downgrades: ${formatNum(planChangeSummary.downgrades)} (${planChangeSummary.downgradePercent})`}
           accent="success"
           icon={<RefreshCw className="h-5 w-5" />}
           onClick={() => setPlanChangesOpen(true)}
