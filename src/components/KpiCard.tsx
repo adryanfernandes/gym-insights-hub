@@ -12,7 +12,7 @@ export function KpiCard({
 }: {
   label: string;
   value: ReactNode;
-  hint?: string;
+  hint?: ReactNode;
   delta?: number;
   icon?: ReactNode;
   accent?: "primary" | "success" | "warning" | "destructive";
@@ -44,7 +44,7 @@ export function KpiCard({
             {label}
           </p>
           <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{value}</p>
-          {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+          {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
         </div>
         {icon && (
           <div

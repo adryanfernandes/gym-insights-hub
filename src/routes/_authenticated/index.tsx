@@ -708,7 +708,16 @@ function GeralPage() {
         <KpiCard
           label="Mudanças de plano"
           value={formatNum(movimentacaoPeriodo.mudancasPlano)}
-          hint={`Upgrades: ${formatNum(planChangeSummary.upgrades)} (${planChangeSummary.upgradePercent}) • Downgrades: ${formatNum(planChangeSummary.downgrades)} (${planChangeSummary.downgradePercent})`}
+          hint={
+            <div className="space-y-0.5">
+              <span className="block">
+                Upgrades: {formatNum(planChangeSummary.upgrades)} ({planChangeSummary.upgradePercent})
+              </span>
+              <span className="block">
+                Downgrades: {formatNum(planChangeSummary.downgrades)} ({planChangeSummary.downgradePercent})
+              </span>
+            </div>
+          }
           accent="success"
           icon={<RefreshCw className="h-5 w-5" />}
           onClick={() => setPlanChangesOpen(true)}
