@@ -182,6 +182,24 @@ function ProfessoresPage() {
   const k = professores.kpis;
   const [showAllTeachers, setShowAllTeachers] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null);
+  const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<{
+    dia: string;
+    horario: string;
+    inscritos: number;
+    presentes: number;
+    justificadas: number;
+    aulas: number;
+    detalhes: Array<{
+      atividade: string;
+      professor: string;
+      unidade: string;
+      horario: string;
+      inscritos: number;
+      presentes: number;
+      justificadas: number;
+      capacidade: number;
+    }>;
+  } | null>(null);
   const rankingData = showAllTeachers ? professores.ranking : professores.ranking.slice(0, 10);
   const selectedTeacherDetails = selectedTeacher
     ? professores.atividadesPorProfessor?.[selectedTeacher]
@@ -357,6 +375,67 @@ function ProfessoresPage() {
                 </table>
               </div>
             </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(selectedHeatmapCell)}
+        onOpenChange={(open) => !open && setSelectedHeatmapCell(null)}
+      >
+        <DialogContent className="max-h-[85vh] max-w-4xl overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5 pr-14">
+            <DialogTitle>
+              Agenda da semana - {selectedHeatmapCell?.dia} às {selectedHeatmapCell?.horario}
+            </DialogTitle>
+            <DialogDescription>
+              {formatNum(selectedHeatmapCell?.inscritos ?? 0)} inscritos,{" "}
+              {formatNum(selectedHeatmapCell?.presentes ?? 0)} presentes e{" "}
+              {formatNum(selectedHeatmapCell?.justificadas ?? 0)} faltas justificadas no horário.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[65vh] overflow-auto p-6">
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Aula</th>
+                    <th className="px-4 py-3 font-medium">Professor</th>
+                    <th className="px-4 py-3 font-medium">Unidade</th>
+                    <th className="px-4 py-3 font-medium">Horário</th>
+                    <th className="px-4 py-3 font-medium text-right">Inscritos</th>
+                    <th className="px-4 py-3 font-medium text-right">Presentes</th>
+                    <th className="px-4 py-3 font-medium text-right">Justificadas</th>
+                    <th className="px-4 py-3 font-medium text-right">Capacidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedHeatmapCell?.detalhes.length ? (
+                    selectedHeatmapCell.detalhes.map((row, index) => (
+                      <tr
+                        key={`${row.horario}-${row.atividade}-${row.professor}-${index}`}
+                        className="border-t border-border"
+                      >
+                        <td className="px-4 py-3 font-medium">{row.atividade}</td>
+                        <td className="px-4 py-3">{row.professor}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{row.unidade}</td>
+                        <td className="px-4 py-3">{row.horario}</td>
+                        <td className="px-4 py-3 text-right">{formatNum(row.inscritos)}</td>
+                        <td className="px-4 py-3 text-right">{formatNum(row.presentes)}</td>
+                        <td className="px-4 py-3 text-right">{formatNum(row.justificadas)}</td>
+                        <td className="px-4 py-3 text-right">{formatNum(row.capacidade)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="h-20 text-center text-muted-foreground">
+                        Nenhuma aula encontrada para este horário.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -654,7 +733,7 @@ function ProfessoresPage() {
             description="Heatmap de presentes por dia e horário na semana atual"
           >
             <div className="flex h-full min-h-[280px] flex-col overflow-hidden">
-              <div className="grid grid-cols-[72px_repeat(7,minmax(72px,1fr))] gap-2 text-xs">
+              <div className="grid grid-cols-[64px_repeat(7,minmax(56px,1fr))] gap-1.5 text-xs">
                 <div className="text-muted-foreground">Horário</div>
                 {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
                   <div key={day} className="text-center font-medium text-muted-foreground">
@@ -663,20 +742,22 @@ function ProfessoresPage() {
                 ))}
               </div>
               <div className="mt-2 min-h-0 flex-1 overflow-auto pr-1">
-                <div className="grid grid-cols-[72px_repeat(7,minmax(72px,1fr))] gap-2">
+                <div className="grid grid-cols-[64px_repeat(7,minmax(56px,1fr))] gap-1.5">
                   {professores.agendaSemanaHeatmap.length ? (
                     professores.agendaSemanaHeatmap.flatMap((row) => [
                       <div
                         key={`${row.horario}-label`}
-                        className="flex h-14 items-center text-xs font-medium text-muted-foreground"
+                        className="flex h-10 items-center text-xs font-medium text-muted-foreground"
                       >
                         {row.horario}
                       </div>,
                       ...row.dias.map((cell) => (
-                        <div
+                        <button
+                          type="button"
                           key={`${row.horario}-${cell.dia}`}
+                          onClick={() => setSelectedHeatmapCell({ ...cell, horario: row.horario })}
                           title={`${cell.dia} ${row.horario}: ${formatNum(cell.presentes)} presentes em ${formatNum(cell.aulas)} aula(s)${cell.atividades ? ` - ${cell.atividades}` : ""}`}
-                          className="flex h-14 flex-col items-center justify-center rounded-lg border border-border text-center transition hover:border-primary/50"
+                          className="flex h-10 flex-col items-center justify-center rounded-md border border-border text-center transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           style={{
                             backgroundColor:
                               cell.presentes > 0
@@ -687,10 +768,10 @@ function ProfessoresPage() {
                           <span className="text-sm font-semibold text-foreground">
                             {formatNum(cell.presentes)}
                           </span>
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-[9px] leading-none text-muted-foreground">
                             {formatNum(cell.aulas)} aula{cell.aulas === 1 ? "" : "s"}
                           </span>
-                        </div>
+                        </button>
                       )),
                     ])
                   ) : (

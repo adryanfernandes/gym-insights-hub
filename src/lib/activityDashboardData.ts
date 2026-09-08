@@ -379,14 +379,53 @@ export function getActivityDashboardDataFromNormalized(
   const heatmapHours = Array.from(new Set(weekRows.map((row) => row.startTime))).sort((a, b) =>
     a.localeCompare(b),
   );
-  const heatmapCells = new Map<string, { presentes: number; aulas: number; atividades: string[] }>();
+  const heatmapCells = new Map<
+    string,
+    {
+      inscritos: number;
+      presentes: number;
+      justificadas: number;
+      aulas: number;
+      atividades: string[];
+      detalhes: Array<{
+        atividade: string;
+        professor: string;
+        unidade: string;
+        horario: string;
+        inscritos: number;
+        presentes: number;
+        justificadas: number;
+        capacidade: number;
+      }>;
+    }
+  >();
   weekRows.forEach((row) => {
     const dayIndex = row.date.getDay();
     const key = `${row.startTime}-${dayIndex}`;
-    const current = heatmapCells.get(key) ?? { presentes: 0, aulas: 0, atividades: [] };
-    current.presentes += row.hasAttendance ? row.present : row.occupied;
+    const current = heatmapCells.get(key) ?? {
+      inscritos: 0,
+      presentes: 0,
+      justificadas: 0,
+      aulas: 0,
+      atividades: [],
+      detalhes: [],
+    };
+    const presentes = row.hasAttendance ? row.present : row.occupied;
+    current.inscritos += row.occupied;
+    current.presentes += presentes;
+    current.justificadas += row.justifiedAbsence;
     current.aulas += 1;
     current.atividades.push(row.modality);
+    current.detalhes.push({
+      atividade: row.modality,
+      professor: row.instructor,
+      unidade: row.area,
+      horario: row.endTime ? `${row.startTime} - ${row.endTime}` : row.startTime,
+      inscritos: row.occupied,
+      presentes,
+      justificadas: row.justifiedAbsence,
+      capacidade: row.capacity,
+    });
     heatmapCells.set(key, current);
   });
   const maxHeatmapPresentes = Math.max(
@@ -399,10 +438,13 @@ export function getActivityDashboardDataFromNormalized(
       const cell = heatmapCells.get(`${horario}-${index}`);
       return {
         dia,
+        inscritos: cell?.inscritos ?? 0,
         presentes: cell?.presentes ?? 0,
+        justificadas: cell?.justificadas ?? 0,
         aulas: cell?.aulas ?? 0,
         intensidade: round(((cell?.presentes ?? 0) / maxHeatmapPresentes) * 100, 0),
         atividades: Array.from(new Set(cell?.atividades ?? [])).slice(0, 3).join(", "),
+        detalhes: cell?.detalhes ?? [],
       };
     }),
   }));
