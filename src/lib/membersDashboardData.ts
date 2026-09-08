@@ -881,17 +881,26 @@ function useDashboardDataState(filters: Filters) {
       memberData.overviewKpis.alunosAtivos,
     );
     const contractsByMember = new Map<number, IndexedContract[]>();
+    const agendaContractsByMember = new Map<number, IndexedContract[]>();
     memberships.forEach((contract) => {
-      if (isSingleUseMembership(contract)) return;
-      const list = contractsByMember.get(contract.id_member) ?? [];
-      list.push({
+      const indexed = {
         contract,
         start: startOfDate(toDate(contract.membership_start || contract.sale_date)),
         end: endOfDate(toDate(contract.membership_end)),
-      });
+      };
+      const agendaList = agendaContractsByMember.get(contract.id_member) ?? [];
+      agendaList.push(indexed);
+      agendaContractsByMember.set(contract.id_member, agendaList);
+
+      if (isSingleUseMembership(contract)) return;
+      const list = contractsByMember.get(contract.id_member) ?? [];
+      list.push(indexed);
       contractsByMember.set(contract.id_member, list);
     });
     contractsByMember.forEach((list) => {
+      list.sort((a, b) => (b.start?.getTime() ?? 0) - (a.start?.getTime() ?? 0));
+    });
+    agendaContractsByMember.forEach((list) => {
       list.sort((a, b) => (b.start?.getTime() ?? 0) - (a.start?.getTime() ?? 0));
     });
     const membersWithRecurringContracts = new Set(contractsByMember.keys());
@@ -907,7 +916,7 @@ function useDashboardDataState(filters: Filters) {
         participantesLista: activity.participantesLista.map((participant) => {
           const memberId = Number(participant.id);
           const contract = Number.isFinite(memberId)
-            ? contractForMemberAt(contractsByMember, memberId, activity.data)
+            ? contractForMemberAt(agendaContractsByMember, memberId, activity.data)
             : null;
           return contract ? { ...participant, ...contract } : participant;
         }),

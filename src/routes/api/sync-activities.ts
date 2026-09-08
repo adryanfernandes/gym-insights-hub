@@ -191,12 +191,11 @@ function enrollmentSummary(detail: Activity) {
   const enrollments = Array.isArray(detail.enrollments)
     ? detail.enrollments.filter(isObject).filter((row) => row.removed !== true)
     : [];
-  const finalized = isFinalizedActivity(detail);
   return {
     total: enrollments.length,
-    scheduled: enrollments.filter((row) => Number(row.status) === 0 && !finalized).length,
-    checkins: enrollments.filter((row) => Number(row.status) === 0 && finalized).length,
-    present: enrollments.filter((row) => Number(row.status) === 0 && finalized).length,
+    scheduled: enrollments.filter((row) => row.status === undefined || row.status === null).length,
+    checkins: enrollments.filter((row) => Number(row.status) === 0).length,
+    present: enrollments.filter((row) => Number(row.status) === 0).length,
     absent: enrollments.filter((row) => Number(row.status) === 1).length,
     justified_absence: enrollments.filter(
       (row) => Number(row.status) === 2 || row.justifiedAbsence === true,
@@ -204,10 +203,11 @@ function enrollmentSummary(detail: Activity) {
   };
 }
 
-function enrollmentStatus(row: Activity, finalized: boolean) {
+function enrollmentStatus(row: Activity) {
   if (Number(row.status) === 2 || row.justifiedAbsence === true) return "Falta justificada";
   if (Number(row.status) === 1) return "Falta";
-  if (Number(row.status) === 0) return finalized ? "Check-in" : "Agendado";
+  if (Number(row.status) === 0) return "Check-in";
+  if (row.status === undefined || row.status === null) return "Agendado";
   return row.status ?? null;
 }
 
@@ -215,7 +215,6 @@ function enrollmentParticipants(detail: Activity) {
   const enrollments = Array.isArray(detail.enrollments)
     ? detail.enrollments.filter(isObject).filter((row) => row.removed !== true)
     : [];
-  const finalized = isFinalizedActivity(detail);
   return enrollments.map((row, index) => {
     const firstName =
       typeof (row.firstName ?? row.registerName) === "string"
@@ -231,14 +230,14 @@ function enrollmentParticipants(detail: Activity) {
     return {
       id: String(row.idMember ?? row.memberId ?? row.idPerson ?? row.id ?? index + 1),
       name,
-      status: enrollmentStatus(row, finalized),
+      status: enrollmentStatus(row),
     };
   });
 }
 
 async function fetchDetail(activity: Activity, activityDate: string, authorization: string) {
   const idConfiguration = activity.idConfiguration;
-  const idActivitySession = activity.idActivitySession;
+  const idActivitySession = activity.idActivitySession ?? activity.idAtividadeSessao;
   if (idConfiguration === undefined && idActivitySession === undefined) return activity;
 
   const url = new URL(process.env.EVO_ACTIVITY_DETAIL_URL || ACTIVITY_DETAIL_URL);

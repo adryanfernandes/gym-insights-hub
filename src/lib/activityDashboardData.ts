@@ -78,18 +78,19 @@ function participantName(row: Record<string, unknown>) {
   );
 }
 
-function participantStatus(value: unknown, finalized = false) {
+function participantStatus(value: unknown) {
   if (typeof value === "string" && value.trim() && Number.isNaN(Number(value))) {
     return value.trim();
   }
   const raw = typeof value === "number" ? value : Number(value);
-  if (raw === 0) return finalized ? "Check-in" : "Agendado";
+  if (raw === 0) return "Check-in";
   if (raw === 1) return "Falta";
   if (raw === 2) return "Falta justificada";
+  if (value === undefined || value === null || value === "") return "Agendado";
   return text(value, "Inscrito");
 }
 
-function activityParticipants(payload: Record<string, unknown>, finalized = false): ActivityParticipant[] {
+function activityParticipants(payload: Record<string, unknown>): ActivityParticipant[] {
   const source =
     array(payload.enrollments).length > 0
       ? array(payload.enrollments)
@@ -104,7 +105,7 @@ function activityParticipants(payload: Record<string, unknown>, finalized = fals
     .map((row, index) => ({
       id: text(row.idMember ?? row.memberId ?? row.idPerson ?? row.id ?? index + 1, String(index + 1)),
       name: participantName(row),
-      status: participantStatus(row.status ?? row.attendanceStatus, finalized),
+      status: participantStatus(row.status ?? row.attendanceStatus),
     }));
 }
 
@@ -122,9 +123,14 @@ function normalize(row: StoredActivity): NormalizedActivity | null {
     row.payload.enrollmentSummary && typeof row.payload.enrollmentSummary === "object"
       ? (row.payload.enrollmentSummary as Record<string, unknown>)
       : null;
-  const status = number(row.payload.status);
-  const finalized = [6, 10, 11].includes(status);
   const enrolled = summary ? number(summary.total) : null;
+  const scheduled = summary
+    ? number(summary.scheduled)
+    : enrolled ?? number(row.payload.ocupation ?? row.payload.occupation);
+  const checkins = summary ? number(summary.checkins ?? summary.present) : 0;
+  const present = summary ? number(summary.present ?? summary.checkins) : 0;
+  const absent = summary ? number(summary.absent) : 0;
+  const justifiedAbsence = summary ? number(summary.justified_absence) : 0;
   return {
     date,
     instructor: text(row.payload.instructor, "Não informado"),
@@ -134,13 +140,13 @@ function normalize(row: StoredActivity): NormalizedActivity | null {
     endTime: text(row.payload.endTime, "").slice(0, 5),
     capacity: number(row.payload.capacity),
     occupied: enrolled ?? number(row.payload.ocupation ?? row.payload.occupation),
-    scheduled: summary ? number(summary.scheduled) : finalized ? 0 : (enrolled ?? number(row.payload.ocupation ?? row.payload.occupation)),
-    checkins: summary ? number(summary.checkins ?? summary.present) : 0,
-    present: finalized && summary ? number(summary.present) : 0,
-    absent: finalized && summary ? number(summary.absent) : 0,
-    justifiedAbsence: finalized && summary ? number(summary.justified_absence) : 0,
-    hasAttendance: finalized && Boolean(summary),
-    participants: activityParticipants(row.payload, finalized),
+    scheduled,
+    checkins,
+    present,
+    absent,
+    justifiedAbsence,
+    hasAttendance: Boolean(summary) && (present + absent + justifiedAbsence + checkins > 0),
+    participants: activityParticipants(row.payload),
   };
 }
 
