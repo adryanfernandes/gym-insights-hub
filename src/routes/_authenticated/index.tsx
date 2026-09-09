@@ -295,6 +295,7 @@ function GeralPage() {
   const agendaScrollRef = useRef<HTMLDivElement | null>(null);
   const currentActivityRef = useRef<HTMLTableRowElement | null>(null);
   const [activeContractFilter, setActiveContractFilter] = useState("Todos");
+  const [activeMovementFilter, setActiveMovementFilter] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(1);
   const [inactivePage, setInactivePage] = useState(1);
   const [inactiveColumnFilters, setInactiveColumnFilters] =
@@ -412,9 +413,16 @@ function GeralPage() {
     filters.dataInicio,
     filters.periodo,
   ]);
+  const filteredActiveStudentsByMovement = useMemo(
+    () =>
+      activeMovementFilter
+        ? activeStudentsWithMovement.filter((student) => student.statusComposicao === activeMovementFilter)
+        : activeStudentsWithMovement,
+    [activeMovementFilter, activeStudentsWithMovement],
+  );
   const sortedActiveStudents = useMemo(
     () =>
-      sortedRows(activeStudentsWithMovement, activeSort, {
+      sortedRows(filteredActiveStudentsByMovement, activeSort, {
         id: (row) => row.id,
         nome: (row) => row.nome,
         contrato: (row) => row.contrato,
@@ -423,7 +431,7 @@ function GeralPage() {
         vencimento: (row) => row.vencimento,
         ultimaFrequencia: (row) => row.ultimaFrequencia,
       }),
-    [activeSort, activeStudentsWithMovement],
+    [activeSort, filteredActiveStudentsByMovement],
   );
   const activeMovementSummary = useMemo(() => {
     const entradas = movimentacaoPeriodo.entradas;
@@ -572,7 +580,7 @@ function GeralPage() {
 
   useEffect(() => {
     setActivePage(1);
-  }, [activeContractFilter]);
+  }, [activeContractFilter, activeMovementFilter]);
 
   useEffect(() => {
     setInactivePage(1);
@@ -807,19 +815,35 @@ function GeralPage() {
             <p className="mt-1 text-xs text-muted-foreground">
               Status dos contratos que compõem o total de alunos ativos exibido nesta lista.
             </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {activeMovementSummary.map((row) => (
-                <div key={row.status} className="rounded-lg border border-border bg-card p-3">
-                  <p
-                    className="truncate text-xs font-medium text-muted-foreground"
-                    title={row.status}
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {activeMovementSummary.map((row) => {
+                const selected = activeMovementFilter === row.status;
+                return (
+                  <button
+                    key={row.status}
+                    type="button"
+                    onClick={() => {
+                      setActiveMovementFilter((current) => (current === row.status ? null : row.status));
+                      setActivePage(1);
+                    }}
+                    className={`rounded-lg border p-3 text-left transition hover:bg-accent ${
+                      selected
+                        ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                        : "border-border bg-card"
+                    }`}
+                    aria-pressed={selected}
                   >
-                    {row.status}
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold">{formatNum(row.total)}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{row.description}</p>
-                </div>
-              ))}
+                    <p
+                      className="truncate text-xs font-medium text-muted-foreground"
+                      title={row.status}
+                    >
+                      {row.status}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold">{formatNum(row.total)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{row.description}</p>
+                  </button>
+                );
+              })}
               {!activeMovementSummary.length && (
                 <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
                   Nenhum aluno ativo encontrado com os filtros selecionados.
