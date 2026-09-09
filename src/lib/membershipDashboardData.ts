@@ -366,6 +366,9 @@ function newEnrollmentsInPeriod(rows: MembershipRow[], start: Date, end: Date) {
   );
 }
 
+function memberHasActiveContractAt(rows: MembershipRow[], memberId: number, referenceDate: Date) {
+  return rows.some((row) => row.id_member === memberId && isMembershipActiveAt(row, referenceDate));
+}
 function planChangesInPeriod(rows: MembershipRow[], start: Date, end: Date) {
   const byMember = new Map<number, MembershipRow[]>();
   rows.forEach((row) => {
@@ -526,13 +529,9 @@ export function getMembershipDashboardData(
   const changedPreviousContractIds = previousContractsFromPlanChanges(scoped);
   const cancellations = scoped.filter((row) => {
     const value = date(row.cancel_date);
-    return (
-      value &&
-      value <= now &&
-      value >= start &&
-      value <= end &&
-      !changedPreviousContractIds.has(row.id_member_membership)
-    );
+    if (!value || value > now || value < start || value > end) return false;
+    if (changedPreviousContractIds.has(row.id_member_membership)) return false;
+    return !memberHasActiveContractAt(memberScoped, row.id_member, value);
   });
   const latestByMember = (rows: MembershipRow[]) => {
     const latest = new Map<number, MembershipRow>();
