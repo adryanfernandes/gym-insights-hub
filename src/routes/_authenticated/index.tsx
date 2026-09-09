@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+﻿import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
@@ -441,11 +441,11 @@ function GeralPage() {
     const mantiveram = Math.max(0, filteredActiveStudents.length - entradas - renovaram - alteraram);
 
     return [
-      { status: "Entraram", total: entradas, description: "Novos alunos no período" },
-      { status: "Saíram", total: saidas, description: "Cancelamentos efetivados no período" },
-      { status: "Renovaram", total: renovaram, description: "Renovações realizadas no período" },
-      { status: "Alteraram", total: alteraram, description: "Mudanças de plano no período" },
-      { status: "Mantiveram", total: mantiveram, description: "Ativos sem entrada, renovação ou alteração" },
+      { status: "Entrou", label: "Entraram", total: entradas, description: "Novos alunos no período" },
+      { status: "Saiu", label: "Saíram", total: saidas, description: "Cancelamentos efetivados no período" },
+      { status: "Renovou", label: "Renovaram", total: renovaram, description: "Renovações realizadas no período" },
+      { status: "Alterou plano", label: "Alteraram", total: alteraram, description: "Mudanças de plano no período" },
+      { status: "Manteve plano", label: "Mantiveram", total: mantiveram, description: "Ativos sem entrada, renovação ou alteração" },
     ];
   }, [filteredActiveStudents.length, movimentacaoPeriodo]);
   const filteredInactiveStudents = useMemo(
@@ -835,9 +835,9 @@ function GeralPage() {
                   >
                     <p
                       className="truncate text-xs font-medium text-muted-foreground"
-                      title={row.status}
+                      title={row.label ?? row.status}
                     >
-                      {row.status}
+                      {row.label ?? row.status}
                     </p>
                     <p className="mt-1 text-2xl font-semibold">{formatNum(row.total)}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{row.description}</p>
@@ -886,7 +886,7 @@ function GeralPage() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground">
             <span>
-              P�gina {activePage} de {activePages}
+              Pagina {activePage} de {activePages}
             </span>
             <div className="flex flex-wrap items-center gap-1">
               <button
@@ -894,8 +894,8 @@ function GeralPage() {
                 disabled={activePage === 1}
                 onClick={() => setActivePage(1)}
                 className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Primeira p�gina"
-                title="Primeira p�gina"
+                aria-label="Primeira pagina"
+                title="Primeira pagina"
               >
                 &lt;&lt;
               </button>
@@ -904,8 +904,8 @@ function GeralPage() {
                 disabled={activePage === 1}
                 onClick={() => setActivePage((page) => Math.max(1, page - 1))}
                 className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="P�gina anterior"
-                title="P�gina anterior"
+                aria-label="Pagina anterior"
+                title="Pagina anterior"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -929,8 +929,8 @@ function GeralPage() {
                 disabled={activePage === activePages}
                 onClick={() => setActivePage((page) => Math.min(activePages, page + 1))}
                 className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Pr�xima p�gina"
-                title="Pr�xima p�gina"
+                aria-label="Proxima pagina"
+                title="Proxima pagina"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -939,8 +939,8 @@ function GeralPage() {
                 disabled={activePage === activePages}
                 onClick={() => setActivePage(activePages)}
                 className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="�ltima p�gina"
-                title="�ltima p�gina"
+                aria-label="Ultima pagina"
+                title="Ultima pagina"
               >
                 &gt;&gt;
               </button>
@@ -1050,7 +1050,7 @@ function GeralPage() {
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground">
             <span>
-              Página {inactivePage} de {inactivePages}
+              Pagina {inactivePage} de {inactivePages}
             </span>
             <div className="flex gap-2">
               <button
@@ -1798,3 +1798,4 @@ function GeralPage() {
     </DashboardLayout>
   );
 }
+
