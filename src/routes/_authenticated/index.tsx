@@ -59,6 +59,17 @@ const tooltipStyle = {
 
 const ACTIVE_PAGE_SIZE = 25;
 
+function visiblePageNumbers(currentPage: number, totalPages: number, maxVisible = 5) {
+  const safeTotal = Math.max(1, totalPages);
+  const safeCurrent = Math.min(Math.max(1, currentPage), safeTotal);
+  const half = Math.floor(maxVisible / 2);
+  let start = Math.max(1, safeCurrent - half);
+  const endOverflow = start + maxVisible - 1 - safeTotal;
+  if (endOverflow > 0) start = Math.max(1, start - endOverflow);
+  const end = Math.min(safeTotal, start + maxVisible - 1);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+}
+
 function periodKpiLabel(metric: string, period: string) {
   if (period.toLowerCase().includes("personalizado")) return `${metric} per√≠odo`;
   if (period.includes("Hoje")) return `${metric} hoje`;
@@ -457,6 +468,7 @@ function GeralPage() {
     [inactiveSort, filteredInactiveStudents],
   );
   const activePages = Math.max(1, Math.ceil(sortedActiveStudents.length / ACTIVE_PAGE_SIZE));
+  const activeVisiblePages = visiblePageNumbers(activePage, activePages);
   const activeRows = sortedActiveStudents.slice(
     (activePage - 1) * ACTIVE_PAGE_SIZE,
     activePage * ACTIVE_PAGE_SIZE,
@@ -848,26 +860,65 @@ function GeralPage() {
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground">
             <span>
-              P√°gina {activePage} de {activePages}
+              P·gina {activePage} de {activePages}
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                disabled={activePage === 1}
+                onClick={() => setActivePage(1)}
+                className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Primeira p·gina"
+                title="Primeira p·gina"
+              >
+                &lt;&lt;
+              </button>
               <button
                 type="button"
                 disabled={activePage === 1}
                 onClick={() => setActivePage((page) => Math.max(1, page - 1))}
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-3 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="P·gina anterior"
+                title="P·gina anterior"
               >
-                <ChevronLeft className="h-4 w-4" /> Anterior
+                <ChevronLeft className="h-4 w-4" />
               </button>
+              {activeVisiblePages.map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setActivePage(page)}
+                  className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 font-medium transition ${
+                    page === activePage
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border text-foreground hover:bg-accent"
+                  }`}
+                  aria-current={page === activePage ? "page" : undefined}
+                >
+                  {page}
+                </button>
+              ))}
               <button
                 type="button"
                 disabled={activePage === activePages}
                 onClick={() => setActivePage((page) => Math.min(activePages, page + 1))}
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-3 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="PrÛxima p·gina"
+                title="PrÛxima p·gina"
               >
-                Pr√≥xima <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                disabled={activePage === activePages}
+                onClick={() => setActivePage(activePages)}
+                className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="⁄ltima p·gina"
+                title="⁄ltima p·gina"
+              >
+                &gt;&gt;
               </button>
             </div>
           </div>
