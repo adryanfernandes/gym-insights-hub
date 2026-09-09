@@ -554,7 +554,11 @@ export function getMembershipDashboardData(
     (renewalInactiveRows.length / Math.max(renewalRows.length, 1)) * 100;
   const totalSales = sales.reduce((sum, row) => sum + num(row.sale_value), 0);
   const renovacoesPeriodo = renewalsInPeriod(scoped, start, end);
-  const novasMatriculasPeriodo = newEnrollmentsInPeriod(scoped, start, end);
+  const novasMatriculasPeriodo = newEnrollmentsInPeriod(memberScoped, start, end).filter(({ row }) =>
+    matchesSelection(row.membership_name?.trim() || "Não informado", filters.tipoContrato, [
+      "Todos",
+    ]),
+  );
   const currentMonth = monthKey(now);
   const paidCurrentMonth = scopedReceivables.reduce((sum, row) => {
     const reference = date(row.receiving_date || row.registration_date);
@@ -674,6 +678,7 @@ export function getMembershipDashboardData(
       },
       movimentacaoPeriodo: {
         entradas: novasMatriculasPeriodo.length,
+        entradasIds: novasMatriculasPeriodo.map(({ row }) => row.id_member),
         saidas: cancellations.length,
         mudancasPlano: mudancasPlanoPeriodo.length,
         saldo: novasMatriculasPeriodo.length - cancellations.length,

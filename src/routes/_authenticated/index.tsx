@@ -345,6 +345,7 @@ function GeralPage() {
     mudancasPlano: 0,
     saldo: 0,
     renovacoes: 0,
+    entradasIds: [] as number[],
   };
   const activeContractOptions = useMemo(() => {
     const options = Array.from(
@@ -371,6 +372,7 @@ function GeralPage() {
       filters.dataInicio,
       filters.dataFim,
     );
+    const newStudentIds = new Set<number>(movimentacaoPeriodo.entradasIds ?? []);
     const changedPlanIds = new Set(
       (data.mudancasPlanoLista ?? [])
         .filter((row) => isDateInRange(row.dataAlteracao, start, end))
@@ -385,12 +387,13 @@ function GeralPage() {
 
     return filteredActiveStudents.map((student) => {
       let statusComposicao = "Manteve plano";
-      if (isDateInRange(student.inicio, start, end)) statusComposicao = "Entrou";
+      if (newStudentIds.has(student.id)) statusComposicao = "Entrou";
       if (renewedIds.has(student.id)) statusComposicao = "Renovou";
       if (changedPlanIds.has(student.id)) statusComposicao = "Alterou plano";
       return { ...student, statusComposicao };
     });
   }, [
+    movimentacaoPeriodo.entradasIds,
     data.mudancasPlanoLista,
     data.renovacoesMensais,
     filteredActiveStudents,
