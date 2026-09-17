@@ -384,24 +384,27 @@ function GeralPage() {
       filters.dataInicio,
       filters.dataFim,
     );
-    const newStudentIds = new Set<number>(movimentacaoPeriodo.entradasIds ?? []);
+    const newStudentIds = new Set<number>(
+      (movimentacaoPeriodo.entradasIds ?? []).map((id) => Number(id)),
+    );
     const changedPlanIds = new Set(
       (data.mudancasPlanoLista ?? [])
         .filter((row) => isDateInRange(row.dataAlteracao, start, end))
-        .map((row) => row.idAluno),
+        .map((row) => Number(row.idAluno)),
     );
     const renewedIds = new Set(
       data.renovacoesMensais
         .flatMap((month) => month.renovacoesLista ?? [])
-        .filter((row) => isDateInRange(row.inicio, start, end))
-        .map((row) => row.idAluno),
+        .filter((row) => isDateInRange(row.data ?? row.inicio, start, end))
+        .map((row) => Number(row.idAluno)),
     );
 
     return filteredActiveStudents.map((student) => {
+      const studentId = Number(student.id);
       let statusComposicao = "Manteve plano";
-      if (newStudentIds.has(student.id)) statusComposicao = "Entrou";
-      if (renewedIds.has(student.id)) statusComposicao = "Renovou";
-      if (changedPlanIds.has(student.id)) statusComposicao = "Alterou plano";
+      if (newStudentIds.has(studentId)) statusComposicao = "Entrou";
+      if (renewedIds.has(studentId)) statusComposicao = "Renovou";
+      if (changedPlanIds.has(studentId)) statusComposicao = "Alterou plano";
       return { ...student, statusComposicao };
     });
   }, [
@@ -413,13 +416,47 @@ function GeralPage() {
     filters.dataInicio,
     filters.periodo,
   ]);
-  const filteredActiveStudentsByMovement = useMemo(
-    () =>
-      activeMovementFilter
-        ? activeStudentsWithMovement.filter((student) => student.statusComposicao === activeMovementFilter)
-        : activeStudentsWithMovement,
-    [activeMovementFilter, activeStudentsWithMovement],
-  );
+  const canceledStudentsForMovement = useMemo(() => {
+    const inactiveById = new Map(data.alunosInativosLista.map((student) => [Number(student.id), student]));
+    return data.cancelamentosLista.map((cancellation) => {
+      const studentId = Number(cancellation.idAluno);
+      const inactiveStudent = inactiveById.get(studentId);
+      return {
+        ...(inactiveStudent ?? {
+          id: studentId,
+          nome: cancellation.aluno,
+          contratoNome: cancellation.contrato,
+          genero: "Não informado",
+          idade: 0,
+          bairro: "Não informado",
+          cidade: "Não informada",
+          fotoUrl: null,
+          valor: cancellation.valorVenda,
+          valorTotal: cancellation.valorVenda,
+          diasAtivo: 0,
+          ativo: false,
+          firstSyncedAt: null,
+          lastSyncedAt: null,
+          ultimaFrequencia: null,
+        }),
+        id: studentId,
+        nome: cancellation.aluno,
+        contrato: cancellation.contrato,
+        inicio: inactiveStudent?.inicio ?? null,
+        vencimento: cancellation.dataCancelamento,
+        statusComposicao: "Saiu",
+      };
+    });
+  }, [data.alunosInativosLista, data.cancelamentosLista]);
+  const filteredActiveStudentsByMovement = useMemo(() => {
+    if (activeMovementFilter === "Saiu") return canceledStudentsForMovement;
+    if (activeMovementFilter) {
+      return activeStudentsWithMovement.filter(
+        (student) => student.statusComposicao === activeMovementFilter,
+      );
+    }
+    return activeStudentsWithMovement;
+  }, [activeMovementFilter, activeStudentsWithMovement, canceledStudentsForMovement]);
   const sortedActiveStudents = useMemo(
     () =>
       sortedRows(filteredActiveStudentsByMovement, activeSort, {
@@ -434,20 +471,20 @@ function GeralPage() {
     [activeSort, filteredActiveStudentsByMovement],
   );
   const activeMovementSummary = useMemo(() => {
-    const entradas = movimentacaoPeriodo.entradas;
-    const saidas = movimentacaoPeriodo.saidas;
-    const renovaram = movimentacaoPeriodo.renovacoes;
-    const alteraram = movimentacaoPeriodo.mudancasPlano;
-    const mantiveram = Math.max(0, filteredActiveStudents.length - entradas - renovaram - alteraram);
+    const totals = new Map<string, number>();
+    activeStudentsWithMovement.forEach((student) => {
+      const status = student.statusComposicao ?? "Manteve plano";
+      totals.set(status, (totals.get(status) ?? 0) + 1);
+    });
 
     return [
-      { status: "Entrou", label: "Entraram", total: entradas, description: "Novos alunos no período" },
-      { status: "Saiu", label: "Saíram", total: saidas, description: "Cancelamentos efetivados no período" },
-      { status: "Renovou", label: "Renovaram", total: renovaram, description: "Renovações realizadas no período" },
-      { status: "Alterou plano", label: "Alteraram", total: alteraram, description: "Mudanças de plano no período" },
-      { status: "Manteve plano", label: "Mantiveram", total: mantiveram, description: "Ativos sem entrada, renovação ou alteração" },
+      { status: "Entrou", label: "Entraram", total: totals.get("Entrou") ?? 0, description: "Novos alunos no período" },
+      { status: "Saiu", label: "Saíram", total: canceledStudentsForMovement.length, description: "Cancelamentos efetivados no período" },
+      { status: "Renovou", label: "Renovaram", total: totals.get("Renovou") ?? 0, description: "Renovações realizadas no período" },
+      { status: "Alterou plano", label: "Alteraram", total: totals.get("Alterou plano") ?? 0, description: "Mudanças de plano no período" },
+      { status: "Manteve plano", label: "Mantiveram", total: totals.get("Manteve plano") ?? 0, description: "Ativos sem entrada, renovação ou alteração" },
     ];
-  }, [filteredActiveStudents.length, movimentacaoPeriodo]);
+  }, [activeStudentsWithMovement, canceledStudentsForMovement.length]);
   const filteredInactiveStudents = useMemo(
     () =>
       data.alunosInativosLista.filter(
