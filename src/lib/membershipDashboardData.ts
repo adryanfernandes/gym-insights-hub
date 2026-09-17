@@ -525,7 +525,11 @@ export function getMembershipDashboardData(
     const value = date(row.sale_date);
     return value && value >= start && value <= end;
   });
-  const mudancasPlanoPeriodo = planChangesInPeriod(scoped, start, end);
+  const mudancasPlanoPeriodo = planChangesInPeriod(scoped, start, end).filter((change) =>
+    activeMemberIds
+      ? activeMemberIds.has(change.idAluno)
+      : memberHasActiveContractAt(memberScoped, change.idAluno, now),
+  );
   const changedPreviousContractIds = previousContractsFromPlanChanges(scoped);
   const cancellations = scoped.filter((row) => {
     const value = date(row.cancel_date);
