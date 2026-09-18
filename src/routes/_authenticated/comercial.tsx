@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -14,13 +15,14 @@ import {
   Funnel,
   LabelList,
 } from "recharts";
-import { ShoppingCart, TrendingDown, AlertTriangle } from "lucide-react";
+import { ShoppingCart, TrendingDown, AlertTriangle, CalendarDays } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard, ChartCard } from "@/components/KpiCard";
 import { useApp } from "@/contexts/AppContext";
 import { formatBRL, formatNum } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
+import { commercialMonthlyMovement } from "@/lib/membershipDashboardData";
 
 export const Route = createFileRoute("/_authenticated/comercial")({
   head: () => ({
@@ -48,11 +50,36 @@ const RISK_BADGE: Record<string, string> = {
 
 const RISK_LABEL: Record<string, string> = { alto: "Alto", medio: "Médio", baixo: "Baixo" };
 
+function monthInputValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthInputDate(value: string, endOfMonth = false) {
+  const [year, month] = value.split("-").map(Number);
+  return endOfMonth
+    ? new Date(year, month, 0, 23, 59, 59, 999)
+    : new Date(year, month - 1, 1);
+}
+
 function ComercialPage() {
   const { filters } = useApp();
   const navigate = useNavigate();
-  const { data, loadingMemberships, membershipsError } = useDashboardData(filters);
+  const { data, memberships, loadingMemberships, membershipsError } = useDashboardData(filters);
   const k = data.overviewKpis;
+  const currentMonth = monthInputValue(new Date());
+  const defaultStart = new Date();
+  defaultStart.setMonth(defaultStart.getMonth() - 11, 1);
+  const [movementStartMonth, setMovementStartMonth] = useState(monthInputValue(defaultStart));
+  const [movementEndMonth, setMovementEndMonth] = useState(currentMonth);
+  const monthlyMovement = useMemo(
+    () =>
+      commercialMonthlyMovement(
+        memberships,
+        monthInputDate(movementStartMonth),
+        monthInputDate(movementEndMonth, true),
+      ),
+    [memberships, movementEndMonth, movementStartMonth],
+  );
 
   const openClientPage = (clientId: number | string | null | undefined) => {
     const parsed = Number(clientId);
@@ -70,6 +97,7 @@ function ComercialPage() {
       EvolucaoVendas: data.evolucaoVendas,
       Funil: data.funilComercial,
       RenovacoesVencimentos: data.renovacoesMensais,
+      MovimentacaoMensal: monthlyMovement,
       AlunosRisco: data.alunosRisco,
     });
 
@@ -292,6 +320,82 @@ function ComercialPage() {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-4 border-b border-border p-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Movimentação mensal de clientes</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Entradas, permanência e saídas consolidadas por mês.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <CalendarDays className="mb-2 h-4 w-4 text-muted-foreground" />
+            <label className="grid gap-1 text-xs text-muted-foreground">
+              Mês inicial
+              <input
+                type="month"
+                value={movementStartMonth}
+                max={movementEndMonth}
+                onChange={(event) => setMovementStartMonth(event.target.value)}
+                className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              />
+            </label>
+            <label className="grid gap-1 text-xs text-muted-foreground">
+              Mês final
+              <input
+                type="month"
+                value={movementEndMonth}
+                min={movementStartMonth}
+                max={currentMonth}
+                onChange={(event) => setMovementEndMonth(event.target.value)}
+                className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              />
+            </label>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="bg-muted/40 text-center text-[11px] uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Mês/ano</th>
+                <th className="px-4 py-3 font-medium">Clientes novos</th>
+                <th className="px-4 py-3 font-medium">Renovações</th>
+                <th className="px-4 py-3 font-medium">Resgates</th>
+                <th className="px-4 py-3 font-medium">Cancelamentos</th>
+                <th className="px-4 py-3 font-medium">Vencimentos</th>
+                <th className="px-4 py-3 font-medium">Desistências</th>
+                <th className="px-4 py-3 font-medium">Suspensões</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthlyMovement.map((month) => (
+                <tr key={month.mesKey} className="border-t border-border text-center">
+                  <td className="px-4 py-3 text-left font-semibold">{month.mes}</td>
+                  <td className="bg-success/5 px-4 py-3 text-success">{formatNum(month.novos)}</td>
+                  <td className="bg-success/5 px-4 py-3 text-success">{formatNum(month.renovacoes)}</td>
+                  <td className="bg-success/5 px-4 py-3 text-success">{formatNum(month.resgates)}</td>
+                  <td className="bg-destructive/5 px-4 py-3 text-destructive">{formatNum(month.cancelamentos)}</td>
+                  <td className="bg-destructive/5 px-4 py-3 text-destructive">{formatNum(month.vencimentos)}</td>
+                  <td className="bg-destructive/5 px-4 py-3 text-destructive">{formatNum(month.desistencias)}</td>
+                  <td className="bg-destructive/5 px-4 py-3 text-destructive">{formatNum(month.suspensoes)}</td>
+                </tr>
+              ))}
+              {!monthlyMovement.length && (
+                <tr>
+                  <td colSpan={8} className="px-5 py-10 text-center text-muted-foreground">
+                    Nenhuma movimentação encontrada no período selecionado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="border-t border-border px-5 py-3 text-[11px] text-muted-foreground">
+          Resgate considera o retorno após mais de 30 dias sem vínculo. Desistências e suspensões
+          são classificadas pelo motivo registrado no cancelamento; quando a API não informa esses
+          termos, o evento permanece em cancelamentos.
+        </p>
       </div>
     </DashboardLayout>
   );

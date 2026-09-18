@@ -369,6 +369,120 @@ function newEnrollmentsInPeriod(rows: MembershipRow[], start: Date, end: Date) {
 function memberHasActiveContractAt(rows: MembershipRow[], memberId: number, referenceDate: Date) {
   return rows.some((row) => row.id_member === memberId && isMembershipActiveAt(row, referenceDate));
 }
+
+export type CommercialMonthlyMovement = {
+  mesKey: string;
+  mes: string;
+  novos: number;
+  renovacoes: number;
+  resgates: number;
+  cancelamentos: number;
+  vencimentos: number;
+  desistencias: number;
+  suspensoes: number;
+};
+
+export function commercialMonthlyMovement(
+  memberships: MembershipRow[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): CommercialMonthlyMovement[] {
+  const firstMonth = startOfMonth(rangeStart);
+  const lastMonth = startOfMonth(rangeEnd);
+  const monthCount = Math.max(
+    1,
+    (lastMonth.getFullYear() - firstMonth.getFullYear()) * 12 +
+      lastMonth.getMonth() -
+      firstMonth.getMonth() +
+      1,
+  );
+  const rows = Array.from({ length: monthCount }, (_, index) => {
+    const current = addMonths(firstMonth, index);
+    return {
+      mesKey: format(current, "yyyy-MM"),
+      mes: format(current, "MMM/yy").replace(".", "").toUpperCase(),
+      novos: 0,
+      renovacoes: 0,
+      resgates: 0,
+      cancelamentos: 0,
+      vencimentos: 0,
+      desistencias: 0,
+      suspensoes: 0,
+    } satisfies CommercialMonthlyMovement;
+  });
+  const byMonth = new Map(rows.map((row) => [row.mesKey, row]));
+  const recurring = memberships.filter((row) => !isSingleUseMembership(row));
+  const byMember = new Map<number, MembershipRow[]>();
+  recurring.forEach((row) => {
+    const memberRows = byMember.get(row.id_member) ?? [];
+    memberRows.push(row);
+    byMember.set(row.id_member, memberRows);
+  });
+  const counted = new Map<string, Set<number>>();
+  const increment = (eventDate: Date | null, field: keyof Omit<CommercialMonthlyMovement, "mesKey" | "mes">, memberId: number) => {
+    if (!eventDate) return;
+    const key = monthKey(eventDate);
+    const month = byMonth.get(key);
+    if (!month) return;
+    const eventKey = `${key}:${field}`;
+    const members = counted.get(eventKey) ?? new Set<number>();
+    if (members.has(memberId)) return;
+    members.add(memberId);
+    counted.set(eventKey, members);
+    month[field] += 1;
+  };
+
+  byMember.forEach((memberRows, memberId) => {
+    const ordered = memberRows
+      .slice()
+      .sort(
+        (a, b) =>
+          (date(a.membership_start || a.sale_date)?.getTime() ?? 0) -
+          (date(b.membership_start || b.sale_date)?.getTime() ?? 0),
+      );
+    if (!ordered.length) return;
+
+    increment(date(ordered[0].sale_date || ordered[0].membership_start), "novos", memberId);
+
+    ordered.slice(1).forEach((row, index) => {
+      const previous = ordered[index];
+      const startedAt = date(row.membership_start || row.sale_date);
+      const performedAt = date(row.sale_date) ?? startedAt;
+      const previousEnd = date(previous.membership_end);
+      const gap =
+        startedAt && previousEnd
+          ? differenceInCalendarDays(startedAt, previousEnd)
+          : Number.POSITIVE_INFINITY;
+      increment(performedAt, gap > 30 ? "resgates" : "renovacoes", memberId);
+    });
+
+    ordered.forEach((row, index) => {
+      const canceledAt = date(row.cancel_date);
+      if (canceledAt && isCancellationEffective(row, canceledAt)) {
+        const reason = normalizedText(row.cancellation_reason).trim();
+        if (reason.includes("suspens") || reason.includes("tranc")) {
+          increment(canceledAt, "suspensoes", memberId);
+        } else if (reason.includes("desist")) {
+          increment(canceledAt, "desistencias", memberId);
+        } else {
+          increment(canceledAt, "cancelamentos", memberId);
+        }
+      }
+
+      const endedAt = date(row.membership_end);
+      if (!endedAt || isCancellationEffective(row, endedAt)) return;
+      const renewedSoon = ordered.slice(index + 1).some((next) => {
+        const nextStart = date(next.membership_start || next.sale_date);
+        if (!nextStart) return false;
+        const gap = differenceInCalendarDays(nextStart, endedAt);
+        return gap >= -30 && gap <= 30;
+      });
+      if (!renewedSoon) increment(endedAt, "vencimentos", memberId);
+    });
+  });
+
+  return rows;
+}
 function planChangesInPeriod(rows: MembershipRow[], start: Date, end: Date) {
   const byMember = new Map<number, MembershipRow[]>();
   rows.forEach((row) => {
