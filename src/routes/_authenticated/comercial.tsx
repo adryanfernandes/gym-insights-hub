@@ -22,7 +22,17 @@ import { useApp } from "@/contexts/AppContext";
 import { formatBRL, formatNum } from "@/lib/mockData";
 import { useDashboardData } from "@/lib/membersDashboardData";
 import { exportToPdf, exportToExcel } from "@/lib/exporters";
-import { commercialMonthlyMovement } from "@/lib/membershipDashboardData";
+import {
+  commercialMonthlyMovement,
+  type CommercialMonthlyMovement,
+} from "@/lib/membershipDashboardData";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/comercial")({
   head: () => ({
@@ -61,16 +71,51 @@ function monthInputDate(value: string, endOfMonth = false) {
     : new Date(year, month - 1, 1);
 }
 
+type MovementListMetric =
+  | "novos"
+  | "renovacoes"
+  | "resgates"
+  | "cancelamentos"
+  | "vencimentos"
+  | "desistencias"
+  | "suspensoes"
+  | "totalPositivos"
+  | "totalNegativos"
+  | "saldoFim";
+
+const MOVEMENT_LABELS: Record<MovementListMetric, string> = {
+  novos: "Clientes novos",
+  renovacoes: "Renovações",
+  resgates: "Resgates",
+  cancelamentos: "Cancelamentos",
+  vencimentos: "Vencimentos",
+  desistencias: "Desistências",
+  suspensoes: "Suspensões",
+  totalPositivos: "Total positivo",
+  totalNegativos: "Total negativo",
+  saldoFim: "Saldo no fim do mês",
+};
+
+function displayMovementDate(value: string | null) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleDateString("pt-BR");
+}
+
 function ComercialPage() {
   const { filters } = useApp();
   const navigate = useNavigate();
-  const { data, memberships, loadingMemberships, membershipsError } = useDashboardData(filters);
+  const { data, clients, memberships, loadingMemberships, membershipsError } = useDashboardData(filters);
   const k = data.overviewKpis;
   const currentMonth = monthInputValue(new Date());
   const defaultStart = new Date();
   defaultStart.setMonth(defaultStart.getMonth() - 11, 1);
   const [movementStartMonth, setMovementStartMonth] = useState(monthInputValue(defaultStart));
   const [movementEndMonth, setMovementEndMonth] = useState(currentMonth);
+  const [selectedMovement, setSelectedMovement] = useState<{
+    month: CommercialMonthlyMovement;
+    metric: MovementListMetric;
+  } | null>(null);
   const monthlyMovement = useMemo(
     () =>
       commercialMonthlyMovement(
@@ -80,12 +125,39 @@ function ComercialPage() {
       ),
     [memberships, movementEndMonth, movementStartMonth],
   );
+  const clientNames = useMemo(
+    () => new Map(clients.map((client) => [Number(client.id), client.nome])),
+    [clients],
+  );
+  const selectedMovementRows = useMemo(() => {
+    if (!selectedMovement) return [];
+    return selectedMovement.month.detalhes[selectedMovement.metric].slice().sort((a, b) =>
+      (clientNames.get(a.idAluno) ?? "").localeCompare(clientNames.get(b.idAluno) ?? "", "pt-BR"),
+    );
+  }, [clientNames, selectedMovement]);
 
   const openClientPage = (clientId: number | string | null | undefined) => {
     const parsed = Number(clientId);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
     navigate({ to: "/clientes/$id", params: { id: String(parsed) } });
   };
+
+  const movementCell = (
+    month: CommercialMonthlyMovement,
+    metric: MovementListMetric,
+    className: string,
+  ) => (
+    <td className={className}>
+      <button
+        type="button"
+        onClick={() => setSelectedMovement({ month, metric })}
+        className="w-full rounded px-2 py-1 font-semibold underline-offset-2 transition hover:bg-accent hover:underline"
+        title={`Ver ${MOVEMENT_LABELS[metric].toLowerCase()} de ${month.mes}`}
+      >
+        {formatNum(month[metric])}
+      </button>
+    </td>
+  );
 
   const onExportExcel = () =>
     exportToExcel("comercial", {
@@ -97,7 +169,7 @@ function ComercialPage() {
       EvolucaoVendas: data.evolucaoVendas,
       Funil: data.funilComercial,
       RenovacoesVencimentos: data.renovacoesMensais,
-      MovimentacaoMensal: monthlyMovement,
+      MovimentacaoMensal: monthlyMovement.map(({ detalhes: _detalhes, ...month }) => month),
       AlunosRisco: data.alunosRisco,
     });
 
@@ -366,24 +438,43 @@ function ComercialPage() {
                 <th className="px-4 py-3 font-medium">Vencimentos</th>
                 <th className="px-4 py-3 font-medium">Desistências</th>
                 <th className="px-4 py-3 font-medium">Suspensões</th>
+                <th className="bg-success/10 px-4 py-3 font-medium text-success">Total positivo</th>
+                <th className="bg-destructive/10 px-4 py-3 font-medium text-destructive">Total negativo</th>
+                <th className="px-4 py-3 font-medium">Saldo no fim</th>
+                <th className="px-4 py-3 font-medium">Crescimento</th>
               </tr>
             </thead>
             <tbody>
               {monthlyMovement.map((month) => (
                 <tr key={month.mesKey} className="border-t border-border text-center">
                   <td className="px-4 py-3 text-left font-semibold">{month.mes}</td>
-                  <td className="bg-success/5 px-4 py-3 text-success">{formatNum(month.novos)}</td>
-                  <td className="bg-success/5 px-4 py-3 text-success">{formatNum(month.renovacoes)}</td>
-                  <td className="bg-success/5 px-4 py-3 text-success">{formatNum(month.resgates)}</td>
-                  <td className="bg-destructive/5 px-4 py-3 text-destructive">{formatNum(month.cancelamentos)}</td>
-                  <td className="bg-destructive/5 px-4 py-3 text-destructive">{formatNum(month.vencimentos)}</td>
-                  <td className="bg-destructive/5 px-4 py-3 text-destructive">{formatNum(month.desistencias)}</td>
-                  <td className="bg-destructive/5 px-4 py-3 text-destructive">{formatNum(month.suspensoes)}</td>
+                  {movementCell(month, "novos", "bg-success/5 px-2 py-2 text-success")}
+                  {movementCell(month, "renovacoes", "bg-success/5 px-2 py-2 text-success")}
+                  {movementCell(month, "resgates", "bg-success/5 px-2 py-2 text-success")}
+                  {movementCell(month, "cancelamentos", "bg-destructive/5 px-2 py-2 text-destructive")}
+                  {movementCell(month, "vencimentos", "bg-destructive/5 px-2 py-2 text-destructive")}
+                  {movementCell(month, "desistencias", "bg-destructive/5 px-2 py-2 text-destructive")}
+                  {movementCell(month, "suspensoes", "bg-destructive/5 px-2 py-2 text-destructive")}
+                  {movementCell(month, "totalPositivos", "bg-success/10 px-2 py-2 text-success")}
+                  {movementCell(month, "totalNegativos", "bg-destructive/10 px-2 py-2 text-destructive")}
+                  {movementCell(month, "saldoFim", "bg-muted/30 px-2 py-2 text-foreground")}
+                  <td
+                    className={`px-4 py-3 font-semibold ${
+                      month.crescimentoPercentual > 0
+                        ? "text-success"
+                        : month.crescimentoPercentual < 0
+                          ? "text-destructive"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {month.crescimentoPercentual > 0 ? "+" : ""}
+                    {month.crescimentoPercentual.toFixed(1).replace(".", ",")}%
+                  </td>
                 </tr>
               ))}
               {!monthlyMovement.length && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-muted-foreground">
+                  <td colSpan={12} className="px-5 py-10 text-center text-muted-foreground">
                     Nenhuma movimentação encontrada no período selecionado.
                   </td>
                 </tr>
@@ -397,6 +488,57 @@ function ComercialPage() {
           termos, o evento permanece em cancelamentos.
         </p>
       </div>
+
+      <Dialog open={Boolean(selectedMovement)} onOpenChange={(open) => !open && setSelectedMovement(null)}>
+        <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 py-5 pr-14">
+            <DialogTitle>
+              {selectedMovement ? MOVEMENT_LABELS[selectedMovement.metric] : "Movimentação mensal"}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedMovement?.month.mes} — {formatNum(selectedMovementRows.length)} clientes
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="sticky top-0 bg-muted text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3 font-medium">Nº cliente</th>
+                  <th className="px-5 py-3 font-medium">Cliente</th>
+                  <th className="px-5 py-3 font-medium">Contrato</th>
+                  <th className="px-5 py-3 font-medium">Data</th>
+                  <th className="px-5 py-3 font-medium">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedMovementRows.map((row, index) => (
+                  <tr
+                    key={`${row.idAluno}-${row.idContrato}-${index}`}
+                    className="cursor-pointer border-t border-border transition hover:bg-accent/40"
+                    onClick={() => openClientPage(row.idAluno)}
+                    title="Abrir perfil do cliente"
+                  >
+                    <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{row.idAluno}</td>
+                    <td className="px-5 py-3 font-medium">
+                      {clientNames.get(row.idAluno) ?? `Aluno ${row.idAluno}`}
+                    </td>
+                    <td className="px-5 py-3">{row.contrato}</td>
+                    <td className="px-5 py-3">{displayMovementDate(row.data)}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{row.motivo ?? "-"}</td>
+                  </tr>
+                ))}
+                {!selectedMovementRows.length && (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-10 text-center text-muted-foreground">
+                      Nenhum cliente encontrado para este indicador.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

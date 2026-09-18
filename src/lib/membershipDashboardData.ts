@@ -7,6 +7,7 @@ import {
   startOfYear,
   subDays,
 } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import type { Filters } from "@/contexts/AppContext";
 
 export type MembershipRow = {
@@ -370,6 +371,23 @@ function memberHasActiveContractAt(rows: MembershipRow[], memberId: number, refe
   return rows.some((row) => row.id_member === memberId && isMembershipActiveAt(row, referenceDate));
 }
 
+export type CommercialMovementMetric =
+  | "novos"
+  | "renovacoes"
+  | "resgates"
+  | "cancelamentos"
+  | "vencimentos"
+  | "desistencias"
+  | "suspensoes";
+
+export type CommercialMovementDetail = {
+  idAluno: number;
+  idContrato: number;
+  contrato: string;
+  data: string | null;
+  motivo: string | null;
+};
+
 export type CommercialMonthlyMovement = {
   mesKey: string;
   mes: string;
@@ -380,6 +398,11 @@ export type CommercialMonthlyMovement = {
   vencimentos: number;
   desistencias: number;
   suspensoes: number;
+  totalPositivos: number;
+  totalNegativos: number;
+  saldoFim: number;
+  crescimentoPercentual: number;
+  detalhes: Record<CommercialMovementMetric | "totalPositivos" | "totalNegativos" | "saldoFim", CommercialMovementDetail[]>;
 };
 
 export function commercialMonthlyMovement(
@@ -396,11 +419,23 @@ export function commercialMonthlyMovement(
       firstMonth.getMonth() +
       1,
   );
+  const emptyDetails = (): CommercialMonthlyMovement["detalhes"] => ({
+    novos: [],
+    renovacoes: [],
+    resgates: [],
+    cancelamentos: [],
+    vencimentos: [],
+    desistencias: [],
+    suspensoes: [],
+    totalPositivos: [],
+    totalNegativos: [],
+    saldoFim: [],
+  });
   const rows = Array.from({ length: monthCount }, (_, index) => {
     const current = addMonths(firstMonth, index);
     return {
       mesKey: format(current, "yyyy-MM"),
-      mes: format(current, "MMM/yy").replace(".", "").toUpperCase(),
+      mes: format(current, "MMM/yy", { locale: ptBR }).replace(".", "").toUpperCase(),
       novos: 0,
       renovacoes: 0,
       resgates: 0,
@@ -408,6 +443,11 @@ export function commercialMonthlyMovement(
       vencimentos: 0,
       desistencias: 0,
       suspensoes: 0,
+      totalPositivos: 0,
+      totalNegativos: 0,
+      saldoFim: 0,
+      crescimentoPercentual: 0,
+      detalhes: emptyDetails(),
     } satisfies CommercialMonthlyMovement;
   });
   const byMonth = new Map(rows.map((row) => [row.mesKey, row]));
@@ -419,17 +459,29 @@ export function commercialMonthlyMovement(
     byMember.set(row.id_member, memberRows);
   });
   const counted = new Map<string, Set<number>>();
-  const increment = (eventDate: Date | null, field: keyof Omit<CommercialMonthlyMovement, "mesKey" | "mes">, memberId: number) => {
+  const detail = (row: MembershipRow, eventDate: Date | null): CommercialMovementDetail => ({
+    idAluno: row.id_member,
+    idContrato: row.id_member_membership,
+    contrato: row.membership_name?.trim() || "Não informado",
+    data: eventDate?.toISOString() ?? row.sale_date ?? row.membership_start,
+    motivo: row.cancellation_reason?.trim() || null,
+  });
+  const increment = (
+    eventDate: Date | null,
+    field: CommercialMovementMetric,
+    row: MembershipRow,
+  ) => {
     if (!eventDate) return;
     const key = monthKey(eventDate);
     const month = byMonth.get(key);
     if (!month) return;
     const eventKey = `${key}:${field}`;
     const members = counted.get(eventKey) ?? new Set<number>();
-    if (members.has(memberId)) return;
-    members.add(memberId);
+    if (members.has(row.id_member)) return;
+    members.add(row.id_member);
     counted.set(eventKey, members);
     month[field] += 1;
+    month.detalhes[field].push(detail(row, eventDate));
   };
 
   byMember.forEach((memberRows, memberId) => {
@@ -442,7 +494,7 @@ export function commercialMonthlyMovement(
       );
     if (!ordered.length) return;
 
-    increment(date(ordered[0].sale_date || ordered[0].membership_start), "novos", memberId);
+    increment(date(ordered[0].sale_date || ordered[0].membership_start), "novos", ordered[0]);
 
     ordered.slice(1).forEach((row, index) => {
       const previous = ordered[index];
@@ -453,7 +505,7 @@ export function commercialMonthlyMovement(
         startedAt && previousEnd
           ? differenceInCalendarDays(startedAt, previousEnd)
           : Number.POSITIVE_INFINITY;
-      increment(performedAt, gap > 30 ? "resgates" : "renovacoes", memberId);
+      increment(performedAt, gap > 30 ? "resgates" : "renovacoes", row);
     });
 
     ordered.forEach((row, index) => {
@@ -461,11 +513,11 @@ export function commercialMonthlyMovement(
       if (canceledAt && isCancellationEffective(row, canceledAt)) {
         const reason = normalizedText(row.cancellation_reason).trim();
         if (reason.includes("suspens") || reason.includes("tranc")) {
-          increment(canceledAt, "suspensoes", memberId);
+          increment(canceledAt, "suspensoes", row);
         } else if (reason.includes("desist")) {
-          increment(canceledAt, "desistencias", memberId);
+          increment(canceledAt, "desistencias", row);
         } else {
-          increment(canceledAt, "cancelamentos", memberId);
+          increment(canceledAt, "cancelamentos", row);
         }
       }
 
@@ -477,8 +529,46 @@ export function commercialMonthlyMovement(
         const gap = differenceInCalendarDays(nextStart, endedAt);
         return gap >= -30 && gap <= 30;
       });
-      if (!renewedSoon) increment(endedAt, "vencimentos", memberId);
+      if (!renewedSoon) increment(endedAt, "vencimentos", row);
     });
+  });
+
+  rows.forEach((row, index) => {
+    const monthEnd = endOfMonth(new Date(`${row.mesKey}-01T12:00:00`));
+    const activeDetails: CommercialMovementDetail[] = [];
+    byMember.forEach((memberRows) => {
+      const active = memberRows.find((membership) => isMembershipActiveAt(membership, monthEnd));
+      if (active) activeDetails.push(detail(active, monthEnd));
+    });
+    row.detalhes.totalPositivos = [
+      ...row.detalhes.novos,
+      ...row.detalhes.renovacoes,
+      ...row.detalhes.resgates,
+    ];
+    row.detalhes.totalNegativos = [
+      ...row.detalhes.cancelamentos,
+      ...row.detalhes.vencimentos,
+      ...row.detalhes.desistencias,
+      ...row.detalhes.suspensoes,
+    ];
+    row.detalhes.saldoFim = activeDetails;
+    row.totalPositivos = row.novos + row.renovacoes + row.resgates;
+    row.totalNegativos =
+      row.cancelamentos + row.vencimentos + row.desistencias + row.suspensoes;
+    row.saldoFim = activeDetails.length;
+    const previousBalance =
+      index > 0
+        ? rows[index - 1].saldoFim
+        : Array.from(byMember.values()).filter((memberRows) =>
+            memberRows.some((membership) =>
+              isMembershipActiveAt(membership, new Date(firstMonth.getTime() - 1)),
+            ),
+          ).length;
+    row.crescimentoPercentual = previousBalance
+      ? ((row.saldoFim - previousBalance) / previousBalance) * 100
+      : row.saldoFim
+        ? 100
+        : 0;
   });
 
   return rows;
