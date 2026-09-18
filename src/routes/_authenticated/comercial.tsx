@@ -74,6 +74,7 @@ function monthInputDate(value: string, endOfMonth = false) {
 type MovementListMetric =
   | "novos"
   | "renovacoes"
+  | "mudancasPlano"
   | "resgates"
   | "cancelamentos"
   | "vencimentos"
@@ -86,6 +87,7 @@ type MovementListMetric =
 const MOVEMENT_LABELS: Record<MovementListMetric, string> = {
   novos: "Clientes novos",
   renovacoes: "Renovações",
+  mudancasPlano: "Mudanças de plano",
   resgates: "Resgates",
   cancelamentos: "Cancelamentos",
   vencimentos: "Vencimentos",
@@ -433,6 +435,7 @@ function ComercialPage() {
                 <th className="px-4 py-3 text-left font-medium">Mês/ano</th>
                 <th className="px-4 py-3 font-medium">Clientes novos</th>
                 <th className="px-4 py-3 font-medium">Renovações</th>
+                <th className="px-4 py-3 font-medium">Mudanças de plano</th>
                 <th className="px-4 py-3 font-medium">Resgates</th>
                 <th className="px-4 py-3 font-medium">Cancelamentos</th>
                 <th className="px-4 py-3 font-medium">Vencimentos</th>
@@ -450,6 +453,7 @@ function ComercialPage() {
                   <td className="px-4 py-3 text-left font-semibold">{month.mes}</td>
                   {movementCell(month, "novos", "bg-success/5 px-2 py-2 text-success")}
                   {movementCell(month, "renovacoes", "bg-success/5 px-2 py-2 text-success")}
+                  {movementCell(month, "mudancasPlano", "bg-warning/10 px-2 py-2 text-warning")}
                   {movementCell(month, "resgates", "bg-success/5 px-2 py-2 text-success")}
                   {movementCell(month, "cancelamentos", "bg-destructive/5 px-2 py-2 text-destructive")}
                   {movementCell(month, "vencimentos", "bg-destructive/5 px-2 py-2 text-destructive")}
@@ -474,7 +478,7 @@ function ComercialPage() {
               ))}
               {!monthlyMovement.length && (
                 <tr>
-                  <td colSpan={12} className="px-5 py-10 text-center text-muted-foreground">
+                  <td colSpan={13} className="px-5 py-10 text-center text-muted-foreground">
                     Nenhuma movimentação encontrada no período selecionado.
                   </td>
                 </tr>
@@ -485,7 +489,8 @@ function ComercialPage() {
         <p className="border-t border-border px-5 py-3 text-[11px] text-muted-foreground">
           Resgate considera o retorno após mais de 30 dias sem vínculo. Desistências e suspensões
           são classificadas pelo motivo registrado no cancelamento; quando a API não informa esses
-          termos, o evento permanece em cancelamentos.
+          termos, o evento permanece em cancelamentos. Mudanças de plano ficam separadas e não
+          compõem entradas, saídas ou cancelamentos.
         </p>
       </div>
 

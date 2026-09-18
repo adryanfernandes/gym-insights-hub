@@ -374,6 +374,7 @@ function memberHasActiveContractAt(rows: MembershipRow[], memberId: number, refe
 export type CommercialMovementMetric =
   | "novos"
   | "renovacoes"
+  | "mudancasPlano"
   | "resgates"
   | "cancelamentos"
   | "vencimentos"
@@ -393,6 +394,7 @@ export type CommercialMonthlyMovement = {
   mes: string;
   novos: number;
   renovacoes: number;
+  mudancasPlano: number;
   resgates: number;
   cancelamentos: number;
   vencimentos: number;
@@ -422,6 +424,7 @@ export function commercialMonthlyMovement(
   const emptyDetails = (): CommercialMonthlyMovement["detalhes"] => ({
     novos: [],
     renovacoes: [],
+    mudancasPlano: [],
     resgates: [],
     cancelamentos: [],
     vencimentos: [],
@@ -438,6 +441,7 @@ export function commercialMonthlyMovement(
       mes: format(current, "MMM/yy", { locale: ptBR }).replace(".", "").toUpperCase(),
       novos: 0,
       renovacoes: 0,
+      mudancasPlano: 0,
       resgates: 0,
       cancelamentos: 0,
       vencimentos: 0,
@@ -470,6 +474,7 @@ export function commercialMonthlyMovement(
     eventDate: Date | null,
     field: CommercialMovementMetric,
     row: MembershipRow,
+    reasonOverride?: string,
   ) => {
     if (!eventDate) return;
     const key = monthKey(eventDate);
@@ -481,7 +486,11 @@ export function commercialMonthlyMovement(
     members.add(row.id_member);
     counted.set(eventKey, members);
     month[field] += 1;
-    month.detalhes[field].push(detail(row, eventDate));
+    const movementDetail = detail(row, eventDate);
+    month.detalhes[field].push({
+      ...movementDetail,
+      motivo: reasonOverride ?? movementDetail.motivo,
+    });
   };
 
   byMember.forEach((memberRows, memberId) => {
@@ -493,6 +502,7 @@ export function commercialMonthlyMovement(
           (date(b.membership_start || b.sale_date)?.getTime() ?? 0),
       );
     if (!ordered.length) return;
+    const planChangePreviousContractIds = new Set<number>();
 
     increment(date(ordered[0].sale_date || ordered[0].membership_start), "novos", ordered[0]);
 
@@ -505,12 +515,26 @@ export function commercialMonthlyMovement(
         startedAt && previousEnd
           ? differenceInCalendarDays(startedAt, previousEnd)
           : Number.POSITIVE_INFINITY;
-      increment(performedAt, gap > 30 ? "resgates" : "renovacoes", row);
+      const previousName = previous.membership_name?.trim() || "Não informado";
+      const currentName = row.membership_name?.trim() || "Não informado";
+      const changedPlan =
+        normalizedText(previousName).trim() !== normalizedText(currentName).trim() ||
+        Boolean(row.membership_swapped);
+      if (changedPlan && gap >= -30 && gap <= 30) {
+        planChangePreviousContractIds.add(previous.id_member_membership);
+        increment(performedAt, "mudancasPlano", row, `${previousName} → ${currentName}`);
+      } else {
+        increment(performedAt, gap > 30 ? "resgates" : "renovacoes", row);
+      }
     });
 
     ordered.forEach((row, index) => {
       const canceledAt = date(row.cancel_date);
-      if (canceledAt && isCancellationEffective(row, canceledAt)) {
+      if (
+        canceledAt &&
+        isCancellationEffective(row, canceledAt) &&
+        !planChangePreviousContractIds.has(row.id_member_membership)
+      ) {
         const reason = normalizedText(row.cancellation_reason).trim();
         if (reason.includes("suspens") || reason.includes("tranc")) {
           increment(canceledAt, "suspensoes", row);
