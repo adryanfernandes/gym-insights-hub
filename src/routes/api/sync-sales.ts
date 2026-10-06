@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { blockEvoSync } from "@/lib/evo-sync-guard";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v2/sales";
 const MEMBER_BATCH_SIZE = 20;
-const SALES_PAGE_SIZE = 1000;
+const SALES_PAGE_SIZE = 50;
 const MAX_RUN_MS = 75000;
 
 type RawSale = Record<string, unknown>;
@@ -65,23 +66,15 @@ async function page(auth: string, idMember: number, skip: number) {
   url.searchParams.set("idBranch", process.env.EVO_BRANCH_ID || "1");
   url.searchParams.set("take", String(SALES_PAGE_SIZE));
   url.searchParams.set("skip", String(skip));
-  let lastError = "";
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      const response = await timedFetch(url.toString(), {
-        headers: { Authorization: auth, Accept: "application/json" },
-        cache: "no-store",
-      });
-      const body = await response.text();
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
-      const parsed = JSON.parse(body) as unknown;
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((row): row is RawSale => Boolean(row) && typeof row === "object");
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "Falha desconhecida";
-    }
-  }
-  throw new Error(`EVO vendas não respondeu para o cliente ${idMember} no cursor ${skip}: ${lastError}`);
+  const response = await timedFetch(url.toString(), {
+    headers: { Authorization: auth, Accept: "application/json" },
+    cache: "no-store",
+  });
+  const body = await response.text();
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
+  const parsed = JSON.parse(body) as unknown;
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((row): row is RawSale => Boolean(row) && typeof row === "object");
 }
 
 function value(record: RawSale, keys: string[]) {
@@ -297,6 +290,8 @@ export const Route = createFileRoute("/api/sync-sales")({
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Falha ao sincronizar vendas";
+          const status = Number(message.match(/HTTP (423|429)/)?.[1] ?? 0);
+          await blockEvoSync(base, key, "sales", status, message);
           try {
             await history(base, key, {
               started_at: startedAt,

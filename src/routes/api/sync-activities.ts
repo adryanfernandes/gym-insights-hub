@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { blockEvoSync } from "@/lib/evo-sync-guard";
 
 const ACTIVITIES_URL = "https://evo-integracao-api.w12app.com.br/api/v1/activities/schedule";
 const ACTIVITY_DETAIL_URL = `${ACTIVITIES_URL}/detail`;
@@ -166,21 +167,13 @@ async function fetchDay(date: string, authorization: string, branchId: number) {
   url.searchParams.set("showFullWeek", "false");
   url.searchParams.set("onlyAvailables", "false");
 
-  let lastError = "";
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      const response = await fetchWithTimeout(url.toString(), {
-        headers: { Authorization: authorization, Accept: "application/json" },
-        cache: "no-store",
-      });
-      const body = await response.text();
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
-      return extractActivities(JSON.parse(body));
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "Falha desconhecida";
-    }
-  }
-  throw new Error(`Falha ao consultar ${date} após 3 tentativas: ${lastError}`);
+  const response = await fetchWithTimeout(url.toString(), {
+    headers: { Authorization: authorization, Accept: "application/json" },
+    cache: "no-store",
+  });
+  const body = await response.text();
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
+  return extractActivities(JSON.parse(body));
 }
 
 function isFinalizedActivity(activity: Activity) {
@@ -504,6 +497,14 @@ export const Route = createFileRoute("/api/sync-activities")({
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Falha ao sincronizar atividades";
+          const status = Number(message.match(/HTTP (423|429)/)?.[1] ?? 0);
+          await blockEvoSync(
+            requiredEnv("SUPABASE_URL").replace(/\/$/, ""),
+            requiredEnv("SUPABASE_SECRET_KEY"),
+            "activities",
+            status,
+            message,
+          );
           try {
             await recordHistory({
               started_at: startedAtIso,

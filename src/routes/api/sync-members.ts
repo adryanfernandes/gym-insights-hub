@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { blockEvoSync } from "@/lib/evo-sync-guard";
 
 const DEFAULT_EVO_URL = "https://evo-integracao-api.w12app.com.br/api/v2/members";
 const PAGE_SIZE = 100;
@@ -240,6 +241,14 @@ export const Route = createFileRoute("/api/sync-members")({
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Failed to synchronize members";
+          const status = Number(message.match(/HTTP (423|429)/)?.[1] ?? 0);
+          await blockEvoSync(
+            requiredEnv("SUPABASE_URL").replace(/\/$/, ""),
+            requiredEnv("SUPABASE_SECRET_KEY"),
+            "members",
+            status,
+            message,
+          );
           try {
             await recordHistory({
               started_at: startedAtIso,

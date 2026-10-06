@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { acquireEvoSync, releaseEvoSync } from "@/lib/evo-sync-guard";
 
 type SettingsRow = {
   enabled: boolean;
@@ -77,6 +78,9 @@ export const Route = createFileRoute("/api/sales-sync-scheduler")({
             return Response.json({ ok: true, skipped: "not_due", dueAt: new Date(dueAt).toISOString() });
           }
 
+          const guard = await acquireEvoSync(base, key, "sales", 3);
+          if (!guard.acquired) return Response.json({ ok: true, skipped: "evo_busy", ...guard });
+
           const origin = new URL(request.url).origin;
           const response = await timedFetch(`${origin}/api/sync-sales?trigger=scheduled`, {
             method: "POST",
@@ -84,6 +88,7 @@ export const Route = createFileRoute("/api/sales-sync-scheduler")({
             cache: "no-store",
           });
           const result = await response.json().catch(() => ({}));
+          await releaseEvoSync(base, key, "sales");
           if (!response.ok) {
             throw new Error(result?.error || `HTTP ${response.status}`);
           }

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { acquireEvoSync, releaseEvoSync } from "@/lib/evo-sync-guard";
 
 function env(name: string) {
   const value = process.env[name];
@@ -50,6 +51,8 @@ export const Route = createFileRoute("/api/membership-sync-scheduler")({
           if (Date.now() - anchor < intervalMinutes * 60000) {
             return Response.json({ ok: true, action: "not-due" });
           }
+          const guard = await acquireEvoSync(base, env("SUPABASE_SECRET_KEY"), "memberships", 3);
+          if (!guard.acquired) return Response.json({ ok: true, action: "evo-busy", ...guard });
           const response = await fetch(
             new URL("/api/sync-memberships?trigger=scheduled", request.url),
             {
@@ -57,6 +60,7 @@ export const Route = createFileRoute("/api/membership-sync-scheduler")({
               headers: { origin: new URL(request.url).origin },
             },
           );
+          await releaseEvoSync(base, env("SUPABASE_SECRET_KEY"), "memberships");
           return new Response(await response.text(), {
             status: response.status,
             headers: { "content-type": "application/json" },

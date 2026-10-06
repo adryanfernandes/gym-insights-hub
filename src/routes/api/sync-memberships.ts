@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { blockEvoSync } from "@/lib/evo-sync-guard";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v3/membermembership";
 const MEMBER_BATCH_SIZE = 10;
@@ -80,30 +81,21 @@ async function page(auth: string, skip: number, options?: { idMember?: number; t
   url.searchParams.set("take", String(options?.take ?? MEMBER_LOOKUP_PAGE_SIZE));
   url.searchParams.set("skip", String(skip));
   if (options?.idMember) url.searchParams.set("idMember", String(options.idMember));
-  let lastError = "";
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      const response = await timedFetch(url.toString(), {
-        headers: { Authorization: auth, Accept: "application/json" },
-        cache: "no-store",
-      });
-      const body = await response.text();
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
-      const parsed = JSON.parse(body) as unknown;
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter(
+  const response = await timedFetch(url.toString(), {
+    headers: { Authorization: auth, Accept: "application/json" },
+    cache: "no-store",
+  });
+  const body = await response.text();
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
+  const parsed = JSON.parse(body) as unknown;
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
         (row): row is RawRecord =>
           Boolean(row) &&
           typeof row === "object" &&
           typeof (row as RawRecord).idMemberMemberShip === "number" &&
           typeof (row as RawRecord).idMember === "number",
-      );
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "Falha desconhecida";
-    }
-  }
-  const target = options?.idMember ? `cliente ${options.idMember}` : `cursor ${skip}`;
-  throw new Error(`EVO não respondeu no ${target}: ${lastError}`);
+  );
 }
 
 function value(record: Record<string, unknown>, key: string) {
@@ -590,6 +582,8 @@ export const Route = createFileRoute("/api/sync-memberships")({
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Falha ao sincronizar contratos";
+          const status = Number(message.match(/HTTP (423|429)/)?.[1] ?? 0);
+          await blockEvoSync(base, key, "memberships", status, message);
           try {
             await history(base, key, {
               started_at: startedAt,
