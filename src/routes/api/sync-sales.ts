@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { blockEvoSync } from "@/lib/evo-sync-guard";
+import { blockEvoSync, fetchEvoBranchCompatible } from "@/lib/evo-sync-guard";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v2/sales";
 const MEMBER_BATCH_SIZE = 20;
@@ -66,10 +66,10 @@ async function page(auth: string, idMember: number, skip: number) {
   url.searchParams.set("idBranch", process.env.EVO_BRANCH_ID || "1");
   url.searchParams.set("take", String(SALES_PAGE_SIZE));
   url.searchParams.set("skip", String(skip));
-  const response = await timedFetch(url.toString(), {
+  const response = await fetchEvoBranchCompatible(url, {
     headers: { Authorization: auth, Accept: "application/json" },
     cache: "no-store",
-  });
+  }, timedFetch);
   const body = await response.text();
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
   const parsed = JSON.parse(body) as unknown;

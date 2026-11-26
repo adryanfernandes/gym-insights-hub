@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { blockEvoSync } from "@/lib/evo-sync-guard";
+import { blockEvoSync, fetchEvoBranchCompatible } from "@/lib/evo-sync-guard";
 
 const DEFAULT_EVO_URL = "https://evo-integracao-api.w12app.com.br/api/v2/members";
 const PAGE_SIZE = 100;
@@ -62,10 +62,10 @@ async function collectMembers(mode: MemberSyncMode, recentDays: number, authoriz
       url.searchParams.set("registerDateEnd", isoDateTime(now));
     }
 
-    const response = await fetchWithTimeout(url.toString(), {
+    const response = await fetchEvoBranchCompatible(url, {
       headers: { Authorization: authorization, Accept: "application/json" },
       cache: "no-store",
-    });
+    }, fetchWithTimeout);
     const body = await response.text();
     if (!response.ok)
       throw new Error(`EVO API returned HTTP ${response.status}: ${body.slice(0, 300)}`);

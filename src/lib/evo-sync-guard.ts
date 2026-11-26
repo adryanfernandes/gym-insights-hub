@@ -70,3 +70,23 @@ export async function assertEvoResponse(response: Response, body: string) {
     `EVO API retornou HTTP ${response.status}: ${body.slice(0, 300)}`,
   );
 }
+
+const BRANCH_TOKEN_ERROR = "Consulta por idBranch permitida apenas para token do adm geral";
+
+export async function fetchEvoBranchCompatible(
+  input: URL,
+  init: RequestInit,
+  requester: (url: string, init: RequestInit) => Promise<Response> = fetch,
+) {
+  const response = await requester(input.toString(), init);
+  if (response.status !== 400 || !input.searchParams.has("idBranch")) return response;
+
+  const body = await response.text();
+  if (!body.includes(BRANCH_TOKEN_ERROR)) {
+    return new Response(body, { status: response.status, headers: response.headers });
+  }
+
+  const unitUrl = new URL(input);
+  unitUrl.searchParams.delete("idBranch");
+  return requester(unitUrl.toString(), init);
+}

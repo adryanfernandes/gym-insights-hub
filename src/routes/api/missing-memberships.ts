@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { fetchEvoBranchCompatible } from "@/lib/evo-sync-guard";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v3/membermembership";
 const MEMBER_LOOKUP_PAGE_SIZE = 25;
@@ -148,10 +149,10 @@ async function page(auth: string, skip: number, idMember: number) {
   url.searchParams.set("take", String(MEMBER_LOOKUP_PAGE_SIZE));
   url.searchParams.set("skip", String(skip));
   url.searchParams.set("idMember", String(idMember));
-  const response = await timedFetch(url.toString(), {
+  const response = await fetchEvoBranchCompatible(url, {
     headers: { Authorization: auth, Accept: "application/json" },
     cache: "no-store",
-  });
+  }, timedFetch);
   const body = await response.text();
   if (!response.ok) throw new Error(`EVO cliente ${idMember}: HTTP ${response.status}: ${body.slice(0, 300)}`);
   const parsed = JSON.parse(body) as unknown;

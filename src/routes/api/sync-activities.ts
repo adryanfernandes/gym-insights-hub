@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { blockEvoSync } from "@/lib/evo-sync-guard";
+import { blockEvoSync, fetchEvoBranchCompatible } from "@/lib/evo-sync-guard";
 
 const ACTIVITIES_URL = "https://evo-integracao-api.w12app.com.br/api/v1/activities/schedule";
 const ACTIVITY_DETAIL_URL = `${ACTIVITIES_URL}/detail`;
@@ -167,10 +167,10 @@ async function fetchDay(date: string, authorization: string, branchId: number) {
   url.searchParams.set("showFullWeek", "false");
   url.searchParams.set("onlyAvailables", "false");
 
-  const response = await fetchWithTimeout(url.toString(), {
+  const response = await fetchEvoBranchCompatible(url, {
     headers: { Authorization: authorization, Accept: "application/json" },
     cache: "no-store",
-  });
+  }, fetchWithTimeout);
   const body = await response.text();
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
   return extractActivities(JSON.parse(body));
