@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { blockEvoSync, fetchEvoBranchCompatible } from "@/lib/evo-sync-guard";
+import { blockEvoSync } from "@/lib/evo-sync-guard";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v3/membermembership";
-const MEMBER_BATCH_SIZE = 25;
+// The current EVO credential is branch-scoped and the API enforces 40 requests/minute.
+// Keep enough headroom for pagination and the other synchronized endpoints.
+const MEMBER_BATCH_SIZE = 15;
 const MEMBER_LOOKUP_PAGE_SIZE = 25;
 const MAX_RUN_MS = 75000;
 const ADMINISTRATIVE_MEMBERSHIPS = new Set([
@@ -189,14 +191,13 @@ async function finishBaselineIfComplete(base: string, key: string, runId: string
 
 async function page(auth: string, skip: number, options?: { idMember?: number; take?: number }) {
   const url = new URL(ENDPOINT);
-  url.searchParams.set("idBranch", process.env.EVO_BRANCH_ID || "1");
   url.searchParams.set("take", String(options?.take ?? MEMBER_LOOKUP_PAGE_SIZE));
   url.searchParams.set("skip", String(skip));
   if (options?.idMember) url.searchParams.set("idMember", String(options.idMember));
-  const response = await fetchEvoBranchCompatible(url, {
+  const response = await timedFetch(url.toString(), {
     headers: { Authorization: auth, Accept: "application/json" },
     cache: "no-store",
-  }, timedFetch);
+  });
   const body = await response.text();
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
   const parsed = JSON.parse(body) as unknown;
