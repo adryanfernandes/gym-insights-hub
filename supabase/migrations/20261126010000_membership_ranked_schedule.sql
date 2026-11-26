@@ -66,7 +66,8 @@ BEGIN
       baseline_checked_at = NULL,
       next_check_at = now(),
       schedule_reason = 'baseline',
-      updated_at = now();
+      updated_at = now()
+  WHERE id_member IS NOT NULL;
 
   UPDATE public.membership_sync_settings
   SET baseline_run_id = run_id,
