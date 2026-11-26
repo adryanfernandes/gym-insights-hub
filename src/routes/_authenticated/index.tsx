@@ -1639,8 +1639,8 @@ function GeralPage() {
         </ChartCard>
 
         <ChartCard
-          title="Ocupação da agenda por horário"
-          description="Inscritos em relação à capacidade média do período"
+          title="Pessoas presentes por horário"
+          description="Presenças confirmadas nas atividades durante o período selecionado"
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.ocupacaoAgenda}>
@@ -1650,9 +1650,17 @@ function GeralPage() {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                 interval={1}
               />
-              <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} unit="%" />
+              <YAxis
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                allowDecimals={false}
+              />
               <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="ocupacao" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+              <Bar
+                dataKey="presentes"
+                name="Pessoas presentes"
+                fill="var(--chart-2)"
+                radius={[4, 4, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>

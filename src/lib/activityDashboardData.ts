@@ -372,6 +372,7 @@ export function getActivityDashboardDataFromNormalized(
       return {
         horario,
         ocupacao: value.occupancy,
+        presentes: value.present,
         aulas: value.classes,
         mediaAlunos: value.averageStudents,
       };
@@ -484,7 +485,12 @@ export function getActivityDashboardDataFromNormalized(
   return {
     filterOptions,
     overviewOccupancy: totals.occupancy,
-    ocupacaoAgenda: porHorario.map(({ horario, ocupacao }) => ({ horario, ocupacao })),
+    ocupacaoAgenda: porHorario.map(({ horario, presentes, aulas, mediaAlunos }) => ({
+      horario,
+      presentes,
+      aulas,
+      mediaAlunos,
+    })),
     agendaEventos,
     agendaHoje,
     professores: {
