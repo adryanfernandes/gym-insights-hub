@@ -220,7 +220,20 @@ export const Route = createFileRoute("/api/sync-members")({
           const newMembers = members.filter(
             (member) => !existingIds.has(String(member.idMember)),
           ).length;
-          if (members.length) await upsertMembers(members);
+          if (members.length) {
+            await upsertMembers(members);
+            await fetch(
+              `${requiredEnv("SUPABASE_URL").replace(/\/$/, "")}/rest/v1/rpc/seed_membership_schedule`,
+              {
+                method: "POST",
+                headers: {
+                  apikey: requiredEnv("SUPABASE_SECRET_KEY"),
+                  "content-type": "application/json",
+                },
+                body: "{}",
+              },
+            ).catch(() => undefined);
+          }
           await recordHistory({
             started_at: startedAtIso,
             finished_at: new Date().toISOString(),

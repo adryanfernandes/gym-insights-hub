@@ -957,6 +957,8 @@ type MembershipSyncProgress = {
   recurring_checked: number;
   recurring_remaining: number;
   member_total: number;
+  baseline_active?: boolean;
+  due?: number;
 };
 
 function MembershipsApiPanel() {
@@ -972,6 +974,7 @@ function MembershipsApiPanel() {
   const [hasCredential, setHasCredential] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [startingFullSync, setStartingFullSync] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -1096,6 +1099,26 @@ function MembershipsApiPanel() {
     }
   }
 
+  async function startFullSync() {
+    const confirmed = window.confirm(
+      "Iniciar uma consulta única de todos os clientes? Ela continuará em segundo plano, em lotes seguros, até concluir toda a base.",
+    );
+    if (!confirmed) return;
+    setStartingFullSync(true);
+    setError("");
+    setMessage("");
+    try {
+      await patchSettings({ startFullSync: true });
+      setEnabled(true);
+      setMessage("Consulta geral iniciada. O progresso será atualizado automaticamente.");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao iniciar consulta geral.");
+    } finally {
+      setStartingFullSync(false);
+    }
+  }
+
   return (
     <Tabs defaultValue="sync" className="space-y-4">
       <TabsList className="h-auto flex-wrap">
@@ -1171,9 +1194,11 @@ function MembershipsApiPanel() {
               <div>
                 <p className="text-xs text-muted-foreground">Progresso da consulta por clientes</p>
                 <p className="text-sm font-semibold">
-                  {progress?.phase === "recurring"
+                  {progress?.baseline_active
+                    ? "Consulta geral inicial em andamento"
+                    : progress?.phase === "recurring"
                     ? "Prioridade: clientes com contratos recorrentes"
-                    : "Fila: demais clientes por cadastro recente"}
+                    : "Agenda inteligente por vencimento e duração do contrato"}
                 </p>
               </div>
               <Badge variant="outline">{progressPercent}% verificado</Badge>
@@ -1199,9 +1224,13 @@ function MembershipsApiPanel() {
               </div>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Base cadastrada: {formatNum(progress?.member_total ?? 0)} clientes. Recorrentes
-              pendentes: {formatNum(progress?.recurring_remaining ?? 0)} de{" "}
-              {formatNum(progress?.recurring_total ?? 0)}.
+              Base cadastrada: {formatNum(progress?.member_total ?? 0)} clientes. Consultas
+              vencidas hoje: {formatNum(progress?.due ?? progress?.remaining ?? 0)}.
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Prioridades: sem contrato, cadastro recente ou próximo do vencimento diariamente;
+              contratos de até 1 mês a cada 15 dias; até 3 meses a cada 20 dias; acima de 3 meses
+              a cada 25 dias; e nova conferência no dia posterior ao cancelamento ou vencimento.
             </p>
           </div>
 
@@ -1247,6 +1276,18 @@ function MembershipsApiPanel() {
             <Button onClick={sync} disabled={syncing}>
               {syncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
               {syncing ? "Processando lote..." : "Atualizar agora"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={startFullSync}
+              disabled={startingFullSync || progress?.baseline_active}
+            >
+              {startingFullSync || progress?.baseline_active ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <RefreshCw />
+              )}
+              {progress?.baseline_active ? "Consulta geral em andamento" : "Consultar todos uma vez"}
             </Button>
           </div>
         </div>

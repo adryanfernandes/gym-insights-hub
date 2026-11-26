@@ -16,6 +16,8 @@ type MembershipProgress = {
   recurring_checked: number;
   recurring_remaining: number;
   member_total: number;
+  baseline_active?: boolean;
+  due?: number;
 };
 
 function safe(
@@ -37,6 +39,9 @@ function safe(
         schedule_updated_at: settings.schedule_updated_at,
         next_skip: settings.next_skip,
         next_member_offset: settings.next_member_offset ?? 0,
+        baseline_run_id: settings.baseline_run_id ?? null,
+        baseline_started_at: settings.baseline_started_at ?? null,
+        baseline_completed_at: settings.baseline_completed_at ?? null,
         progress,
         has_api_credential: Boolean(settings.evo_api_authorization) || inheritedCredential,
       }
@@ -62,6 +67,40 @@ async function membershipProgress(
   headers: Record<string, string>,
   settings?: Record<string, unknown>,
 ) {
+  const baselineRunId = typeof settings?.baseline_run_id === "string"
+    ? settings.baseline_run_id
+    : null;
+  const scheduleTotal = await countRows(
+    url,
+    headers,
+    "membership_member_schedule?select=id_member&limit=0",
+  );
+  if (scheduleTotal > 0) {
+    const baselineRemaining = baselineRunId
+      ? await countRows(
+          url,
+          headers,
+          `membership_member_schedule?select=id_member&baseline_run_id=eq.${baselineRunId}&baseline_checked_at=is.null&limit=0`,
+        )
+      : 0;
+    const due = await countRows(
+      url,
+      headers,
+      `membership_member_schedule?select=id_member&next_check_at=lte.${encodeURIComponent(new Date().toISOString())}&limit=0`,
+    );
+    return {
+      phase: "members" as const,
+      total: scheduleTotal,
+      checked: baselineRunId ? Math.max(0, scheduleTotal - baselineRemaining) : scheduleTotal,
+      remaining: baselineRunId ? baselineRemaining : due,
+      recurring_total: 0,
+      recurring_checked: 0,
+      recurring_remaining: 0,
+      member_total: scheduleTotal,
+      baseline_active: Boolean(baselineRunId),
+      due,
+    };
+  }
   const [memberTotal, recurringTotal, recurringRemaining] = await Promise.all([
     countRows(url, headers, "members?select=idMember&limit=0"),
     countRows(url, headers, "membership_recurring_members?select=id_member&limit=0"),
@@ -181,6 +220,7 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
             intervalMinutes?: number;
             apiCredential?: string;
             restartCycle?: boolean;
+            startFullSync?: boolean;
           };
           const { url, headers } = config();
           const changedAt = new Date().toISOString();
@@ -210,6 +250,16 @@ export const Route = createFileRoute("/api/membership-sync-settings")({
             updates.evo_api_authorization = credential.startsWith("Basic ")
               ? credential
               : `Basic ${credential}`;
+          }
+          if (input.startFullSync) {
+            const baselineResponse = await fetch(`${url}/rest/v1/rpc/start_membership_baseline`, {
+              method: "POST",
+              headers,
+              body: "{}",
+            });
+            if (!baselineResponse.ok) {
+              throw new Error(`Falha ao iniciar consulta geral: ${await baselineResponse.text()}`);
+            }
           }
           const response = await fetch(`${url}/rest/v1/membership_sync_settings?id=eq.true`, {
             method: "PATCH",

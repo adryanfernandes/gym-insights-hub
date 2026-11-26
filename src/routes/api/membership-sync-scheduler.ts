@@ -30,6 +30,7 @@ export const Route = createFileRoute("/api/membership-sync-scheduler")({
                 interval_minutes?: number;
                 schedule_updated_at: string;
                 updated_at: string;
+                baseline_run_id?: string | null;
               }
             | undefined;
           if (!settings?.enabled) return Response.json({ ok: true, action: "disabled" });
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/api/membership-sync-scheduler")({
             typeof settings.interval_minutes === "number"
               ? settings.interval_minutes
               : Math.max(1, Number(settings.interval_hours ?? 24) * 60);
-          if (Date.now() - anchor < intervalMinutes * 60000) {
+          if (!settings.baseline_run_id && Date.now() - anchor < intervalMinutes * 60000) {
             return Response.json({ ok: true, action: "not-due" });
           }
           const guard = await acquireEvoSync(base, env("SUPABASE_SECRET_KEY"), "memberships", 3);

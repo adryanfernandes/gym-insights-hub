@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { blockEvoSync, fetchEvoBranchCompatible } from "@/lib/evo-sync-guard";
 
 const ENDPOINT = "https://evo-integracao-api.w12app.com.br/api/v3/membermembership";
-const MEMBER_BATCH_SIZE = 10;
+const MEMBER_BATCH_SIZE = 25;
 const MEMBER_LOOKUP_PAGE_SIZE = 25;
 const MAX_RUN_MS = 75000;
 const ADMINISTRATIVE_MEMBERSHIPS = new Set([
@@ -62,17 +62,129 @@ async function authorization(base: string, key: string) {
 
 async function settings(base: string, key: string) {
   const response = await fetch(
-    `${base}/rest/v1/membership_sync_settings?select=next_skip,next_member_offset&id=eq.true&limit=1`,
+    `${base}/rest/v1/membership_sync_settings?select=next_skip,next_member_offset,baseline_run_id&id=eq.true&limit=1`,
     { headers: { apikey: key }, cache: "no-store" },
   );
   if (!response.ok) throw new Error(`Falha ao carregar cursor: ${await response.text()}`);
   const row = (await response.json())[0] as
-    | { next_skip?: number; next_member_offset?: number }
+    | { next_skip?: number; next_member_offset?: number; baseline_run_id?: string | null }
     | undefined;
   return {
     nextSkip: row?.next_skip ?? 0,
     nextMemberOffset: row?.next_member_offset ?? 0,
+    baselineRunId: row?.baseline_run_id ?? null,
   };
+}
+
+type ScheduleRow = {
+  id_member: number;
+  registered_at?: string | null;
+  baseline_run_id?: string | null;
+};
+
+async function scheduledMembers(base: string, key: string, baselineRunId: string | null) {
+  const filter = baselineRunId
+    ? `baseline_run_id=eq.${baselineRunId}&baseline_checked_at=is.null`
+    : `next_check_at=lte.${encodeURIComponent(new Date().toISOString())}`;
+  const response = await fetch(
+    `${base}/rest/v1/membership_member_schedule?select=id_member,registered_at,baseline_run_id&${filter}&order=next_check_at.asc,id_member.desc&limit=${MEMBER_BATCH_SIZE}`,
+    { headers: { apikey: key }, cache: "no-store" },
+  );
+  if (!response.ok) {
+    // Compatibility until the ranked-schedule migration is applied.
+    if (response.status === 404 || response.status === 400) return null;
+    throw new Error(`Falha ao carregar agenda de contratos: ${await response.text()}`);
+  }
+  return (await response.json()) as ScheduleRow[];
+}
+
+function nextMemberCheck(records: RawRecord[], registeredAt?: string | null) {
+  const now = new Date();
+  const dayMs = 86400000;
+  const recurring = records.filter((record) => !isNonRecurringMembershipName(value(record, "nameMembership")));
+  const active = recurring
+    .filter((record) => {
+      const end = recordDate(value(record, "membershipEnd"));
+      const cancel = recordDate(value(record, "cancelDate"));
+      return Boolean(end && end >= now && (!cancel || cancel > now));
+    })
+    .sort((a, b) => (recordDate(value(b, "membershipEnd"))?.getTime() ?? 0) - (recordDate(value(a, "membershipEnd"))?.getTime() ?? 0));
+
+  const latest = active[0];
+  if (!latest) return { at: new Date(now.getTime() + dayMs), reason: "without_active_contract" };
+
+  const registration = registeredAt ? new Date(registeredAt) : null;
+  if (registration && !Number.isNaN(registration.getTime()) && now.getTime() - registration.getTime() <= 7 * dayMs) {
+    return { at: new Date(now.getTime() + dayMs), reason: "recent_member" };
+  }
+
+  const start = recordDate(value(latest, "membershipStart"));
+  const end = recordDate(value(latest, "membershipEnd"))!;
+  const cancel = recordDate(value(latest, "cancelDate"));
+  const remainingDays = Math.ceil((end.getTime() - now.getTime()) / dayMs);
+  if (remainingDays <= 30) return { at: new Date(now.getTime() + dayMs), reason: "near_expiration" };
+
+  const durationDays = start ? Math.ceil((end.getTime() - start.getTime()) / dayMs) : 31;
+  const intervalDays = durationDays <= 31 ? 15 : durationDays <= 93 ? 20 : 25;
+  let next = new Date(now.getTime() + intervalDays * dayMs);
+  let reason = `active_${intervalDays}_days`;
+
+  for (const boundary of [cancel, end]) {
+    if (!boundary || boundary <= now) continue;
+    const afterBoundary = new Date(boundary);
+    afterBoundary.setDate(afterBoundary.getDate() + 1);
+    afterBoundary.setHours(6, 0, 0, 0);
+    if (afterBoundary < next) {
+      next = afterBoundary;
+      reason = boundary === cancel ? "after_cancellation" : "after_expiration";
+    }
+  }
+  return { at: next, reason };
+}
+
+async function updateMemberSchedule(
+  base: string,
+  key: string,
+  member: ScheduleRow,
+  records: RawRecord[],
+  baselineRunId: string | null,
+) {
+  const next = nextMemberCheck(records, member.registered_at);
+  const now = new Date().toISOString();
+  const response = await fetch(
+    `${base}/rest/v1/membership_member_schedule?id_member=eq.${member.id_member}`,
+    {
+      method: "PATCH",
+      headers: { apikey: key, "content-type": "application/json", prefer: "return=minimal" },
+      body: JSON.stringify({
+        last_checked_at: now,
+        next_check_at: next.at.toISOString(),
+        schedule_reason: next.reason,
+        baseline_checked_at: baselineRunId ? now : undefined,
+        updated_at: now,
+      }),
+    },
+  );
+  if (!response.ok) throw new Error(`Falha ao atualizar agenda do cliente ${member.id_member}`);
+}
+
+async function finishBaselineIfComplete(base: string, key: string, runId: string | null) {
+  if (!runId) return false;
+  const response = await fetch(
+    `${base}/rest/v1/membership_member_schedule?select=id_member&baseline_run_id=eq.${runId}&baseline_checked_at=is.null&limit=1`,
+    { headers: { apikey: key }, cache: "no-store" },
+  );
+  if (!response.ok || ((await response.json()) as unknown[]).length) return false;
+  await fetch(`${base}/rest/v1/membership_sync_settings?id=eq.true`, {
+    method: "PATCH",
+    headers: { apikey: key, "content-type": "application/json", prefer: "return=minimal" },
+    body: JSON.stringify({
+      baseline_run_id: null,
+      baseline_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }),
+  });
+  return true;
 }
 
 async function page(auth: string, skip: number, options?: { idMember?: number; take?: number }) {
@@ -464,10 +576,12 @@ export const Route = createFileRoute("/api/sync-memberships")({
         try {
           const targetIds = await targetMemberIds(request);
           const targeted = targetIds.length > 0;
+          let baselineRunId: string | null = null;
           if (!targeted) {
             const savedSettings = await settings(base, key);
             cursor = savedSettings.nextSkip;
             memberOffset = savedSettings.nextMemberOffset;
+            baselineRunId = savedSettings.baselineRunId;
           }
           const auth = await authorization(base, key);
           const saveRecords = async (records: RawRecord[]) => {
@@ -501,13 +615,20 @@ export const Route = createFileRoute("/api/sync-memberships")({
             fetched += records.length;
             receivablesSynced += receivables.length;
           };
+          const rankedSchedule = targeted ? null : await scheduledMembers(base, key, baselineRunId);
+          const scheduleByMember = new Map(
+            (rankedSchedule ?? []).map((row) => [Number(row.id_member), row]),
+          );
+          const usingRankedSchedule = rankedSchedule !== null;
           let phase: "targeted" | "recurring" | "inactive" = "targeted";
           let selection = targeted
             ? { ids: targetIds, phase }
-            : await prioritizedMemberIds(base, key, memberOffset);
+            : usingRankedSchedule
+              ? { ids: rankedSchedule.map((row) => Number(row.id_member)), phase: "inactive" as const }
+              : await prioritizedMemberIds(base, key, memberOffset);
           let ids = selection.ids;
           phase = selection.phase;
-          if (!targeted && !ids.length && memberOffset > 0) {
+          if (!targeted && !usingRankedSchedule && !ids.length && memberOffset > 0) {
             memberOffset = 0;
             await resetRecurringPriorityCounts(base, key);
             selection = await prioritizedMemberIds(base, key, memberOffset);
@@ -520,6 +641,7 @@ export const Route = createFileRoute("/api/sync-memberships")({
           for (const idMember of ids) {
             if (Date.now() - started > MAX_RUN_MS) break;
             let memberFinished = false;
+            const memberRecords: RawRecord[] = [];
             while (!memberFinished && Date.now() - started <= MAX_RUN_MS) {
               const records = await page(auth, cursor, {
                 idMember,
@@ -529,6 +651,7 @@ export const Route = createFileRoute("/api/sync-memberships")({
                 memberFinished = true;
                 break;
               }
+              memberRecords.push(...records);
               await saveRecords(records);
               cursor += records.length;
               if (records.length < MEMBER_LOOKUP_PAGE_SIZE) {
@@ -537,13 +660,24 @@ export const Route = createFileRoute("/api/sync-memberships")({
             }
             if (!memberFinished) break;
             cursor = 0;
-            if (!targeted && phase === "inactive") memberOffset += 1;
-            if (!targeted && phase === "recurring") recurringMembersChecked.push(idMember);
+            if (!targeted && usingRankedSchedule) {
+              const schedule = scheduleByMember.get(idMember);
+              if (schedule) {
+                await updateMemberSchedule(base, key, schedule, memberRecords, baselineRunId);
+              }
+            } else {
+              if (!targeted && phase === "inactive") memberOffset += 1;
+              if (!targeted && phase === "recurring") recurringMembersChecked.push(idMember);
+            }
             membersChecked += 1;
           }
 
           if (targeted) {
             completed = membersChecked === ids.length;
+          } else if (usingRankedSchedule) {
+            completed = baselineRunId
+              ? await finishBaselineIfComplete(base, key, baselineRunId)
+              : ids.length < MEMBER_BATCH_SIZE;
           } else if (phase === "recurring") {
             await bumpRecurringPriorityCounts(base, key, recurringMembersChecked);
           } else if (ids.length < MEMBER_BATCH_SIZE && cursor === 0) {
@@ -551,7 +685,7 @@ export const Route = createFileRoute("/api/sync-memberships")({
             completed = true;
             await resetRecurringPriorityCounts(base, key);
           }
-          if (!targeted) await updateCursor(base, key, cursor, memberOffset);
+          if (!targeted && !usingRankedSchedule) await updateCursor(base, key, cursor, memberOffset);
           const finishedAt = new Date().toISOString();
           await history(base, key, {
             started_at: startedAt,
